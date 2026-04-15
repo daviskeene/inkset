@@ -6,50 +6,104 @@ import { createCodePlugin } from "@preframe/code";
 import { createMathPlugin } from "@preframe/math";
 import { createTablePlugin } from "@preframe/table";
 
+const MARKDOWN_PANEL_WIDTH = 360;
+const MIN_RENDER_PANEL_WIDTH = 320;
+const METRICS_PANEL_MIN_WIDTH = 220;
+const RESIZE_HANDLE_WIDTH = 8;
+const COMPACT_OUTPUT_BREAKPOINT = 860;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getMaxRenderPanelWidth(containerWidth: number) {
+  return Math.max(
+    MIN_RENDER_PANEL_WIDTH,
+    containerWidth - RESIZE_HANDLE_WIDTH - METRICS_PANEL_MIN_WIDTH,
+  );
+}
+
 // ── Sample content presets ─────────────────────────────────────────
 
 const PRESETS: Record<string, string> = {
-  mixed: `# Welcome to Preframe
+  mixed: `# Preframe: AI Output Rendering Without Reflow
 
-This is a **streaming markdown renderer** powered by pretext for responsive layout.
+**Preframe** is a renderer for AI-generated markdown that treats text layout as data, not as an accidental side effect of the DOM.
 
-## Code Example
+Most markdown renderers stream tokens into live DOM, then rely on browser layout to figure out where everything lands. That works until the output becomes dense, code-heavy, math-heavy, or resizable. Then every update turns into a choreography of reflow, repaint, height correction, and visual instability.
 
-\`\`\`python
-def fibonacci(n: int) -> int:
-    """Calculate the nth Fibonacci number."""
-    if n <= 1:
-        return n
-    a, b = 0, 1
-    for _ in range(2, n + 1):
-        a, b = b, a + b
-    return b
+> Preframe separates **measurement**, **layout**, and **rendering**. That architectural split is the unlock.
 
-# Calculate first 10 Fibonacci numbers
-for i in range(10):
-    print(f"F({i}) = {fibonacci(i)}")
+## Why this matters
+
+If a renderer measures text with DOM reads like \`getBoundingClientRect()\`, then streaming and resizing compete with the browser's layout engine.
+
+Preframe uses **pretext** to prepare text once and re-layout it with pure arithmetic:
+
+\`\`\`ts
+const prepared = pretext.prepare(markdownText, "400 15px system-ui");
+const next = pretext.layout(prepared, containerWidth, 22);
+
+// No DOM probing in the hot path.
+// Width changes become data changes, not reflow events.
 \`\`\`
 
-## Math
+That changes what is possible for AI interfaces:
 
-The quadratic formula:
+$$t_{resize} \\approx t_{layout\\ math} + t_{paint}$$
 
-$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
+instead of
 
-Euler's identity: $e^{i\\pi} + 1 = 0$
+$$t_{resize} \\approx t_{DOM\\ reflow} + t_{measurement} + t_{patching} + t_{paint}$$
 
-## Table
+## Preframe vs DOM-first renderers
 
-| Language | Typing | Speed | Popularity |
-|----------|--------|-------|------------|
-| Python | Dynamic | Slow | Very High |
-| Rust | Static | Fast | Growing |
-| TypeScript | Static | Medium | High |
-| Go | Static | Fast | High |
+Tools like **Streamdown** and other DOM-first markdown renderers focus on turning model output into HTML quickly. Preframe is optimizing for a different problem:
 
-## Why Preframe?
+| Concern | DOM-first markdown renderers | Preframe |
+|---------|------------------------------|----------|
+| Text measurement | Browser layout / DOM reads | **pretext** |
+| Resize path | Reflow-driven | Arithmetic-driven |
+| Streaming stability | Patch DOM as tokens arrive | Preserve measured layout as content evolves |
+| Plugins | Usually post-render enhancement | Native code / math / table pipeline |
+| Goal | Render markdown | **Render model output predictably at interactive speed** |
 
-Every chat UI renders markdown and hopes the browser handles layout. Preframe uses **pretext** to measure text without DOM reflow, achieving 300-600x faster layout on resize.`,
+## Native plugin pipeline
+
+Preframe is built for the kinds of blocks LLMs actually emit:
+
+\`\`\`python
+def score_renderer(reflow_ms: float, layout_ms: float, plugin_ready: bool) -> str:
+    if layout_ms < 1 and plugin_ready and reflow_ms == 0:
+        return "feels instant"
+    if layout_ms < 8:
+        return "good enough for chat"
+    return "browser is doing too much work"
+\`\`\`
+
+It also handles structured content without treating it as an afterthought:
+
+$$\\text{throughput gain} = \\frac{t_{DOM\\ layout}}{t_{pretext\\ relayout}}$$
+
+and
+
+| Output type | Why it is hard | What Preframe does |
+|-------------|----------------|--------------------|
+| Long prose | Rewraps constantly on resize | Re-layout from prepared text |
+| Code blocks | Syntax UI changes measured height | Plugin-aware measurement + rendering |
+| Math | Incomplete formulas flicker during stream | Stream-safe math fallback and final render |
+| Tables | Headers, cells, and overflow shift visually | Structured table plugin with stable sizing |
+
+## What this unlocks
+
+Preframe is not just "markdown, but faster." It is the basis for:
+
+- chat UIs that stream without jitter
+- inspectors and copilots with continuously resizable panels
+- AI workspaces with code, math, and tables in the same response
+- plugin-native rendering pipelines where layout remains predictable
+
+This playground exists to show that responsive AI output does **not** have to mean fragile DOM-driven layout.`,
 
   "code-heavy": `## Algorithm Comparison
 
@@ -177,66 +231,161 @@ export default function PlaygroundPage() {
   const [panelWidth, setPanelWidth] = useState(600);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState("");
-  const isDragging = useRef(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [outputAreaWidth, setOutputAreaWidth] = useState(0);
+  const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const outputAreaRef = useRef<HTMLDivElement>(null);
+  const panelWidthFrameRef = useRef<number | null>(null);
+  const pendingPanelWidthRef = useRef<number | null>(null);
 
   const plugins = Object.entries(enabledPlugins)
     .filter(([, enabled]) => enabled)
     .map(([name]) => ALL_PLUGINS[name as keyof typeof ALL_PLUGINS]);
 
-  // Resize handle drag
-  const handleMouseDown = useCallback(() => {
-    isDragging.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+  const resetGlobalInteractionState = useCallback(() => {
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   }, []);
 
+  const resetDragState = useCallback(() => {
+    setIsDragging(false);
+    resetGlobalInteractionState();
+  }, [resetGlobalInteractionState]);
+
+  const clampPanelWidth = useCallback((nextWidth: number) => {
+    const containerWidth = outputAreaRef.current?.clientWidth ?? nextWidth;
+    return clamp(
+      nextWidth,
+      MIN_RENDER_PANEL_WIDTH,
+      getMaxRenderPanelWidth(containerWidth),
+    );
+  }, []);
+
+  const flushPanelWidth = useCallback(() => {
+    panelWidthFrameRef.current = null;
+    const nextWidth = pendingPanelWidthRef.current;
+    pendingPanelWidthRef.current = null;
+    if (typeof nextWidth === "number") {
+      setPanelWidth(nextWidth);
+    }
+  }, []);
+
+  const schedulePanelWidthCommit = useCallback((nextWidth: number) => {
+    pendingPanelWidthRef.current = nextWidth;
+    if (panelWidthFrameRef.current !== null) {
+      return;
+    }
+
+    panelWidthFrameRef.current = requestAnimationFrame(() => {
+      flushPanelWidth();
+    });
+  }, [flushPanelWidth]);
+
+  const isCompactOutput = outputAreaWidth > 0 && outputAreaWidth < COMPACT_OUTPUT_BREAKPOINT;
+  const effectivePanelWidth = isCompactOutput
+    ? Math.max(0, outputAreaWidth)
+    : clampPanelWidth(panelWidth);
+
+  const stopStreaming = useCallback(() => {
+    if (streamIntervalRef.current) {
+      clearInterval(streamIntervalRef.current);
+      streamIntervalRef.current = null;
+    }
+    setIsStreaming(false);
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (isCompactOutput) return;
+      event.preventDefault();
+      setIsDragging(true);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [isCompactOutput],
+  );
+
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const newWidth = e.clientX - rect.left;
-      setPanelWidth(Math.max(280, Math.min(newWidth, window.innerWidth - 400)));
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isDragging || !outputAreaRef.current) return;
+      const rect = outputAreaRef.current.getBoundingClientRect();
+      schedulePanelWidthCommit(clampPanelWidth(event.clientX - rect.left));
     };
 
-    const handleMouseUp = () => {
-      isDragging.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", resetDragState);
+    window.addEventListener("pointercancel", resetDragState);
     return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", resetDragState);
+      window.removeEventListener("pointercancel", resetDragState);
     };
+  }, [clampPanelWidth, isDragging, resetDragState, schedulePanelWidthCommit]);
+
+  useEffect(() => {
+    const container = outputAreaRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      if (width > 0) {
+        setOutputAreaWidth(width);
+        setPanelWidth((currentWidth) =>
+          clamp(
+            currentWidth,
+            MIN_RENDER_PANEL_WIDTH,
+            getMaxRenderPanelWidth(width),
+          ),
+        );
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
   }, []);
 
   // Streaming simulation
   const simulateStream = useCallback(() => {
+    stopStreaming();
     const text = PRESETS.streaming;
     const words = text.split(/(\s+)/);
-    let idx = 0;
+    const initialChunkSize = Math.min(6, words.length);
+    let idx = initialChunkSize;
+    setActivePreset("streaming");
+    setContent(text);
     setIsStreaming(true);
-    setStreamedContent("");
+    setStreamedContent(words.slice(0, initialChunkSize).join(""));
 
-    const interval = setInterval(() => {
+    streamIntervalRef.current = setInterval(() => {
       if (idx >= words.length) {
-        clearInterval(interval);
+        if (streamIntervalRef.current) {
+          clearInterval(streamIntervalRef.current);
+          streamIntervalRef.current = null;
+        }
+        setStreamedContent(text);
         setIsStreaming(false);
         return;
       }
       // Add 1-3 words at a time to simulate token chunks
-      const chunk = words.slice(idx, idx + Math.ceil(Math.random() * 3)).join("");
-      idx += Math.ceil(Math.random() * 3);
+      const chunkSize = Math.ceil(Math.random() * 3);
+      const chunk = words.slice(idx, idx + chunkSize).join("");
+      idx += chunkSize;
       setStreamedContent((prev) => prev + chunk);
     }, 30);
+  }, [stopStreaming]);
 
-    return () => clearInterval(interval);
-  }, []);
+  useEffect(() => {
+    return () => {
+      stopStreaming();
+      resetGlobalInteractionState();
+      if (panelWidthFrameRef.current !== null) {
+        cancelAnimationFrame(panelWidthFrameRef.current);
+      }
+    };
+  }, [resetGlobalInteractionState, stopStreaming]);
 
   const displayContent = isStreaming ? streamedContent : content;
+  const renderContentWidth = Math.max(0, effectivePanelWidth - 32);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -267,9 +416,9 @@ export default function PlaygroundPage() {
                 if (name === "streaming") {
                   simulateStream();
                 } else {
+                  stopStreaming();
                   setActivePreset(name);
                   setContent(PRESETS[name]);
-                  setIsStreaming(false);
                 }
               }}
               style={{
@@ -319,14 +468,11 @@ export default function PlaygroundPage() {
       </header>
 
       {/* Main content area */}
-      <div
-        ref={containerRef}
-        style={{ display: "flex", flex: 1, overflow: "hidden" }}
-      >
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Markdown input */}
         <div
           style={{
-            width: 360,
+            width: MARKDOWN_PANEL_WIDTH,
             flexShrink: 0,
             borderRight: "1px solid #222",
             display: "flex",
@@ -346,8 +492,8 @@ export default function PlaygroundPage() {
           <textarea
             value={isStreaming ? streamedContent : content}
             onChange={(e) => {
+              stopStreaming();
               setContent(e.target.value);
-              setIsStreaming(false);
             }}
             readOnly={isStreaming}
             style={{
@@ -367,14 +513,24 @@ export default function PlaygroundPage() {
         </div>
 
         {/* Rendered output (resizable) */}
-        <div style={{ flex: 1, display: "flex", position: "relative" }}>
+        <div
+          ref={outputAreaRef}
+          style={{
+            flex: 1,
+            display: "flex",
+            position: "relative",
+            minWidth: 0,
+            flexDirection: isCompactOutput ? "column" : "row",
+          }}
+        >
           <div
             style={{
-              width: panelWidth,
+              width: isCompactOutput ? "100%" : effectivePanelWidth,
               flexShrink: 0,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              minWidth: 0,
             }}
           >
             <div
@@ -388,7 +544,7 @@ export default function PlaygroundPage() {
               }}
             >
               <span>RENDERED OUTPUT</span>
-              <span>{panelWidth}px</span>
+              <span>{Math.round(effectivePanelWidth)}px</span>
             </div>
             <div
               style={{
@@ -402,6 +558,7 @@ export default function PlaygroundPage() {
                 content={displayContent}
                 streaming={isStreaming}
                 plugins={plugins}
+                width={renderContentWidth}
                 fontSize={15}
                 lineHeight={22}
                 blockMargin={12}
@@ -411,22 +568,26 @@ export default function PlaygroundPage() {
 
           {/* Resize handle */}
           <div
-            onMouseDown={handleMouseDown}
+            onPointerDown={handlePointerDown}
             style={{
-              width: 6,
-              cursor: "col-resize",
-              background: isDragging.current ? "#444" : "#222",
+              width: isCompactOutput ? "100%" : RESIZE_HANDLE_WIDTH,
+              height: isCompactOutput ? RESIZE_HANDLE_WIDTH : "auto",
+              cursor: isCompactOutput ? "default" : "col-resize",
+              background: isCompactOutput ? "#161616" : isDragging ? "#444" : "#222",
               flexShrink: 0,
               transition: "background 0.1s",
+              touchAction: "none",
+              borderTop: isCompactOutput ? "1px solid #222" : undefined,
+              borderBottom: isCompactOutput ? "1px solid #222" : undefined,
             }}
-            title="Drag to resize"
+            title={isCompactOutput ? "Resize disabled in compact layout" : "Drag to resize"}
           />
 
           {/* Metrics panel */}
           <div
             style={{
-              flex: 1,
-              minWidth: 200,
+              flex: isCompactOutput ? "0 0 auto" : 1,
+              minWidth: isCompactOutput ? 0 : METRICS_PANEL_MIN_WIDTH,
               padding: 16,
               fontSize: 12,
               fontFamily: "ui-monospace, monospace",
@@ -434,12 +595,13 @@ export default function PlaygroundPage() {
               display: "flex",
               flexDirection: "column",
               gap: 8,
+              borderTop: isCompactOutput ? "1px solid #222" : undefined,
             }}
           >
             <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>
               METRICS
             </div>
-            <div>Panel width: {panelWidth}px</div>
+            <div>Panel width: {Math.round(effectivePanelWidth)}px</div>
             <div>Plugins: {plugins.map((p) => p.name).join(", ") || "none"}</div>
             <div>Streaming: {isStreaming ? "active" : "idle"}</div>
             <div style={{ marginTop: 16, fontSize: 11, opacity: 0.5 }}>

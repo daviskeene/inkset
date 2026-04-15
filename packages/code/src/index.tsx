@@ -41,7 +41,7 @@ async function getHighlighter(theme: string = "github-dark"): Promise<ShikiHighl
   return highlighterPromise;
 }
 
-// ── Code block component ───────────────────────────────────────────
+// ── Code block component ──────────────────────────────────────────
 
 export interface CodeBlockProps extends PluginComponentProps {
   theme?: string;
@@ -50,13 +50,12 @@ export interface CodeBlockProps extends PluginComponentProps {
 function CodeBlock({ node, isStreaming }: PluginComponentProps) {
   const [html, setHtml] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const code = node.pluginData?.code as string ?? "";
   const lang = node.pluginData?.lang as string ?? "text";
   const theme = (node.pluginData?.theme as string) ?? "github-dark";
 
-  // Highlight with Shiki (async, progressive enhancement)
   useEffect(() => {
     let cancelled = false;
 
@@ -66,7 +65,6 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
         const result = highlighter.codeToHtml(code, { lang, theme });
         setHtml(result);
       } catch {
-        // Language not loaded — show plain text
         setHtml(null);
       }
     });
@@ -84,7 +82,6 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
 
   return (
     <div className="preframe-code-block" style={{ position: "relative" }}>
-      {/* Header bar with language label and copy button */}
       <div
         className="preframe-code-header"
         style={{
@@ -93,6 +90,7 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
           alignItems: "center",
           padding: "4px 12px",
           fontSize: "12px",
+          lineHeight: "16px",
           fontFamily: "system-ui, sans-serif",
           opacity: 0.7,
         }}
@@ -108,6 +106,7 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
             cursor: "pointer",
             padding: "2px 6px",
             fontSize: "12px",
+            lineHeight: "16px",
             fontFamily: "system-ui, sans-serif",
             opacity: 0.8,
           }}
@@ -116,7 +115,6 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
         </button>
       </div>
 
-      {/* Code content — highlighted HTML or plain text fallback */}
       {html ? (
         <div
           className="preframe-code-content"
@@ -139,7 +137,6 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
         </pre>
       )}
 
-      {/* Streaming indicator */}
       {isStreaming && (
         <div
           className="preframe-code-streaming"
@@ -158,12 +155,10 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
   );
 }
 
-// ── Plugin definition ──────────────────────────────────────────────
+// ── Plugin definition ─────────────────────────────────────────────
 
 export interface CodePluginOptions {
-  /** Shiki theme name. Default: "github-dark" */
   theme?: string;
-  /** Additional languages to load */
   langs?: string[];
 }
 
@@ -175,33 +170,26 @@ export function createCodePlugin(options?: CodePluginOptions): PreframePlugin {
     handles: ["code"],
 
     transform(node: ASTNode, ctx: PluginContext): EnrichedNode {
-      // Extract code content and language from the parsed node
       const code = extractCodeContent(node);
       const lang = node.lang ?? detectLanguage(node) ?? "text";
 
       return {
         ...node,
         transformedBy: "code",
-        pluginData: {
-          code,
-          lang,
-          theme,
-        },
+        pluginData: { code, lang, theme },
       };
     },
 
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
       const code = (node.pluginData?.code as string) ?? "";
       const lines = code.split("\n");
-      const lineHeight = 21; // 14px font * 1.5 line-height
-      const headerHeight = 28; // language label + copy button
-      const padding = 24; // top + bottom padding
-
-      const height = lines.length * lineHeight + headerHeight + padding;
+      const lineHeight = 21;
+      const headerHeight = 24;
+      const padding = 24;
 
       return {
         width: maxWidth,
-        height: Math.max(height, 48), // minimum height
+        height: Math.max(lines.length * lineHeight + headerHeight + padding, 48),
       };
     },
 
@@ -209,28 +197,21 @@ export function createCodePlugin(options?: CodePluginOptions): PreframePlugin {
   };
 }
 
-// ── Helpers ────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────
 
 function extractCodeContent(node: ASTNode): string {
-  // For code blocks, the content is in the first text child of the <code> element
   if (node.children) {
     for (const child of node.children) {
-      if (child.tagName === "pre") {
-        return extractCodeContent(child);
-      }
-      if (child.tagName === "code") {
-        return extractText(child);
-      }
-      if (child.type === "text" && child.value) {
-        return child.value;
-      }
+      if (child.tagName === "pre") return extractCodeContent(child);
+      if (child.tagName === "code") return extractText(child);
+      if (child.type === "text" && child.value) return child.value;
     }
   }
   return node.value ?? "";
 }
 
+/** Detect language from remark's `language-xxx` className on code elements. */
 function detectLanguage(node: ASTNode): string | null {
-  // Check className on code element (remark adds language-xxx class)
   if (node.children) {
     for (const child of node.children) {
       if (child.tagName === "pre" && child.children) {

@@ -1,18 +1,20 @@
 import React, { useCallback, useRef, useState } from "react";
-import type {
-  PreframePlugin,
-  ASTNode,
-  EnrichedNode,
-  PluginContext,
-  Dimensions,
-  PluginComponentProps,
+import {
+  extractText,
+  nodeToHtml,
+  type PreframePlugin,
+  type ASTNode,
+  type EnrichedNode,
+  type PluginContext,
+  type Dimensions,
+  type PluginComponentProps,
 } from "@preframe/core";
 
-// ── Table component ────────────────────────────────────────────────
+// ── Table component ───────────────────────────────────────────────
 
 function TableBlock({ node }: PluginComponentProps) {
   const [copied, setCopied] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tableHtml = (node.pluginData?.html as string) ?? "";
   const csvData = (node.pluginData?.csv as string) ?? "";
 
@@ -33,6 +35,7 @@ function TableBlock({ node }: PluginComponentProps) {
           justifyContent: "flex-end",
           padding: "2px 8px",
           fontSize: "11px",
+          lineHeight: "14px",
           fontFamily: "system-ui, sans-serif",
           opacity: 0.6,
         }}
@@ -47,6 +50,7 @@ function TableBlock({ node }: PluginComponentProps) {
             cursor: "pointer",
             padding: "2px 6px",
             fontSize: "11px",
+            lineHeight: "14px",
             fontFamily: "system-ui, sans-serif",
           }}
         >
@@ -66,7 +70,7 @@ function TableBlock({ node }: PluginComponentProps) {
   );
 }
 
-// ── Plugin definition ──────────────────────────────────────────────
+// ── Plugin definition ─────────────────────────────────────────────
 
 export function createTablePlugin(): PreframePlugin {
   return {
@@ -85,16 +89,14 @@ export function createTablePlugin(): PreframePlugin {
     },
 
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
-      // Estimate table height based on row count
       const html = (node.pluginData?.html as string) ?? "";
       const rowCount = (html.match(/<tr/g) ?? []).length;
-      const headerHeight = 36;
-      const rowHeight = 32;
-      const padding = 16;
+      const headerHeight = 20;
+      const rowHeight = 44;
 
       return {
         width: maxWidth,
-        height: Math.max(rowCount * rowHeight + headerHeight + padding, 60),
+        height: Math.max(rowCount * rowHeight + headerHeight, 64),
       };
     },
 
@@ -102,24 +104,7 @@ export function createTablePlugin(): PreframePlugin {
   };
 }
 
-// ── HTML + CSV extraction ──────────────────────────────────────────
-
-function nodeToHtml(node: ASTNode): string {
-  if (node.type === "text") return escapeHtml(node.value ?? "");
-  if (node.type === "root" && node.children) {
-    return node.children.map(nodeToHtml).join("");
-  }
-
-  const tag = node.tagName ?? "div";
-  const attrs = propsToAttrs(node.properties);
-  const children = node.children?.map(nodeToHtml).join("") ?? "";
-
-  if (["br", "hr", "img", "input"].includes(tag)) {
-    return `<${tag}${attrs} />`;
-  }
-
-  return `<${tag}${attrs}>${children}</${tag}>`;
-}
+// ── CSV extraction ────────────────────────────────────────────────
 
 function nodeToCSV(node: ASTNode): string {
   const rows = findNodes(node, "tr");
@@ -140,30 +125,4 @@ function findNodes(node: ASTNode, tagName: string): ASTNode[] {
     }
   }
   return results;
-}
-
-function extractText(node: ASTNode): string {
-  if (node.value) return node.value;
-  if (!node.children) return "";
-  return node.children.map(extractText).join("");
-}
-
-function propsToAttrs(props?: Record<string, unknown>): string {
-  if (!props) return "";
-  return Object.entries(props)
-    .filter(([, v]) => v != null && v !== false)
-    .map(([k, v]) => {
-      const attr = k === "className" ? "class" : k;
-      if (v === true) return ` ${attr}`;
-      return ` ${attr}="${escapeHtml(String(v))}"`;
-    })
-    .join("");
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

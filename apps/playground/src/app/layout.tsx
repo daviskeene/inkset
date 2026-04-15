@@ -11,7 +11,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"
@@ -19,6 +19,7 @@ export default function RootLayout({
         />
       </head>
       <body
+        suppressHydrationWarning
         style={{
           margin: 0,
           fontFamily: "system-ui, -apple-system, sans-serif",

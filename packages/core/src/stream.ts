@@ -48,6 +48,8 @@ export class StreamingPipeline {
   private currentMeasured: MeasuredBlock[] = [];
   private currentLayout: LayoutTree = [];
   private containerWidth = 0;
+  private pendingRelayoutWidth: number | null = null;
+  private relayoutInFlight = false;
   private options: Required<Omit<PreframeOptions, "plugins">>;
 
   // ReturnType covers both browser `number` and Node.js `Timeout`
@@ -95,11 +97,28 @@ export class StreamingPipeline {
   }
 
   async setWidth(width: number): Promise<void> {
-    if (width === this.containerWidth) return;
+    if (width === this.containerWidth && this.pendingRelayoutWidth === null) return;
     this.containerWidth = width;
 
-    if (this.currentNodes.length > 0) {
-      await this.relayout();
+    if (this.currentNodes.length === 0) {
+      return;
+    }
+
+    this.pendingRelayoutWidth = width;
+    if (this.relayoutInFlight) return;
+
+    this.relayoutInFlight = true;
+    try {
+      while (this.pendingRelayoutWidth !== null) {
+        const nextWidth = this.pendingRelayoutWidth;
+        this.pendingRelayoutWidth = null;
+        await this.relayout(nextWidth);
+      }
+    } finally {
+      this.relayoutInFlight = false;
+      if (this.pendingRelayoutWidth !== null) {
+        await this.setWidth(this.pendingRelayoutWidth);
+      }
     }
   }
 
@@ -116,6 +135,13 @@ export class StreamingPipeline {
   }
 
   async setContent(content: string): Promise<void> {
+    this.cancelPendingUpdate();
+    this.parseCache.clear();
+    this.transformCache.clear();
+    this.measureCache.clear();
+    this.currentNodes = [];
+    this.currentMeasured = [];
+    this.currentLayout = [];
     this.ingest.reset();
     this.ingest.append(content);
     this.ingest.end();
@@ -162,6 +188,7 @@ export class StreamingPipeline {
         this.runPipeline();
       });
     } else {
+      // Node.js / test environment — setTimeout returns Timeout, not number
       this.pendingUpdate = setTimeout(() => {
         this.pendingUpdate = null;
         this.runPipeline();
@@ -171,7 +198,7 @@ export class StreamingPipeline {
 
   private cancelPendingUpdate(): void {
     if (this.pendingUpdate !== null) {
-      if (typeof cancelAnimationFrame !== "undefined") {
+      if (typeof cancelAnimationFrame !== "undefined" && typeof this.pendingUpdate === "number") {
         cancelAnimationFrame(this.pendingUpdate);
       } else {
         clearTimeout(this.pendingUpdate);
@@ -200,7 +227,7 @@ export class StreamingPipeline {
     }
 
     const parseStart = performance.now();
-    const nodes = parseBlocks(blocks, this.parseCache);
+    const { nodes, parsedBlockIds } = parseBlocks(blocks, this.parseCache);
     this.metrics.lastParseMs = performance.now() - parseStart;
 
     const transformStart = performance.now();
@@ -208,11 +235,11 @@ export class StreamingPipeline {
       containerWidth: this.containerWidth,
       isStreaming: this.ingest.isStreaming,
     };
-    this.currentNodes = transformBlocks(nodes, this.registry, ctx, this.transformCache);
+    this.currentNodes = transformBlocks(nodes, this.registry, ctx, this.transformCache, parsedBlockIds);
     this.metrics.lastTransformMs = performance.now() - transformStart;
 
     const measureStart = performance.now();
-    this.currentMeasured = await this.measureBlocks(this.currentNodes);
+    this.currentMeasured = await this.measureBlocks(this.currentNodes, this.containerWidth);
     this.metrics.lastMeasureMs = performance.now() - measureStart;
 
     const layoutStart = performance.now();
@@ -230,11 +257,11 @@ export class StreamingPipeline {
     this.notify();
   }
 
-  private async relayout(): Promise<void> {
+  private async relayout(targetWidth: number): Promise<void> {
     if (this.currentNodes.length === 0) return;
 
     const ctx: PluginContext = {
-      containerWidth: this.containerWidth,
+      containerWidth: targetWidth,
       isStreaming: this.ingest.isStreaming,
     };
 
@@ -245,21 +272,37 @@ export class StreamingPipeline {
       this.transformCache,
     );
 
+    let nextNodes = this.currentNodes;
+    let nextMeasured = this.currentMeasured;
+
     if (changed) {
-      this.currentNodes = nodes;
-      this.currentMeasured = await this.measureBlocks(this.currentNodes);
+      nextNodes = nodes;
+      nextMeasured = await this.measureBlocks(nextNodes, targetWidth);
     } else {
       const reMeasured: MeasuredBlock[] = [];
       for (const measured of this.currentMeasured) {
-        const dims = await this.measureLayer.relayout(measured, this.containerWidth);
+        const plugin = measured.node.transformedBy
+          ? this.registry.get(measured.node.transformedBy)
+          : undefined;
+        const dims = await this.measureLayer.relayout(
+          measured,
+          targetWidth,
+          plugin,
+        );
         reMeasured.push({ ...measured, dimensions: dims });
       }
-      this.currentMeasured = reMeasured;
+      nextMeasured = reMeasured;
+    }
+
+    if (targetWidth !== this.containerWidth) {
+      return;
     }
 
     const layoutStart = performance.now();
-    this.currentLayout = computeLayout(this.currentMeasured, {
-      containerWidth: this.containerWidth,
+    this.currentNodes = nextNodes;
+    this.currentMeasured = nextMeasured;
+    this.currentLayout = computeLayout(nextMeasured, {
+      containerWidth: targetWidth,
       blockMargin: this.options.blockMargin,
     });
     this.metrics.lastLayoutMs = performance.now() - layoutStart;
@@ -267,7 +310,10 @@ export class StreamingPipeline {
     this.notify();
   }
 
-  private async measureBlocks(nodes: EnrichedNode[]): Promise<MeasuredBlock[]> {
+  private async measureBlocks(
+    nodes: EnrichedNode[],
+    containerWidth: number = this.containerWidth,
+  ): Promise<MeasuredBlock[]> {
     const measured: MeasuredBlock[] = [];
 
     for (const node of nodes) {
@@ -283,7 +329,7 @@ export class StreamingPipeline {
 
       const result = await this.measureLayer.measureBlock(
         node,
-        this.containerWidth,
+        containerWidth,
         plugin,
       );
       this.measureCache.set(node.blockId, result);

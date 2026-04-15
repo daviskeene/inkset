@@ -34,6 +34,12 @@ describe("splitBlocks", () => {
     expect(blocks[1]).toContain("$$");
   });
 
+  it("does not merge single-line display math with following blocks", () => {
+    const doc = "Before\n\n$$x = 1$$\n\n## After";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual(["Before", "$$x = 1$$", "## After"]);
+  });
+
   it("handles multiple consecutive blank lines", () => {
     const blocks = splitBlocks("A\n\n\n\nB");
     expect(blocks).toEqual(["A", "B"]);

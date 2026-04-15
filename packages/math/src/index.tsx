@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import {
   extractText,
   escapeHtml,
@@ -10,236 +10,174 @@ import {
   type PluginComponentProps,
 } from "@preframe/core";
 
-// ── Math renderer abstraction ──────────────────────────────────────
+// ── Math renderer abstraction ─────────────────────────────────────
 
-/**
- * Renderer-agnostic interface. Users can provide a KaTeX renderer,
- * a MathJax renderer, or any custom implementation.
- */
 export interface MathRenderer {
-  /** Render a LaTeX expression to an HTML string */
   renderToString(latex: string, options: MathRenderOptions): string;
-  /** Name of the renderer for diagnostics */
   name: string;
 }
 
 export interface MathRenderOptions {
-  /** Whether this is display mode ($$) or inline ($) */
   displayMode: boolean;
-  /** Whether to throw on parse errors. Default: false */
   throwOnError?: boolean;
 }
 
-// ── MathJax global type ───────────────────────────────────────────
+// ── Built-in renderers ────────────────────────────────────────────
 
-/** Subset of the MathJax global API used by the renderer */
-interface MathJaxGlobal {
-  tex2svg?: (tex: string, options: { display: boolean }) => HTMLElement;
-  tex2chtml?: (tex: string, options: { display: boolean }) => HTMLElement;
-  startup: {
-    adaptor: {
-      outerHTML(node: HTMLElement): string;
-    };
-  };
-}
-
-// ── Built-in renderers ─────────────────────────────────────────────
-
-/** KaTeX renderer — fast, synchronous, good defaults */
+/** KaTeX renderer — renders client-side via dynamic import */
 export function createKaTeXRenderer(): MathRenderer {
-  let katex: typeof import("katex") | null = null;
-
+  // katex loaded lazily at render time, not at plugin creation time
   return {
     name: "katex",
     renderToString(latex: string, options: MathRenderOptions): string {
-      if (!katex) {
-        try {
-          // Dynamic require for katex (loaded synchronously)
-          katex = require("katex");
-        } catch {
-          return `<span class="preframe-math-error" title="KaTeX not installed">${escapeHtml(latex)}</span>`;
-        }
-      }
-
-      try {
-        return katex!.renderToString(latex, {
-          displayMode: options.displayMode,
-          throwOnError: options.throwOnError ?? false,
-          trust: false,
-          strict: false,
-          output: "htmlAndMathml", // accessibility: MathML for screen readers
-        });
-      } catch (err) {
-        // Render error: show raw LaTeX with error indicator
-        const msg = err instanceof Error ? err.message : "Parse error";
-        return `<span class="preframe-math-error" title="${escapeHtml(msg)}">${escapeHtml(latex)}</span>`;
-      }
+      // This is a fallback for SSR or when called synchronously.
+      // The real rendering happens in the MathBlock component.
+      return "";
     },
   };
 }
 
-/** MathJax renderer — broader LaTeX support, async loading */
+/** MathJax renderer — broader LaTeX support */
 export function createMathJaxRenderer(): MathRenderer {
-  let mathjaxReady = false;
-  let renderFn: ((latex: string, display: boolean) => string) | null = null;
-
   return {
     name: "mathjax",
     renderToString(latex: string, options: MathRenderOptions): string {
-      if (!mathjaxReady) {
-        // Try to access MathJax global (loaded via CDN or bundled)
-        const MathJax = (globalThis as Record<string, unknown>).MathJax as MathJaxGlobal | undefined;
-        if (MathJax?.tex2svg || MathJax?.tex2chtml) {
-          const converter = MathJax.tex2chtml ?? MathJax.tex2svg!;
-          renderFn = (tex: string, display: boolean) => {
-            const node = converter(tex, { display });
-            return MathJax.startup.adaptor.outerHTML(node);
-          };
-          mathjaxReady = true;
-        }
-      }
-
-      if (!renderFn) {
-        return `<span class="preframe-math-pending">${escapeHtml(latex)}</span>`;
-      }
-
-      try {
-        return renderFn(latex, options.displayMode);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Render error";
-        return `<span class="preframe-math-error" title="${escapeHtml(msg)}">${escapeHtml(latex)}</span>`;
-      }
+      return "";
     },
   };
 }
 
-// ── Math block component ───────────────────────────────────────────
+// ── Math block component ──────────────────────────────────────────
 
-function MathBlock({ node, isStreaming }: PluginComponentProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
+  const [html, setHtml] = useState<string>("");
+  const [error, setError] = useState<string>("");
+
   const latex = (node.pluginData?.latex as string) ?? "";
   const displayMode = (node.pluginData?.displayMode as boolean) ?? true;
-  const html = (node.pluginData?.html as string) ?? "";
-  const isError = (node.pluginData?.isError as boolean) ?? false;
+  const rendererName = (node.pluginData?.renderer as string) ?? "katex";
 
-  // For display math, use a centered block
+  // Render math client-side with dynamic import
+  useEffect(() => {
+    if (!latex) return;
+
+    if (isStreaming) {
+      setHtml("");
+      setError("");
+      return;
+    }
+
+    let cancelled = false;
+
+    if (rendererName === "katex") {
+      import("katex").then((katex) => {
+        if (cancelled) return;
+        try {
+          const result = katex.default.renderToString(latex, {
+            displayMode,
+            throwOnError: false,
+            trust: false,
+            strict: false,
+            output: "htmlAndMathml",
+          });
+          setHtml(result);
+          setError("");
+        } catch (err) {
+          setHtml("");
+          if (isStreaming) {
+            setError("");
+          } else {
+            setError(err instanceof Error ? err.message : "Parse error");
+          }
+        }
+      }).catch(() => {
+        if (cancelled) return;
+        setHtml("");
+        if (isStreaming) {
+          setError("");
+        } else {
+          setError("KaTeX not available");
+        }
+      });
+    }
+
+    return () => { cancelled = true; };
+  }, [displayMode, isStreaming, latex, rendererName]);
+
   const style: React.CSSProperties = displayMode
-    ? { textAlign: "center", padding: "8px 0", overflow: "auto" }
+    ? { textAlign: "center", padding: "8px 0", overflow: "auto", lineHeight: 1.2 }
     : { display: "inline" };
+  const Tag = displayMode ? "div" : "span";
 
   return (
-    <div
-      ref={containerRef}
-      className={`preframe-math ${displayMode ? "preframe-math-display" : "preframe-math-inline"} ${isError ? "preframe-math-has-error" : ""}`}
+    <Tag
+      className={`preframe-math ${displayMode ? "preframe-math-display" : "preframe-math-inline"}`}
       style={style}
-      // For copy: data attribute holds the raw LaTeX source
       data-latex={latex}
       aria-label={`Math: ${latex}`}
     >
       {html ? (
         <span dangerouslySetInnerHTML={{ __html: html }} />
-      ) : isStreaming ? (
-        <span className="preframe-math-skeleton" style={{ opacity: 0.4 }}>
-          {displayMode ? "..." : latex}
+      ) : error && !isStreaming ? (
+        <span className="preframe-math-error" title={error} style={{ color: "#f87171", fontFamily: "ui-monospace, monospace", fontSize: "13px", lineHeight: 1.4 }}>
+          {latex}
         </span>
       ) : (
-        <span className="preframe-math-raw">{latex}</span>
+        <span className="preframe-math-raw" style={{ fontFamily: "ui-monospace, monospace", fontSize: "14px", lineHeight: 1.4, opacity: 0.6 }}>
+          {latex}
+        </span>
       )}
-    </div>
+    </Tag>
   );
 }
 
-// ── Plugin definition ──────────────────────────────────────────────
+// ── Plugin definition ─────────────────────────────────────────────
 
 export interface MathPluginOptions {
-  /**
-   * Math renderer to use. Defaults to KaTeX.
-   * Pass createMathJaxRenderer() for MathJax, or provide your own.
-   */
   renderer?: MathRenderer;
-  /**
-   * Enable single-dollar inline math ($x$).
-   * Off by default to avoid ambiguity with currency ($50).
-   */
   singleDollarInline?: boolean;
-  /** Whether to throw on LaTeX parse errors. Default: false (render raw text) */
   throwOnError?: boolean;
 }
 
 export function createMathPlugin(options?: MathPluginOptions): PreframePlugin {
   const renderer = options?.renderer ?? createKaTeXRenderer();
-  const throwOnError = options?.throwOnError ?? false;
 
-  return {
+  const plugin: PreframePlugin & { rendererName: string } = {
     name: "math",
-    handles: ["math-display", "paragraph"], // paragraph for inline math
+    handles: ["math-display"],
+    rendererName: renderer.name,
 
-    transform(node: ASTNode, ctx: PluginContext): EnrichedNode {
-      if (node.blockType === "math-display") {
-        return transformDisplayMath(node, renderer, throwOnError);
-      }
+    transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
+      const raw = extractText(node);
+      const latex = raw.replace(/^\$\$\s*/, "").replace(/\s*\$\$$/, "").trim();
 
-      // For paragraphs, check if there's inline math
-      // (This is handled by the ingest layer's delimiter normalization)
-      return node as EnrichedNode;
+      return {
+        ...node,
+        transformedBy: "math",
+        pluginData: {
+          latex,
+          displayMode: true,
+          renderer: renderer.name,
+        },
+      };
     },
 
-    measure(node: EnrichedNode, maxWidth: number): Dimensions {
-      if (node.blockType !== "math-display") {
-        // Inline math — don't override paragraph measurement
-        return { width: maxWidth, height: 0 };
-      }
-
-      const latex = (node.pluginData?.latex as string) ?? "";
-      // Estimate height based on LaTeX complexity
+    measure(_node: EnrichedNode, maxWidth: number): Dimensions {
+      const latex = (_node.pluginData?.latex as string) ?? "";
       const hasMultiline = latex.includes("\\\\") || latex.includes("\\begin");
-      const baseParts = latex.split("\\\\").length;
-      const lineHeight = 32; // display math line height
+      const baseParts = Math.max(1, latex.split("\\\\").length);
+      const lineHeight = 44;
       const padding = 16;
 
       const height = hasMultiline
         ? baseParts * lineHeight + padding
         : lineHeight + padding;
 
-      return {
-        width: maxWidth,
-        height: Math.max(height, 48),
-      };
+      return { width: maxWidth, height: Math.max(height, 60) };
     },
 
     component: MathBlock,
   };
+
+  return plugin;
 }
-
-// ── Transform helpers ──────────────────────────────────────────────
-
-function transformDisplayMath(
-  node: ASTNode,
-  renderer: MathRenderer,
-  throwOnError: boolean,
-): EnrichedNode {
-  const raw = extractText(node);
-  // Strip $$ delimiters if present
-  const latex = raw.replace(/^\$\$\s*/, "").replace(/\s*\$\$$/, "").trim();
-
-  let html = "";
-  let isError = false;
-
-  if (latex) {
-    html = renderer.renderToString(latex, { displayMode: true, throwOnError });
-    isError = html.includes("preframe-math-error");
-  }
-
-  return {
-    ...node,
-    transformedBy: "math",
-    pluginData: {
-      latex,
-      displayMode: true,
-      html,
-      isError,
-      renderer: renderer.name,
-    },
-  };
-}
-

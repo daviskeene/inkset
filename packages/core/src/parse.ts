@@ -78,29 +78,37 @@ export function parseBlock(block: Block): ASTNode {
   }
 }
 
+export interface ParseResult {
+  nodes: ASTNode[];
+  parsedBlockIds: Set<number>;
+}
+
 /**
- * Parse multiple blocks. Only re-parses blocks that have changed.
- * Uses the frozenOffset to skip already-parsed blocks.
+ * Parse multiple blocks. Only re-parses blocks that have changed (hot blocks).
+ * Returns both the parsed nodes and the set of block IDs that were freshly parsed,
+ * so downstream layers (transform, measure) know which blocks need reprocessing.
  */
 export function parseBlocks(
   blocks: Block[],
   cache: Map<number, ASTNode>,
-): ASTNode[] {
-  const result: ASTNode[] = [];
+): ParseResult {
+  const nodes: ASTNode[] = [];
+  const parsedBlockIds = new Set<number>();
 
   for (const block of blocks) {
     if (!block.hot && cache.has(block.id)) {
       // Frozen block with cached parse — reuse
-      result.push(cache.get(block.id)!);
+      nodes.push(cache.get(block.id)!);
     } else {
       // Hot block or uncached — parse
       const node = parseBlock(block);
       cache.set(block.id, node);
-      result.push(node);
+      nodes.push(node);
+      parsedBlockIds.add(block.id);
     }
   }
 
-  return result;
+  return { nodes, parsedBlockIds };
 }
 
 // ── HAST conversion ────────────────────────────────────────────────

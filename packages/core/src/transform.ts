@@ -13,13 +13,16 @@ export function transformBlocks(
   registry: PluginRegistry,
   ctx: PluginContext,
   cache: Map<number, EnrichedNode>,
+  parsedBlockIds?: Set<number>,
 ): EnrichedNode[] {
   const result: EnrichedNode[] = [];
 
   for (const node of nodes) {
-    // Use cached transform for frozen blocks (unless width changed and plugin is width-sensitive)
+    // Re-transform blocks that were freshly parsed (hot or uncached).
+    // Frozen blocks with a cached transform are reused as-is.
+    const wasFreshlyParsed = parsedBlockIds?.has(node.blockId) ?? false;
     const cached = cache.get(node.blockId);
-    if (cached && !isHotBlock(node)) {
+    if (cached && !wasFreshlyParsed) {
       result.push(cached);
       continue;
     }
@@ -67,10 +70,4 @@ export function retransformWidthSensitive(
   }
 
   return { nodes: result, changed };
-}
-
-function isHotBlock(node: ASTNode): boolean {
-  // The last block in a streaming response is always hot
-  // This is determined by the block's hot flag set during parsing
-  return false; // Will be determined by the streaming orchestrator
 }
