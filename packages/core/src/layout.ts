@@ -1,27 +1,25 @@
-import type { EnrichedNode, LayoutBlock, LayoutTree, MeasuredBlock } from "./types";
+// Layout layer: pure arithmetic to compute a vertical-stack layout from measured blocks.
+import type { LayoutBlock, LayoutTree, MeasuredBlock } from "./types";
 
-export interface LayoutOptions {
+export type LayoutOptions = {
   blockMargin: number;
   containerWidth: number;
   padding: number;
-}
+};
+
+const DEFAULT_BLOCK_MARGIN = 16;
+const DEFAULT_CONTAINER_WIDTH = 800;
 
 const DEFAULT_LAYOUT_OPTIONS: LayoutOptions = {
-  blockMargin: 16,
-  containerWidth: 800,
+  blockMargin: DEFAULT_BLOCK_MARGIN,
+  containerWidth: DEFAULT_CONTAINER_WIDTH,
   padding: 0,
 };
 
-/**
- * Compute a vertical-stack layout from measured blocks.
- * Pure arithmetic — no DOM access.
- *
- * Performance: ~0.0002ms per block. 1000 blocks < 0.2ms.
- */
-export function computeLayout(
-  measured: MeasuredBlock[],
+export const computeLayout = (
+  measured: readonly MeasuredBlock[],
   options?: Partial<LayoutOptions>,
-): LayoutTree {
+): LayoutTree => {
   const opts = { ...DEFAULT_LAYOUT_OPTIONS, ...options };
   const { blockMargin, containerWidth, padding } = opts;
 
@@ -49,23 +47,23 @@ export function computeLayout(
   }
 
   return layout;
-}
+};
 
-export function getLayoutHeight(layout: LayoutTree, padding: number = 0): number {
+export const getLayoutHeight = (layout: readonly LayoutBlock[], padding: number = 0): number => {
   if (layout.length === 0) return 0;
   const last = layout[layout.length - 1];
   return last.y + last.height + padding;
-}
+};
 
-/** Used for virtual scrolling -- only mount visible blocks. */
-export function getVisibleBlocks(
-  layout: LayoutTree,
+/** Filters to only blocks intersecting the visible viewport, for virtual scrolling. */
+export const getVisibleBlocks = (
+  layout: readonly LayoutBlock[],
   scrollTop: number,
   viewportHeight: number,
-): LayoutBlock[] {
+): LayoutBlock[] => {
   const viewBottom = scrollTop + viewportHeight;
   return layout.filter(
     (block) =>
       block.y + block.height > scrollTop && block.y < viewBottom,
   );
-}
+};

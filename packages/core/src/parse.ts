@@ -1,3 +1,4 @@
+// Parse layer: converts raw markdown blocks into HAST-compatible AST nodes via unified.
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
@@ -8,7 +9,7 @@ import type { ASTNode, Block, BlockType } from "./types";
 
 let cachedProcessor: { parse(doc: string): unknown; runSync(node: unknown): unknown } | null = null;
 
-function getProcessor() {
+const getProcessor = () => {
   if (!cachedProcessor) {
     cachedProcessor = unified()
       .use(remarkParse)
@@ -16,11 +17,11 @@ function getProcessor() {
       .use(remarkRehype, { allowDangerousHtml: true });
   }
   return cachedProcessor;
-}
+};
 
 // ── Block type detection ───────────────────────────────────────────
 
-function detectBlockType(raw: string): BlockType {
+const detectBlockType = (raw: string): BlockType => {
   const trimmed = raw.trimStart();
 
   if (trimmed.match(/^(`{3,}|~{3,})/)) return "code";
@@ -33,31 +34,23 @@ function detectBlockType(raw: string): BlockType {
   if (trimmed.match(/^([-*_]){3,}\s*$/)) return "thematic-break";
 
   return "paragraph";
-}
+};
 
 // ── Block parsing ──────────────────────────────────────────────────
 
-/**
- * Parse raw block strings into Block objects with type detection.
- */
-export function createBlocks(rawBlocks: string[]): Block[] {
+export const createBlocks = (rawBlocks: readonly string[]): Block[] => {
   return rawBlocks.map((raw, i) => ({
     id: i,
     raw,
     type: detectBlockType(raw),
     hot: i === rawBlocks.length - 1, // last block is hot during streaming
   }));
-}
+};
 
-/**
- * Parse a single block's markdown into a HAST-compatible AST node.
- * Uses the cached unified pipeline (remark-parse -> remark-gfm -> remark-rehype).
- */
-export function parseBlock(block: Block): ASTNode {
+export const parseBlock = (block: Readonly<Block>): ASTNode => {
   const processor = getProcessor();
 
   try {
-    // Parse markdown to MDAST, then transform to HAST
     const mdast = processor.parse(block.raw);
     // unified's generic types don't track the mdast->hast conversion across .use() calls,
     // so we assert the output shape which remark-rehype guarantees at runtime.
@@ -76,31 +69,25 @@ export function parseBlock(block: Block): ASTNode {
       blockType: block.type,
     };
   }
-}
+};
 
-export interface ParseResult {
+export type ParseResult = {
   nodes: ASTNode[];
   parsedBlockIds: Set<number>;
-}
+};
 
-/**
- * Parse multiple blocks. Only re-parses blocks that have changed (hot blocks).
- * Returns both the parsed nodes and the set of block IDs that were freshly parsed,
- * so downstream layers (transform, measure) know which blocks need reprocessing.
- */
-export function parseBlocks(
-  blocks: Block[],
+/** Only re-parses hot or uncached blocks; frozen blocks reuse cached AST nodes. */
+export const parseBlocks = (
+  blocks: readonly Block[],
   cache: Map<number, ASTNode>,
-): ParseResult {
+): ParseResult => {
   const nodes: ASTNode[] = [];
   const parsedBlockIds = new Set<number>();
 
   for (const block of blocks) {
     if (!block.hot && cache.has(block.id)) {
-      // Frozen block with cached parse — reuse
       nodes.push(cache.get(block.id)!);
     } else {
-      // Hot block or uncached — parse
       const node = parseBlock(block);
       cache.set(block.id, node);
       nodes.push(node);
@@ -109,23 +96,23 @@ export function parseBlocks(
   }
 
   return { nodes, parsedBlockIds };
-}
+};
 
 // ── HAST conversion ────────────────────────────────────────────────
 
-interface HastNode {
+type HastNode = {
   type: string;
   tagName?: string;
   properties?: Record<string, unknown>;
   children?: HastNode[];
   value?: string;
-}
+};
 
-function hastToASTNode(
+const hastToASTNode = (
   hast: HastNode,
   blockId: number,
   blockType: BlockType,
-): ASTNode {
+): ASTNode => {
   const node: ASTNode = {
     type: hast.type,
     blockId,
@@ -143,13 +130,11 @@ function hastToASTNode(
   }
 
   return node;
-}
+};
 
-/**
- * Extract plain text from an AST node tree (for pretext measurement).
- */
-export function extractText(node: ASTNode): string {
+/** Recursively extracts all text content from an AST subtree for measurement. */
+export const extractText = (node: Readonly<ASTNode>): string => {
   if (node.value) return node.value;
   if (!node.children) return "";
   return node.children.map(extractText).join("");
-}
+};

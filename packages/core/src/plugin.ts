@@ -1,3 +1,4 @@
+// Plugin registry: manages plugin lifecycle, handler dispatch, and AST transformation.
 import type { PreframePlugin, ASTNode, EnrichedNode, PluginContext } from "./types";
 
 export class PluginRegistry {
@@ -18,7 +19,7 @@ export class PluginRegistry {
     }
   }
 
-  getHandlers(nodeType: string): PreframePlugin[] {
+  getHandlers(nodeType: string): readonly PreframePlugin[] {
     return this.handlerIndex.get(nodeType) ?? [];
   }
 
@@ -26,15 +27,15 @@ export class PluginRegistry {
     return this.plugins.get(name);
   }
 
-  all(): PreframePlugin[] {
+  all(): readonly PreframePlugin[] {
     return Array.from(this.plugins.values());
   }
 
-  widthSensitive(): PreframePlugin[] {
+  widthSensitive(): readonly PreframePlugin[] {
     return this.all().filter((p) => p.widthSensitive);
   }
 
-  transform(node: ASTNode, ctx: PluginContext): EnrichedNode {
+  transform(node: Readonly<ASTNode>, ctx: Readonly<PluginContext>): EnrichedNode {
     const handlers = this.getHandlers(node.blockType);
     if (handlers.length === 0) {
       return node as EnrichedNode;

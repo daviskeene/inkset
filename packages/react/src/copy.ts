@@ -1,10 +1,11 @@
-import type { EnrichedNode, PluginRegistry } from "@preframe/core";
+// Smart copy handler: extracts source-friendly text from code, math, and table blocks.
+import type { PluginRegistry } from "@preframe/core";
 
-export interface CopyHandler {
+export type CopyHandler = {
   attach(container: HTMLElement): () => void;
-}
+};
 
-export function createCopyHandler(registry: PluginRegistry): CopyHandler {
+export const createCopyHandler = (registry: PluginRegistry): CopyHandler => {
   return {
     attach(container: HTMLElement) {
       const handler = (e: ClipboardEvent) => {
@@ -25,12 +26,12 @@ export function createCopyHandler(registry: PluginRegistry): CopyHandler {
       return () => container.removeEventListener("copy", handler);
     },
   };
-}
+};
 
-function extractSmartText(
+const extractSmartText = (
   container: HTMLElement,
   range: Range,
-): string | null {
+): string | null => {
   const parts: string[] = [];
   const blocks = container.querySelectorAll("[data-block-id]");
 
@@ -77,9 +78,9 @@ function extractSmartText(
 
   if (parts.length === 0) return null;
   return parts.join("\n\n");
-}
+};
 
-function tableToText(table: HTMLTableElement): string {
+const tableToText = (table: HTMLTableElement): string => {
   const rows: string[][] = [];
   const trs = table.querySelectorAll("tr");
 
@@ -103,4 +104,4 @@ function tableToText(table: HTMLTableElement): string {
       row.map((cell, i) => cell.padEnd(colWidths[i] ?? 0)).join("  "),
     )
     .join("\n");
-}
+};

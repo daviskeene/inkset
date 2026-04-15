@@ -1,3 +1,4 @@
+// Measure layer: text measurement via pretext with LRU caching and block-type-aware sizing.
 import type {
   Dimensions,
   EnrichedNode,
@@ -9,16 +10,30 @@ import { extractText } from "./parse";
 
 // ── LRU Cache ──────────────────────────────────────────────────────
 
-interface CacheEntry {
+type CacheEntry = {
   handle: unknown;
   lastAccessed: number;
-}
+};
+
+const LRU_DEFAULT_MAX_SIZE = 500;
+
+// Block-type measurement constants
+const CODE_LINE_HEIGHT = 21; // 14px font * 1.5 line-height
+const CODE_HEADER_HEIGHT = 28;
+const CODE_PADDING = 24;
+const TABLE_ROW_HEIGHT = 36;
+const TABLE_HEADER_HEIGHT = 40;
+const TABLE_MIN_HEIGHT = 80;
+const LIST_ITEM_PADDING = 4;
+const BLOCKQUOTE_EXTRA_PADDING = 16;
+const THEMATIC_BREAK_HEIGHT = 24;
+const AVG_CHAR_WIDTH_RATIO = 0.6;
 
 export class LRUCache {
   private entries = new Map<string, CacheEntry>();
   private accessCounter = 0;
 
-  constructor(private maxSize: number = 500) {}
+  constructor(private maxSize: number = LRU_DEFAULT_MAX_SIZE) {}
 
   get(key: string): unknown | undefined {
     const entry = this.entries.get(key);
@@ -71,64 +86,67 @@ export class LRUCache {
 
 let fontsReady = false;
 
-export async function waitForFonts(): Promise<void> {
+export const waitForFonts = async (): Promise<void> => {
   if (fontsReady) return;
 
   if (typeof document !== "undefined" && document.fonts) {
     await document.fonts.ready;
   }
   fontsReady = true;
-}
+};
 
-export function resetFontState(): void {
+export const resetFontState = (): void => {
   fontsReady = false;
-}
+};
 
 // ── Pretext integration ────────────────────────────────────────────
 
 let pretextModule: PretextModule | null = null;
 
-interface PretextModule {
+type PretextModule = {
   prepare: (text: string, font: string, options?: { fontSize?: number }) => unknown;
   layout: (
     prepared: unknown,
     maxWidth: number,
     lineHeight: number,
   ) => { height: number; lineCount: number };
-}
+};
 
-async function getPretext(): Promise<PretextModule | null> {
+const getPretext = async (): Promise<PretextModule | null> => {
   if (pretextModule) return pretextModule;
 
   try {
     pretextModule = (await import("@chenglou/pretext")) as PretextModule;
     return pretextModule;
-  } catch {
-    console.warn("[preframe] @chenglou/pretext not available. Using fallback measurement.");
+  } catch (err: unknown) {
+    console.warn("[preframe] @chenglou/pretext not available. Using fallback measurement.", err);
     return null;
   }
-}
+};
 
 // ── Measure layer ──────────────────────────────────────────────────
 
-export interface MeasureOptions {
+export type MeasureOptions = {
   font: string;
   fontSize: number;
   lineHeight: number;
   cacheSize?: number;
-}
+};
 
-interface TypographySpec {
+type TypographySpec = {
   font: string;
   fontSize: number;
   lineHeight: number;
-}
+};
+
+const DEFAULT_FONT_SIZE = 16;
+const DEFAULT_LINE_HEIGHT = 24;
 
 const DEFAULT_OPTIONS: MeasureOptions = {
   font: "system-ui, sans-serif",
-  fontSize: 16,
-  lineHeight: 24,
-  cacheSize: 500,
+  fontSize: DEFAULT_FONT_SIZE,
+  lineHeight: DEFAULT_LINE_HEIGHT,
+  cacheSize: LRU_DEFAULT_MAX_SIZE,
 };
 
 export class MeasureLayer {
@@ -179,8 +197,9 @@ export class MeasureLayer {
   }
 
   /**
-   * Block-type-aware measurement. Accounts for headings being taller,
-   * code blocks having monospace + header bars, lists having indent, etc.
+   * Accounts for headings being taller, code blocks having monospace + header
+   * bars, lists having indent, etc. Each block type uses a different sizing
+   * heuristic so pretext can approximate layout without DOM access.
    */
   private async measureBlockByType(
     node: EnrichedNode,
@@ -204,32 +223,24 @@ export class MeasureLayer {
       }
 
       case "code": {
-        // Code blocks: monospace font (wider chars), plus header bar
         const lines = text.split("\n");
-        const codeLineHeight = 21; // 14px * 1.5
-        const headerHeight = 28;
-        const padding = 24;
         return {
           width: maxWidth,
-          height: lines.length * codeLineHeight + headerHeight + padding,
+          height: lines.length * CODE_LINE_HEIGHT + CODE_HEADER_HEIGHT + CODE_PADDING,
         };
       }
 
       case "table": {
-        // Tables: estimate from row count
         const rows = (text.match(/\n/g) ?? []).length + 1;
-        const rowHeight = 36;
-        const headerHeight = 40;
         return {
           width: maxWidth,
-          height: Math.max(rows * rowHeight + headerHeight, 80),
+          height: Math.max(rows * TABLE_ROW_HEIGHT + TABLE_HEADER_HEIGHT, TABLE_MIN_HEIGHT),
         };
       }
 
       case "list": {
-        // Lists: each item gets its own line + indent
         const items = text.split("\n").filter((l) => l.trim());
-        const itemHeight = this.options.lineHeight + 4;
+        const itemHeight = this.options.lineHeight + LIST_ITEM_PADDING;
         return {
           width: maxWidth,
           height: Math.max(items.length * itemHeight, this.options.lineHeight),
@@ -237,15 +248,14 @@ export class MeasureLayer {
       }
 
       case "blockquote": {
-        // Blockquotes: same as text but with left padding
         return {
           width: maxWidth,
-          height: baseDims.height + 16, // extra padding
+          height: baseDims.height + BLOCKQUOTE_EXTRA_PADDING,
         };
       }
 
       case "thematic-break": {
-        return { width: maxWidth, height: 24 };
+        return { width: maxWidth, height: THEMATIC_BREAK_HEIGHT };
       }
 
       default:
@@ -292,7 +302,6 @@ export class MeasureLayer {
     };
   }
 
-  /** Re-layout at a new width using the cached prepare() handle. */
   async relayout(
     measured: MeasuredBlock,
     newWidth: number,
@@ -318,7 +327,7 @@ export class MeasureLayer {
   get cacheStats() {
     return {
       size: this.cache.size,
-      maxSize: this.options.cacheSize ?? 500,
+      maxSize: this.options.cacheSize ?? LRU_DEFAULT_MAX_SIZE,
     };
   }
 
@@ -378,7 +387,7 @@ export class MeasureLayer {
     fontSize: number = this.options.fontSize,
     lineHeight: number = this.options.lineHeight,
   ): Dimensions {
-    const avgCharWidth = fontSize * 0.6;
+    const avgCharWidth = fontSize * AVG_CHAR_WIDTH_RATIO;
     const charsPerLine = Math.max(1, Math.floor(maxWidth / avgCharWidth));
     const lineCount = Math.max(1, Math.ceil(text.length / charsPerLine));
     return {
@@ -388,16 +397,16 @@ export class MeasureLayer {
   }
 }
 
-function getHeadingLevel(node: EnrichedNode): number {
+const getHeadingLevel = (node: EnrichedNode): number => {
   const tag = node.tagName ?? node.children?.[0]?.tagName ?? "";
   const match = tag.match(/^h(\d)$/);
   return match ? parseInt(match[1], 10) : 1;
-}
+};
 
-function buildFontShorthand(
+const buildFontShorthand = (
   weight: number,
   fontSize: number,
   family: string,
-): string {
+): string => {
   return `${weight} ${fontSize}px ${family}`;
-}
+};

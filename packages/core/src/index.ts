@@ -1,3 +1,4 @@
+// Public API surface for @preframe/core.
 export type {
   ASTNode,
   Block,

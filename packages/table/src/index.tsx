@@ -1,3 +1,4 @@
+// Table plugin: renders markdown tables with horizontal scroll and CSV copy support.
 import React, { useCallback, useRef, useState } from "react";
 import {
   extractText,
@@ -9,6 +10,11 @@ import {
   type Dimensions,
   type PluginComponentProps,
 } from "@preframe/core";
+
+const TABLE_HEADER_HEIGHT = 20;
+const TABLE_ROW_HEIGHT = 44;
+const TABLE_MIN_HEIGHT = 64;
+const COPY_FEEDBACK_DURATION_MS = 2000;
 
 // ── Table component ───────────────────────────────────────────────
 
@@ -22,7 +28,7 @@ function TableBlock({ node }: PluginComponentProps) {
     navigator.clipboard.writeText(csvData).then(() => {
       setCopied(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
+      timeoutRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
     });
   }, [csvData]);
 
@@ -72,12 +78,12 @@ function TableBlock({ node }: PluginComponentProps) {
 
 // ── Plugin definition ─────────────────────────────────────────────
 
-export function createTablePlugin(): PreframePlugin {
+export const createTablePlugin = (): PreframePlugin => {
   return {
     name: "table",
     handles: ["table"],
 
-    transform(node: ASTNode, ctx: PluginContext): EnrichedNode {
+    transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
       const html = nodeToHtml(node);
       const csv = nodeToCSV(node);
 
@@ -91,22 +97,20 @@ export function createTablePlugin(): PreframePlugin {
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
       const html = (node.pluginData?.html as string) ?? "";
       const rowCount = (html.match(/<tr/g) ?? []).length;
-      const headerHeight = 20;
-      const rowHeight = 44;
 
       return {
         width: maxWidth,
-        height: Math.max(rowCount * rowHeight + headerHeight, 64),
+        height: Math.max(rowCount * TABLE_ROW_HEIGHT + TABLE_HEADER_HEIGHT, TABLE_MIN_HEIGHT),
       };
     },
 
     component: TableBlock,
   };
-}
+};
 
 // ── CSV extraction ────────────────────────────────────────────────
 
-function nodeToCSV(node: ASTNode): string {
+const nodeToCSV = (node: ASTNode): string => {
   const rows = findNodes(node, "tr");
   return rows
     .map((row) => {
@@ -114,9 +118,9 @@ function nodeToCSV(node: ASTNode): string {
       return cells.map((cell) => extractText(cell).replace(/"/g, '""')).map((t) => `"${t}"`).join(",");
     })
     .join("\n");
-}
+};
 
-function findNodes(node: ASTNode, tagName: string): ASTNode[] {
+const findNodes = (node: ASTNode, tagName: string): ASTNode[] => {
   const results: ASTNode[] = [];
   if (node.tagName === tagName) results.push(node);
   if (node.children) {
@@ -125,4 +129,4 @@ function findNodes(node: ASTNode, tagName: string): ASTNode[] {
     }
   }
   return results;
-}
+};

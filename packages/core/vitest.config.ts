@@ -1,3 +1,4 @@
+// Test configuration for @preframe/core.
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({

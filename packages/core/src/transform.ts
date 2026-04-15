@@ -1,25 +1,22 @@
+// Transform layer: runs AST nodes through registered plugins to produce enriched nodes.
 import type { ASTNode, EnrichedNode, PluginContext } from "./types";
 import type { PluginRegistry } from "./plugin";
 
 /**
- * Transform AST nodes through registered plugins.
- * Each plugin that handles the block's type gets a chance to enrich it.
- *
  * Width-sensitive plugins are tracked so the layout layer can
- * selectively re-transform on resize.
+ * selectively re-transform on resize without reprocessing everything.
  */
-export function transformBlocks(
-  nodes: ASTNode[],
+export const transformBlocks = (
+  nodes: readonly ASTNode[],
   registry: PluginRegistry,
-  ctx: PluginContext,
+  ctx: Readonly<PluginContext>,
   cache: Map<number, EnrichedNode>,
-  parsedBlockIds?: Set<number>,
-): EnrichedNode[] {
+  parsedBlockIds?: ReadonlySet<number>,
+): EnrichedNode[] => {
   const result: EnrichedNode[] = [];
 
   for (const node of nodes) {
-    // Re-transform blocks that were freshly parsed (hot or uncached).
-    // Frozen blocks with a cached transform are reused as-is.
+    // Frozen blocks with a cached transform are reused; freshly parsed blocks get re-transformed
     const wasFreshlyParsed = parsedBlockIds?.has(node.blockId) ?? false;
     const cached = cache.get(node.blockId);
     if (cached && !wasFreshlyParsed) {
@@ -33,18 +30,15 @@ export function transformBlocks(
   }
 
   return result;
-}
+};
 
-/**
- * Re-transform only width-sensitive blocks after a container resize.
- * Returns true if any blocks were re-transformed (meaning re-measure is needed).
- */
-export function retransformWidthSensitive(
+/** Re-transforms only width-sensitive blocks after a container resize. */
+export const retransformWidthSensitive = (
   nodes: EnrichedNode[],
   registry: PluginRegistry,
-  ctx: PluginContext,
+  ctx: Readonly<PluginContext>,
   cache: Map<number, EnrichedNode>,
-): { nodes: EnrichedNode[]; changed: boolean } {
+): { nodes: EnrichedNode[]; changed: boolean } => {
   const widthSensitivePlugins = registry.widthSensitive();
   if (widthSensitivePlugins.length === 0) {
     return { nodes, changed: false };
@@ -54,12 +48,10 @@ export function retransformWidthSensitive(
   const result: EnrichedNode[] = [];
 
   for (const node of nodes) {
-    // Check if this node was transformed by a width-sensitive plugin
     if (
       node.transformedBy &&
       widthSensitivePlugins.some((p) => p.name === node.transformedBy)
     ) {
-      // Re-transform through the width-sensitive plugin
       const reTransformed = registry.transform(node, ctx);
       cache.set(node.blockId, reTransformed);
       result.push(reTransformed);
@@ -70,4 +62,4 @@ export function retransformWidthSensitive(
   }
 
   return { nodes: result, changed };
-}
+};

@@ -1,3 +1,4 @@
+// Code block plugin: syntax highlighting via shiki with streaming support.
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   extractText,
@@ -9,16 +10,22 @@ import {
   type PluginComponentProps,
 } from "@preframe/core";
 
+const CODE_LINE_HEIGHT = 21;
+const CODE_HEADER_HEIGHT = 24;
+const CODE_PADDING = 24;
+const CODE_MIN_HEIGHT = 48;
+const COPY_FEEDBACK_DURATION_MS = 2000;
+
 // ── Shiki lazy loading ─────────────────────────────────────────────
 
-interface ShikiHighlighter {
+type ShikiHighlighter = {
   codeToHtml: (code: string, options: { lang: string; theme: string }) => string;
-}
+};
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
 let highlighterInstance: ShikiHighlighter | null = null;
 
-async function getHighlighter(theme: string = "github-dark"): Promise<ShikiHighlighter> {
+const getHighlighter = async (theme: string = "github-dark"): Promise<ShikiHighlighter> => {
   if (highlighterInstance) return highlighterInstance;
   if (highlighterPromise) return highlighterPromise;
 
@@ -39,7 +46,7 @@ async function getHighlighter(theme: string = "github-dark"): Promise<ShikiHighl
   })();
 
   return highlighterPromise;
-}
+};
 
 // ── Code block component ──────────────────────────────────────────
 
@@ -64,7 +71,11 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
       try {
         const result = highlighter.codeToHtml(code, { lang, theme });
         setHtml(result);
-      } catch {
+      } catch (err: unknown) {
+        // Gracefully degrade to plain text when shiki can't highlight the language
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[preframe/code] Highlight failed, falling back to plain text:", err);
+        }
         setHtml(null);
       }
     });
@@ -76,7 +87,7 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
+      timeoutRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
     });
   }, [code]);
 
@@ -157,19 +168,19 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
 
 // ── Plugin definition ─────────────────────────────────────────────
 
-export interface CodePluginOptions {
+export type CodePluginOptions = {
   theme?: string;
   langs?: string[];
-}
+};
 
-export function createCodePlugin(options?: CodePluginOptions): PreframePlugin {
+export const createCodePlugin = (options?: CodePluginOptions): PreframePlugin => {
   const theme = options?.theme ?? "github-dark";
 
   return {
     name: "code",
     handles: ["code"],
 
-    transform(node: ASTNode, ctx: PluginContext): EnrichedNode {
+    transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
       const code = extractCodeContent(node);
       const lang = node.lang ?? detectLanguage(node) ?? "text";
 
@@ -183,23 +194,20 @@ export function createCodePlugin(options?: CodePluginOptions): PreframePlugin {
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
       const code = (node.pluginData?.code as string) ?? "";
       const lines = code.split("\n");
-      const lineHeight = 21;
-      const headerHeight = 24;
-      const padding = 24;
 
       return {
         width: maxWidth,
-        height: Math.max(lines.length * lineHeight + headerHeight + padding, 48),
+        height: Math.max(lines.length * CODE_LINE_HEIGHT + CODE_HEADER_HEIGHT + CODE_PADDING, CODE_MIN_HEIGHT),
       };
     },
 
     component: CodeBlock,
   };
-}
+};
 
 // ── Helpers ───────────────────────────────────────────────────────
 
-function extractCodeContent(node: ASTNode): string {
+const extractCodeContent = (node: ASTNode): string => {
   if (node.children) {
     for (const child of node.children) {
       if (child.tagName === "pre") return extractCodeContent(child);
@@ -208,10 +216,10 @@ function extractCodeContent(node: ASTNode): string {
     }
   }
   return node.value ?? "";
-}
+};
 
 /** Detect language from remark's `language-xxx` className on code elements. */
-function detectLanguage(node: ASTNode): string | null {
+const detectLanguage = (node: ASTNode): string | null => {
   if (node.children) {
     for (const child of node.children) {
       if (child.tagName === "pre" && child.children) {
@@ -230,4 +238,4 @@ function detectLanguage(node: ASTNode): string | null {
     }
   }
   return null;
-}
+};

@@ -1,11 +1,6 @@
+// Ingest layer: accumulates streaming tokens, detects block boundaries, and repairs incomplete markdown.
 import type { StreamEvent } from "./types";
 
-/**
- * Accumulates streaming tokens, detects block boundaries,
- * and repairs incomplete markdown syntax before parsing.
- *
- * Follows the remend pattern: fix at the string level BEFORE parsing.
- */
 export class Ingest {
   private document = "";
   private closed = false;
@@ -72,8 +67,8 @@ export class Ingest {
 
 // ── Block splitting ────────────────────────────────────────────────
 
-/** Split a markdown document into block-level chunks. */
-export function splitBlocks(document: string): string[] {
+/** Splits a markdown document into block-level chunks, preserving fenced regions. */
+export const splitBlocks = (document: string): string[] => {
   if (!document) return [];
 
   const lines = document.split("\n");
@@ -121,12 +116,12 @@ export function splitBlocks(document: string): string[] {
   }
 
   return blocks;
-}
+};
 
 // ── Syntax repair ──────────────────────────────────────────────────
 
-/** Repair incomplete markdown syntax for streaming display. */
-export function repair(text: string): string {
+/** Closes unclosed fences, math delimiters, and inline formatting for mid-stream display. */
+export const repair = (text: string): string => {
   let result = text;
 
   result = normalizeDelimiters(result);
@@ -135,18 +130,18 @@ export function repair(text: string): string {
   result = repairInlineFormatting(result);
 
   return result;
-}
+};
 
-function normalizeDelimiters(text: string): string {
+const normalizeDelimiters = (text: string): string => {
   // $$ in replacement string is special (inserts literal $), so use $$$$
   let result = text.replace(/\\\[/g, "$$$$");
   result = result.replace(/\\\]/g, "$$$$");
   result = result.replace(/\\\(/g, "$$");
   result = result.replace(/\\\)/g, "$$");
   return result;
-}
+};
 
-function repairCodeFences(text: string): string {
+const repairCodeFences = (text: string): string => {
   const lines = text.split("\n");
   let openFence: string | null = null;
 
@@ -166,9 +161,9 @@ function repairCodeFences(text: string): string {
     return text + "\n" + openFence;
   }
   return text;
-}
+};
 
-function repairMathBlocks(text: string): string {
+const repairMathBlocks = (text: string): string => {
   let count = 0;
   let inCodeFence = false;
 
@@ -188,9 +183,9 @@ function repairMathBlocks(text: string): string {
     return text + "\n$$";
   }
   return text;
-}
+};
 
-function repairInlineFormatting(text: string): string {
+const repairInlineFormatting = (text: string): string => {
   let result = text;
 
   const lastNewline = result.lastIndexOf("\n");
@@ -221,4 +216,4 @@ function repairInlineFormatting(text: string): string {
   }
 
   return prefix + repairedLine;
-}
+};

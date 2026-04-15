@@ -1,7 +1,7 @@
+// Math block plugin: LaTeX rendering via KaTeX or MathJax with streaming fallback.
 import React, { useEffect, useState } from "react";
 import {
   extractText,
-  escapeHtml,
   type PreframePlugin,
   type ASTNode,
   type EnrichedNode,
@@ -10,42 +10,43 @@ import {
   type PluginComponentProps,
 } from "@preframe/core";
 
+const MATH_LINE_HEIGHT = 44;
+const MATH_PADDING = 16;
+const MATH_MIN_HEIGHT = 60;
+
 // ── Math renderer abstraction ─────────────────────────────────────
 
-export interface MathRenderer {
+export type MathRenderer = {
   renderToString(latex: string, options: MathRenderOptions): string;
   name: string;
-}
+};
 
-export interface MathRenderOptions {
+export type MathRenderOptions = {
   displayMode: boolean;
   throwOnError?: boolean;
-}
+};
 
 // ── Built-in renderers ────────────────────────────────────────────
 
-/** KaTeX renderer — renders client-side via dynamic import */
-export function createKaTeXRenderer(): MathRenderer {
-  // katex loaded lazily at render time, not at plugin creation time
+/** SSR stub -- actual rendering happens client-side in the MathBlock component via dynamic import */
+export const createKaTeXRenderer = (): MathRenderer => {
   return {
     name: "katex",
-    renderToString(latex: string, options: MathRenderOptions): string {
-      // This is a fallback for SSR or when called synchronously.
-      // The real rendering happens in the MathBlock component.
+    renderToString(_latex: string, _options: MathRenderOptions): string {
       return "";
     },
   };
-}
+};
 
-/** MathJax renderer — broader LaTeX support */
-export function createMathJaxRenderer(): MathRenderer {
+/** SSR stub -- actual rendering happens client-side in the MathBlock component */
+export const createMathJaxRenderer = (): MathRenderer => {
   return {
     name: "mathjax",
-    renderToString(latex: string, options: MathRenderOptions): string {
+    renderToString(_latex: string, _options: MathRenderOptions): string {
       return "";
     },
   };
-}
+};
 
 // ── Math block component ──────────────────────────────────────────
 
@@ -90,8 +91,11 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
             setError(err instanceof Error ? err.message : "Parse error");
           }
         }
-      }).catch(() => {
+      }).catch((loadErr: unknown) => {
         if (cancelled) return;
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[preframe/math] KaTeX import failed:", loadErr);
+        }
         setHtml("");
         if (isStreaming) {
           setError("");
@@ -133,13 +137,13 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
 
 // ── Plugin definition ─────────────────────────────────────────────
 
-export interface MathPluginOptions {
+export type MathPluginOptions = {
   renderer?: MathRenderer;
   singleDollarInline?: boolean;
   throwOnError?: boolean;
-}
+};
 
-export function createMathPlugin(options?: MathPluginOptions): PreframePlugin {
+export const createMathPlugin = (options?: MathPluginOptions): PreframePlugin => {
   const renderer = options?.renderer ?? createKaTeXRenderer();
 
   const plugin: PreframePlugin & { rendererName: string } = {
@@ -162,22 +166,20 @@ export function createMathPlugin(options?: MathPluginOptions): PreframePlugin {
       };
     },
 
-    measure(_node: EnrichedNode, maxWidth: number): Dimensions {
-      const latex = (_node.pluginData?.latex as string) ?? "";
+    measure(node: EnrichedNode, maxWidth: number): Dimensions {
+      const latex = (node.pluginData?.latex as string) ?? "";
       const hasMultiline = latex.includes("\\\\") || latex.includes("\\begin");
       const baseParts = Math.max(1, latex.split("\\\\").length);
-      const lineHeight = 44;
-      const padding = 16;
 
       const height = hasMultiline
-        ? baseParts * lineHeight + padding
-        : lineHeight + padding;
+        ? baseParts * MATH_LINE_HEIGHT + MATH_PADDING
+        : MATH_LINE_HEIGHT + MATH_PADDING;
 
-      return { width: maxWidth, height: Math.max(height, 60) };
+      return { width: maxWidth, height: Math.max(height, MATH_MIN_HEIGHT) };
     },
 
     component: MathBlock,
   };
 
   return plugin;
-}
+};

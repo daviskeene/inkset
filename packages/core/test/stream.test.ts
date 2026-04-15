@@ -1,3 +1,4 @@
+// Tests for the streaming pipeline: end-to-end content processing and cache invalidation.
 import { describe, it, expect } from "vitest";
 import { StreamingPipeline } from "../src/stream.js";
 import { extractText } from "../src/parse.js";

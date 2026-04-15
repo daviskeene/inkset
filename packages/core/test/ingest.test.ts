@@ -1,3 +1,4 @@
+// Tests for the ingest layer: block splitting, syntax repair, and streaming token accumulation.
 import { describe, it, expect } from "vitest";
 import { Ingest, splitBlocks, repair } from "../src/ingest.js";
 
@@ -50,7 +51,6 @@ describe("repair", () => {
   it("auto-closes unclosed code fences", () => {
     const result = repair("```python\ndef hello():");
     expect(result).toContain("```");
-    // Should end with closing fence
     const lines = result.split("\n");
     expect(lines[lines.length - 1]).toBe("```");
   });

@@ -1,14 +1,17 @@
+// HTML serialization utilities for converting AST nodes to safe HTML strings.
 import type { ASTNode } from "./types";
 
-export function escapeHtml(str: string): string {
+const SELF_CLOSING_TAGS = ["br", "hr", "img", "input"] as const;
+
+export const escapeHtml = (str: string): string => {
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
+};
 
-export function nodeToHtml(node: ASTNode): string {
+export const nodeToHtml = (node: Readonly<ASTNode>): string => {
   if (node.type === "text") return escapeHtml(node.value ?? "");
   if (node.type === "root" && node.children) {
     return node.children.map(nodeToHtml).join("");
@@ -18,14 +21,14 @@ export function nodeToHtml(node: ASTNode): string {
   const attrs = propsToAttrs(node.properties);
   const children = node.children?.map(nodeToHtml).join("") ?? "";
 
-  if (["br", "hr", "img", "input"].includes(tag)) {
+  if ((SELF_CLOSING_TAGS as readonly string[]).includes(tag)) {
     return `<${tag}${attrs} />`;
   }
 
   return `<${tag}${attrs}>${children}</${tag}>`;
-}
+};
 
-export function propsToAttrs(props?: Record<string, unknown>): string {
+export const propsToAttrs = (props?: Readonly<Record<string, unknown>>): string => {
   if (!props) return "";
   return Object.entries(props)
     .filter(([, v]) => v != null && v !== false)
@@ -35,4 +38,4 @@ export function propsToAttrs(props?: Record<string, unknown>): string {
       return ` ${attr}="${escapeHtml(String(v))}"`;
     })
     .join("");
-}
+};

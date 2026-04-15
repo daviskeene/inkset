@@ -1,3 +1,4 @@
+// Streaming pipeline: orchestrates ingest -> parse -> transform -> measure -> layout.
 import type {
   EnrichedNode,
   LayoutTree,
@@ -5,7 +6,6 @@ import type {
   PreframeOptions,
   ASTNode,
   PluginContext,
-  StreamEvent,
 } from "./types";
 import { Ingest, splitBlocks } from "./ingest";
 import { createBlocks, parseBlocks, extractText } from "./parse";
@@ -14,24 +14,30 @@ import { MeasureLayer } from "./measure";
 import { computeLayout, getLayoutHeight } from "./layout";
 import { PluginRegistry } from "./plugin";
 
+const DEFAULT_FONT = "system-ui, sans-serif";
+const DEFAULT_FONT_SIZE = 16;
+const DEFAULT_LINE_HEIGHT = 24;
+const DEFAULT_BLOCK_MARGIN = 16;
+const DEFAULT_CACHE_SIZE = 500;
+
 // ── Pipeline state ─────────────────────────────────────────────────
 
-export interface PipelineState {
+export type PipelineState = {
   layout: LayoutTree;
   totalHeight: number;
   isStreaming: boolean;
   blockCount: number;
   metrics: PipelineMetrics;
-}
+};
 
-export interface PipelineMetrics {
+export type PipelineMetrics = {
   lastParseMs: number;
   lastTransformMs: number;
   lastMeasureMs: number;
   lastLayoutMs: number;
   totalPipelineMs: number;
   cacheHitRate: number;
-}
+};
 
 // ── Streaming orchestrator ─────────────────────────────────────────
 
@@ -52,7 +58,6 @@ export class StreamingPipeline {
   private relayoutInFlight = false;
   private options: Required<Omit<PreframeOptions, "plugins">>;
 
-  // ReturnType covers both browser `number` and Node.js `Timeout`
   private pendingUpdate: ReturnType<typeof setTimeout> | number | null = null;
   private initialized = false;
 
@@ -69,11 +74,11 @@ export class StreamingPipeline {
 
   constructor(options?: PreframeOptions) {
     this.options = {
-      font: options?.font ?? "system-ui, sans-serif",
-      fontSize: options?.fontSize ?? 16,
-      lineHeight: options?.lineHeight ?? 24,
-      blockMargin: options?.blockMargin ?? 16,
-      cacheSize: options?.cacheSize ?? 500,
+      font: options?.font ?? DEFAULT_FONT,
+      fontSize: options?.fontSize ?? DEFAULT_FONT_SIZE,
+      lineHeight: options?.lineHeight ?? DEFAULT_LINE_HEIGHT,
+      blockMargin: options?.blockMargin ?? DEFAULT_BLOCK_MARGIN,
+      cacheSize: options?.cacheSize ?? DEFAULT_CACHE_SIZE,
     };
 
     this.measureLayer = new MeasureLayer({
@@ -188,7 +193,6 @@ export class StreamingPipeline {
         this.runPipeline();
       });
     } else {
-      // Node.js / test environment — setTimeout returns Timeout, not number
       this.pendingUpdate = setTimeout(() => {
         this.pendingUpdate = null;
         this.runPipeline();

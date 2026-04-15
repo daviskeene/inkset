@@ -1,3 +1,4 @@
+// Build configuration for @preframe/react.
 import { defineConfig } from "tsup";
 
 export default defineConfig({
@@ -6,8 +7,7 @@ export default defineConfig({
   external: ["react"],
   dts: {
     compilerOptions: {
-      // Remove paths so DTS generation uses the compiled @preframe/core
-      // package from node_modules instead of source files outside rootDir
+      // DTS generation must use compiled @preframe/core from node_modules, not source files
       paths: {},
     },
   },

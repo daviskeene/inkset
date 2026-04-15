@@ -1,3 +1,4 @@
+// React bindings for preframe: the <Preframe> component, usePreframe hook, and block renderer.
 import React, {
   useEffect,
   useLayoutEffect,
@@ -17,6 +18,11 @@ import {
   type PreframePlugin,
 } from "@preframe/core";
 import { createCopyHandler } from "./copy";
+
+const DEFAULT_BLOCK_MARGIN = 16;
+const DEFAULT_FONT_SIZE = 16;
+const DEFAULT_LINE_HEIGHT = 24;
+const DEFAULT_LINE_HEIGHT_RATIO = 1.5;
 
 const PRE_FRAME_STYLES = `
   .preframe-root {
@@ -157,17 +163,17 @@ const PRE_FRAME_STYLES = `
   }
 `;
 
-interface ResolvedBlockHeight {
+type ResolvedBlockHeight = {
   height: number;
   node: EnrichedNode;
   width: number;
-}
+};
 
-function resolveLayout(
-  layout: LayoutBlock[],
-  heightMap: Map<number, ResolvedBlockHeight>,
+const resolveLayout = (
+  layout: readonly LayoutBlock[],
+  heightMap: ReadonlyMap<number, ResolvedBlockHeight>,
   blockMargin: number,
-): LayoutBlock[] {
+): LayoutBlock[] => {
   if (layout.length === 0) return [];
 
   let currentY = layout[0]?.y ?? 0;
@@ -176,10 +182,8 @@ function resolveLayout(
     const resolved = heightMap.get(block.blockId);
     let height = block.height;
 
-    // Only trust DOM-resolved heights when they were captured for the exact
-    // same block instance at the exact same width. This preserves seamless
-    // handoff from the hot flow block to the frozen absolute layer, while
-    // avoiding stale-height lag during interactive resize.
+    // Only trust DOM-resolved heights when captured for the same block instance
+    // at the same width, preventing stale-height lag during interactive resize
     if (
       resolved &&
       resolved.node === block.node &&
@@ -198,13 +202,13 @@ function resolveLayout(
     currentY += height + (index < layout.length - 1 ? blockMargin : 0);
     return nextBlock;
   });
-}
+};
 
-function getLayoutHeight(layout: LayoutBlock[]): number {
+const getLayoutHeight = (layout: readonly LayoutBlock[]): number => {
   if (layout.length === 0) return 0;
   const lastBlock = layout[layout.length - 1];
   return lastBlock.y + lastBlock.height;
-}
+};
 
 // ── usePreframe hook ───────────────────────────────────────────────
 
@@ -213,16 +217,16 @@ export interface UsePreframeOptions extends PreframeOptions {
   width?: number;
 }
 
-export interface UsePreframeResult {
+export type UsePreframeResult = {
   state: PipelineState | null;
   registry: PluginRegistry;
   containerRef: React.RefObject<HTMLDivElement | null>;
   appendToken: (token: string) => Promise<void>;
   endStream: () => Promise<void>;
   setContent: (content: string) => Promise<void>;
-}
+};
 
-export function usePreframe(options?: UsePreframeOptions): UsePreframeResult {
+export const usePreframe = (options?: UsePreframeOptions): UsePreframeResult => {
   const containerRef = useRef<HTMLDivElement>(null);
   const pipelineRef = useRef<StreamingPipeline | null>(null);
   const registryRef = useRef<PluginRegistry>(new PluginRegistry());
@@ -302,11 +306,11 @@ export function usePreframe(options?: UsePreframeOptions): UsePreframeResult {
     endStream,
     setContent,
   };
-}
+};
 
 // ── Block renderer ─────────────────────────────────────────────────
 
-interface BlockRendererProps {
+type BlockRendererProps = {
   block: LayoutBlock;
   registry: PluginRegistry;
   isStreaming: boolean;
@@ -320,7 +324,7 @@ interface BlockRendererProps {
     height: number,
     priority?: "sync" | "deferred",
   ) => void;
-}
+};
 
 const BlockRenderer = memo(
   function BlockRenderer({
@@ -340,8 +344,6 @@ const BlockRenderer = memo(
 
     const PluginComponent = plugin?.component;
 
-    // Frozen blocks: absolute positioned with pretext-computed coordinates.
-    // Hot block: normal document flow — CSS handles height automatically.
     const style: React.CSSProperties =
       positioning === "absolute"
         ? {
@@ -353,15 +355,10 @@ const BlockRenderer = memo(
             contain: "layout style",
           }
         : {
-            // Normal flow — no position/transform needed.
-            // The spacer div above handles vertical placement.
             width,
           };
 
-    // Always capture the hot block's real DOM height before paint so we can
-    // hand that exact height to the frozen absolute layer when the block
-    // completes. Frozen blocks also keep a ResizeObserver as a fallback for
-    // plugin-driven DOM changes after commit.
+    // Capture real DOM height so frozen absolute layout inherits it seamlessly
     useLayoutEffect(() => {
       if (!observeHeight) return;
 
@@ -376,15 +373,10 @@ const BlockRenderer = memo(
       };
 
       if (positioning === "flow") {
-        // The live streaming block needs an exact pre-paint measurement so the
-        // next frozen absolute frame inherits its final height seamlessly.
         reportHeight("sync");
         return;
       }
 
-      // Frozen blocks can update on the next animation frame. This keeps
-      // spacing accurate during resize without forcing one synchronous React
-      // commit per ResizeObserver callback.
       reportHeight("deferred");
 
       const observer = new ResizeObserver(() => {
@@ -426,9 +418,9 @@ const BlockRenderer = memo(
 
 // ── Default block renderer ────────────────────────────────────────
 
-interface MathInlinePlugin extends PreframePlugin {
+type MathInlinePlugin = PreframePlugin & {
   rendererName?: string;
-}
+};
 
 function DefaultBlockRenderer({
   node,
@@ -444,12 +436,12 @@ function DefaultBlockRenderer({
   );
 }
 
-function renderAstNode(
+const renderAstNode = (
   node: EnrichedNode,
   registry: PluginRegistry,
   key: string,
   allowInlineMath: boolean = true,
-): React.ReactNode {
+): React.ReactNode => {
   if (node.type === "text") {
     return renderTextNode(node, registry, key, allowInlineMath);
   }
@@ -478,14 +470,14 @@ function renderAstNode(
   );
 
   return React.createElement(tagName, props, ...(children ?? []));
-}
+};
 
-function renderTextNode(
+const renderTextNode = (
   node: EnrichedNode,
   registry: PluginRegistry,
   key: string,
   allowInlineMath: boolean,
-): React.ReactNode {
+): React.ReactNode => {
   const text = node.value ?? "";
   if (!allowInlineMath || !text.includes("$")) {
     return text;
@@ -540,12 +532,12 @@ function renderTextNode(
       />
     );
   });
-}
+};
 
-function toReactProps(
+const toReactProps = (
   properties: Record<string, unknown> | undefined,
   key: string,
-): Record<string, unknown> {
+): Record<string, unknown> => {
   const props: Record<string, unknown> = { key };
   if (!properties) return props;
 
@@ -561,13 +553,13 @@ function toReactProps(
   }
 
   return props;
-}
+};
 
 type InlineMathSegment =
   | { type: "text"; value: string }
   | { type: "math"; value: string };
 
-function splitInlineMath(text: string): InlineMathSegment[] {
+const splitInlineMath = (text: string): InlineMathSegment[] => {
   const segments: InlineMathSegment[] = [];
   let cursor = 0;
 
@@ -599,9 +591,9 @@ function splitInlineMath(text: string): InlineMathSegment[] {
   }
 
   return segments;
-}
+};
 
-function findInlineMathDelimiter(text: string, fromIndex: number): number {
+const findInlineMathDelimiter = (text: string, fromIndex: number): number => {
   for (let index = fromIndex; index < text.length; index++) {
     if (text[index] !== "$") continue;
     if (text[index - 1] === "\\") continue;
@@ -613,12 +605,12 @@ function findInlineMathDelimiter(text: string, fromIndex: number): number {
   }
 
   return -1;
-}
+};
 
 
 // ── <Preframe> component ──────────────────────────────────────────
 
-export interface PreframeProps {
+export type PreframeProps = {
   content?: string;
   streaming?: boolean;
   plugins?: PreframePlugin[];
@@ -631,7 +623,7 @@ export interface PreframeProps {
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
-}
+};
 
 export function Preframe({
   content,
@@ -829,7 +821,7 @@ export function Preframe({
     [scheduleHeightFlush],
   );
 
-  const margin = blockMargin ?? 16;
+  const margin = blockMargin ?? DEFAULT_BLOCK_MARGIN;
   const resolvedLayout = state
     ? resolveLayout(state.layout, resolvedHeights, margin)
     : [];
@@ -837,9 +829,8 @@ export function Preframe({
     ? getLayoutHeight(resolvedLayout)
     : (state?.totalHeight ?? 0);
 
-  // Hybrid layout: split into frozen blocks (absolute) and hot block (flow).
-  // The hot block is the last block during streaming. It uses normal document
-  // flow so CSS handles its height natively — no measurement race, no flicker.
+  // The hot block (last during streaming) uses normal document flow so CSS
+  // handles its height natively, avoiding measurement race conditions
   const hotBlockIndex = streaming && resolvedLayout.length > 0
     ? resolvedLayout.length - 1
     : -1;
@@ -850,25 +841,20 @@ export function Preframe({
     ? resolvedLayout[hotBlockIndex]
     : null;
 
-  // Spacer height = the y position where the hot block should start.
-  // This pushes the normal-flow hot block to the correct vertical position
-  // below the absolute-positioned frozen blocks.
+  // Pushes the normal-flow hot block below the absolute-positioned frozen blocks
   const spacerHeight = hotBlock
     ? hotBlock.y
     : 0;
 
-  // Container height: for frozen-only (not streaming), use resolved heights.
-  // When streaming with a hot block in flow, let CSS determine total height
-  // from the spacer + hot block's natural height.
   const containerMinHeight = hotBlock
-    ? undefined // flow block determines height naturally
+    ? undefined
     : resolvedHeight || (state?.totalHeight ?? 0);
 
-  const baseFontSize = fontSize ?? 16;
-  const baseLineHeight = lineHeight ?? 24;
+  const baseFontSize = fontSize ?? DEFAULT_FONT_SIZE;
+  const baseLineHeight = lineHeight ?? DEFAULT_LINE_HEIGHT;
   const baseLineHeightRatio = baseFontSize > 0
     ? baseLineHeight / baseFontSize
-    : 1.5;
+    : DEFAULT_LINE_HEIGHT_RATIO;
 
   const containerStyle: React.CSSProperties & Record<string, string | number> = {
     position: "relative",
@@ -892,7 +878,6 @@ export function Preframe({
     >
       <style>{PRE_FRAME_STYLES}</style>
 
-      {/* Frozen blocks: absolute positioned, pretext-controlled layout */}
       {frozenBlocks.map((block: LayoutBlock) => (
         <BlockRenderer
           key={block.blockId}
@@ -905,10 +890,8 @@ export function Preframe({
         />
       ))}
 
-      {/* Hot block: normal document flow, CSS handles height */}
       {hotBlock && (
         <>
-          {/* Spacer pushes the flow block below the absolute blocks */}
           <div
             aria-hidden
             style={{
@@ -916,7 +899,6 @@ export function Preframe({
               pointerEvents: "none",
             }}
           />
-          {/* Margin between last frozen block and hot block */}
           {frozenBlocks.length > 0 && (
             <div aria-hidden style={{ height: margin }} />
           )}

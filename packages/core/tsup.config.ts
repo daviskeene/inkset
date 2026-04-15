@@ -1,3 +1,4 @@
+// Build configuration for @preframe/core.
 import { defineConfig } from "tsup";
 
 export default defineConfig({
@@ -8,7 +9,6 @@ export default defineConfig({
       composite: false,
       rootDir: "./src",
     },
-    // Ensure all source files are included in the DTS build
     tsConfigPath: "./tsconfig.json",
   },
 });

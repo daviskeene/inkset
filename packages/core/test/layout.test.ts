@@ -1,8 +1,9 @@
+// Tests for the layout layer: vertical stacking, height calculation, and viewport filtering.
 import { describe, it, expect } from "vitest";
 import { computeLayout, getLayoutHeight, getVisibleBlocks } from "../src/layout.js";
 import type { MeasuredBlock, EnrichedNode } from "../src/types.js";
 
-function makeNode(blockId: number): EnrichedNode {
+const makeNode = (blockId: number): EnrichedNode => {
   return {
     type: "element",
     tagName: "p",
@@ -10,15 +11,15 @@ function makeNode(blockId: number): EnrichedNode {
     blockType: "paragraph",
     children: [{ type: "text", value: `Block ${blockId}`, blockId, blockType: "paragraph" }],
   };
-}
+};
 
-function makeMeasured(blockId: number, height: number): MeasuredBlock {
+const makeMeasured = (blockId: number, height: number): MeasuredBlock => {
   return {
     blockId,
     node: makeNode(blockId),
     dimensions: { width: 800, height },
   };
-}
+};
 
 describe("computeLayout", () => {
   it("returns empty array for no blocks", () => {
@@ -131,6 +132,6 @@ describe("layout performance", () => {
     const elapsed = performance.now() - start;
 
     expect(layout).toHaveLength(1000);
-    expect(elapsed).toBeLessThan(5); // Should be well under 1ms
+    expect(elapsed).toBeLessThan(5);
   });
 });

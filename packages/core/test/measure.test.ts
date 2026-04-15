@@ -1,3 +1,4 @@
+// Tests for the LRU cache used by the measure layer.
 import { describe, it, expect } from "vitest";
 import { LRUCache } from "../src/measure.js";
 

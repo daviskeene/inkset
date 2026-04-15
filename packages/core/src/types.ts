@@ -1,3 +1,4 @@
+// Core type definitions for the preframe rendering pipeline.
 import type { ComponentType } from "react";
 
 // ── Block-level types ──────────────────────────────────────────────
@@ -16,13 +17,13 @@ export type BlockType =
 
 export type Properties = Record<string, unknown>;
 
-export interface Block {
+export type Block = {
   id: number;
   raw: string;
   type: BlockType;
   /** Whether this block is still receiving streaming tokens */
   hot: boolean;
-}
+};
 
 // ── AST types (post-parse) ─────────────────────────────────────────
 
@@ -47,37 +48,37 @@ export interface EnrichedNode extends ASTNode {
 
 // ── Measurement types ──────────────────────────────────────────────
 
-export interface Dimensions {
+export type Dimensions = {
   width: number;
   height: number;
-}
+};
 
-export interface MeasuredBlock {
+export type MeasuredBlock = {
   blockId: number;
   node: EnrichedNode;
   dimensions: Dimensions;
   preparedHandle?: unknown;
-}
+};
 
 // ── Layout types ───────────────────────────────────────────────────
 
-export interface LayoutBlock {
+export type LayoutBlock = {
   blockId: number;
   x: number;
   y: number;
   width: number;
   height: number;
   node: EnrichedNode;
-}
+};
 
 export type LayoutTree = LayoutBlock[];
 
 // ── Plugin types ───────────────────────────────────────────────────
 
-export interface PluginContext {
+export type PluginContext = {
   containerWidth: number;
   isStreaming: boolean;
-}
+};
 
 export interface PreframePlugin {
   name: string;

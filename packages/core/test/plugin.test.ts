@@ -1,24 +1,25 @@
+// Tests for the plugin registry: registration, handler dispatch, and error handling.
 import { describe, it, expect, vi } from "vitest";
 import { PluginRegistry } from "../src/plugin.js";
 import type { PreframePlugin, ASTNode, BlockType, PluginContext } from "../src/types.js";
 
-function makePlugin(name: string, handles: string[]): PreframePlugin {
+const makePlugin = (name: string, handles: string[]): PreframePlugin => {
   return {
     name,
     handles,
     transform: (node) => ({ ...node, transformedBy: name, pluginData: { by: name } }),
     component: () => null,
   };
-}
+};
 
-function makeNode(blockType: BlockType, blockId = 0): ASTNode {
+const makeNode = (blockType: BlockType, blockId = 0): ASTNode => {
   return {
     type: "element",
     tagName: "div",
     blockId,
     blockType,
   };
-}
+};
 
 const ctx: PluginContext = { containerWidth: 800, isStreaming: false };
 
@@ -95,7 +96,6 @@ describe("PluginRegistry", () => {
     const node = makeNode("code");
     const result = registry.transform(node, ctx);
 
-    // Should return the original node, not crash
     expect(result.blockId).toBe(0);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
