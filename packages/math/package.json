@@ -1,0 +1,41 @@
+{
+  "name": "@preframe/math",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.tsx --format esm --no-dts --external react --external @preframe/core --external katex --external mathjax",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@preframe/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "katex": "^0.16.0",
+    "mathjax": "^3.0.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "katex": { "optional": true },
+    "mathjax": { "optional": true }
+  },
+  "devDependencies": {
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0",
+    "react": "^19.0.0",
+    "@types/react": "^19.0.0",
+    "katex": "^0.16.0",
+    "@types/katex": "^0.16.0"
+  }
+}

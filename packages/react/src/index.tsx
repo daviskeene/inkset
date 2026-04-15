@@ -15,6 +15,7 @@ import {
   type EnrichedNode,
   type PreframePlugin,
 } from "@preframe/core";
+import { createCopyHandler } from "./copy.js";
 
 // ── usePreframe hook ───────────────────────────────────────────────
 
@@ -257,6 +258,14 @@ export function Preframe({
       endStream();
     }
   }, [streaming, endStream]);
+
+  // Attach smart copy handler
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const copyHandler = createCopyHandler(registry);
+    return copyHandler.attach(container);
+  }, [registry, containerRef]);
 
   const containerStyle: React.CSSProperties = {
     position: "relative",

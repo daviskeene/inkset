@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "paths": {
+      "@preframe/core": ["../../packages/core/src/index.ts"],
+      "@preframe/react": ["../../packages/react/src/index.tsx"],
+      "@preframe/code": ["../../packages/code/src/index.tsx"],
+      "@preframe/math": ["../../packages/math/src/index.tsx"],
+      "@preframe/table": ["../../packages/table/src/index.tsx"]
+    },
+    "plugins": [{ "name": "next" }]
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
