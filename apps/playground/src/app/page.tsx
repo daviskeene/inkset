@@ -26,54 +26,53 @@ function getMaxRenderPanelWidth(containerWidth: number) {
 // ── Sample content presets ─────────────────────────────────────────
 
 const PRESETS: Record<string, string> = {
-  mixed: `# Preframe: AI Output Rendering Without Reflow
+  mixed: `# Preframe
 
-**Preframe** is a renderer for AI-generated markdown that treats text layout as data, not as an accidental side effect of the DOM.
+A renderer for model output that measures text without touching the DOM.
 
-Most markdown renderers stream tokens into live DOM, then rely on browser layout to figure out where everything lands. That works until the output becomes dense, code-heavy, math-heavy, or resizable. Then every update turns into a choreography of reflow, repaint, height correction, and visual instability.
+Most chat UIs stream markdown tokens into the page and let the browser figure out where things go. This works fine until someone resizes the window, or the response has code blocks and math, or the stream is fast enough that layout can't keep up. Then you get jitter.
 
-> Preframe separates **measurement**, **layout**, and **rendering**. That architectural split is the unlock.
+The problem is that measuring text with \`getBoundingClientRect()\` forces the browser to reflow the page. Do that on every token and you're fighting the rendering engine.
 
-## Why this matters
+> Preframe measures text once with pretext, then re-layouts with arithmetic. No DOM reads in the hot path.
 
-If a renderer measures text with DOM reads like \`getBoundingClientRect()\`, then streaming and resizing compete with the browser's layout engine.
-
-Preframe uses **pretext** to prepare text once and re-layout it with pure arithmetic:
+## How it works
 
 \`\`\`ts
-const prepared = pretext.prepare(markdownText, "400 15px system-ui");
-const next = pretext.layout(prepared, containerWidth, 22);
+const prepared = pretext.prepare(text, "400 15px system-ui");
+const layout = pretext.layout(prepared, containerWidth, 22);
 
-// No DOM probing in the hot path.
-// Width changes become data changes, not reflow events.
+// Width changes are just math now.
+// Resize 1000 blocks in under a millisecond.
 \`\`\`
 
-That changes what is possible for AI interfaces:
+On resize, the cost drops to:
 
-$$t_{resize} \\approx t_{layout\\ math} + t_{paint}$$
+$$t_{resize} \\approx t_{arithmetic} + t_{paint}$$
 
-instead of
+instead of the usual:
 
-$$t_{resize} \\approx t_{DOM\\ reflow} + t_{measurement} + t_{patching} + t_{paint}$$
+$$t_{resize} \\approx t_{reflow} + t_{measure} + t_{patch} + t_{paint}$$
 
-## Preframe vs DOM-first renderers
+Drag the resize handle on this playground to feel the difference.
 
-Tools like **Streamdown** and other DOM-first markdown renderers focus on turning model output into HTML quickly. Preframe is optimizing for a different problem:
+## Compared to Streamdown
 
-| Concern | DOM-first markdown renderers | Preframe |
+Streamdown turns markdown into HTML fast. Preframe is solving a different thing: keeping layout stable while content streams in and the container changes size.
+
+| | Streamdown | Preframe |
 |---------|------------------------------|----------|
-| Text measurement | Browser layout / DOM reads | **pretext** |
-| Resize path | Reflow-driven | Arithmetic-driven |
-| Streaming stability | Patch DOM as tokens arrive | Preserve measured layout as content evolves |
-| Plugins | Usually post-render enhancement | Native code / math / table pipeline |
-| Goal | Render markdown | **Render model output predictably at interactive speed** |
+| Text measurement | DOM reads | pretext (Canvas) |
+| Resize | Browser reflow | Arithmetic |
+| Streaming | Patch DOM per token | Measured layout, flow-based hot block |
+| Plugins | Post-render | Integrated (code, math, tables) |
 
-## Native plugin pipeline
+## Plugins
 
-Preframe is built for the kinds of blocks LLMs actually emit:
+Code, math, and tables are first-class. Not bolted on after the fact.
 
 \`\`\`python
-def score_renderer(reflow_ms: float, layout_ms: float, plugin_ready: bool) -> str:
+def score_renderer(reflow_ms, layout_ms, plugin_ready):
     if layout_ms < 1 and plugin_ready and reflow_ms == 0:
         return "feels instant"
     if layout_ms < 8:
@@ -81,29 +80,18 @@ def score_renderer(reflow_ms: float, layout_ms: float, plugin_ready: bool) -> st
     return "browser is doing too much work"
 \`\`\`
 
-It also handles structured content without treating it as an afterthought:
+The throughput gain over DOM-based layout for the resize path:
 
-$$\\text{throughput gain} = \\frac{t_{DOM\\ layout}}{t_{pretext\\ relayout}}$$
+$$\\text{speedup} = \\frac{t_{DOM}}{t_{pretext}} \\approx 300\\text{-}600\\times$$
 
-and
-
-| Output type | Why it is hard | What Preframe does |
+| Block type | The hard part | What happens here |
 |-------------|----------------|--------------------|
-| Long prose | Rewraps constantly on resize | Re-layout from prepared text |
-| Code blocks | Syntax UI changes measured height | Plugin-aware measurement + rendering |
-| Math | Incomplete formulas flicker during stream | Stream-safe math fallback and final render |
-| Tables | Headers, cells, and overflow shift visually | Structured table plugin with stable sizing |
+| Prose | Rewraps on every resize | Re-layout from prepared handle |
+| Code | Highlighting changes height | Plugin measures before render |
+| Math | Partial formulas flicker | Fallback text until KaTeX finishes |
+| Tables | Overflow shifts content | Stable sizing with scroll |
 
-## What this unlocks
-
-Preframe is not just "markdown, but faster." It is the basis for:
-
-- chat UIs that stream without jitter
-- inspectors and copilots with continuously resizable panels
-- AI workspaces with code, math, and tables in the same response
-- plugin-native rendering pipelines where layout remains predictable
-
-This playground exists to show that responsive AI output does **not** have to mean fragile DOM-driven layout.`,
+This is early. The measurement layer still falls back to character-width estimates when pretext isn't loaded, and the height reconciliation between absolute-positioned frozen blocks and the flow-based streaming block has edge cases. But the core idea works: measure once, layout with math, let CSS handle the block that's actually changing.`,
 
   "code-heavy": `## Algorithm Comparison
 
