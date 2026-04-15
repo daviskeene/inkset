@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { PluginRegistry } from "../src/plugin.js";
-import type { PreframePlugin, ASTNode, PluginContext } from "../src/types.js";
+import type { PreframePlugin, ASTNode, BlockType, PluginContext } from "../src/types.js";
 
 function makePlugin(name: string, handles: string[]): PreframePlugin {
   return {
@@ -11,12 +11,12 @@ function makePlugin(name: string, handles: string[]): PreframePlugin {
   };
 }
 
-function makeNode(blockType: string, blockId = 0): ASTNode {
+function makeNode(blockType: BlockType, blockId = 0): ASTNode {
   return {
     type: "element",
     tagName: "div",
     blockId,
-    blockType: blockType as any,
+    blockType,
   };
 }
 

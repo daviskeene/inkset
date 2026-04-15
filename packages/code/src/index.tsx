@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import type {
-  PreframePlugin,
-  ASTNode,
-  EnrichedNode,
-  PluginContext,
-  Dimensions,
-  PluginComponentProps,
+import {
+  extractText,
+  type PreframePlugin,
+  type ASTNode,
+  type EnrichedNode,
+  type PluginContext,
+  type Dimensions,
+  type PluginComponentProps,
 } from "@preframe/core";
 
 // ── Shiki lazy loading ─────────────────────────────────────────────
@@ -228,12 +229,6 @@ function extractCodeContent(node: ASTNode): string {
   return node.value ?? "";
 }
 
-function extractText(node: ASTNode): string {
-  if (node.value) return node.value;
-  if (!node.children) return "";
-  return node.children.map(extractText).join("");
-}
-
 function detectLanguage(node: ASTNode): string | null {
   // Check className on code element (remark adds language-xxx class)
   if (node.children) {
@@ -244,9 +239,9 @@ function detectLanguage(node: ASTNode): string | null {
             const classes = grandchild.properties.className;
             if (Array.isArray(classes)) {
               const langClass = classes.find(
-                (c: string) => typeof c === "string" && c.startsWith("language-"),
+                (c) => typeof c === "string" && c.startsWith("language-"),
               );
-              if (langClass) return (langClass as string).replace("language-", "");
+              if (typeof langClass === "string") return langClass.replace("language-", "");
             }
           }
         }

@@ -3,9 +3,9 @@ import type {
   EnrichedNode,
   MeasuredBlock,
   PreframePlugin,
-} from "./types.js";
-import type { PluginRegistry } from "./plugin.js";
-import { extractText } from "./parse.js";
+} from "./types";
+import type { PluginRegistry } from "./plugin";
+import { extractText } from "./parse";
 
 // ── LRU Cache ──────────────────────────────────────────────────────
 
@@ -71,10 +71,6 @@ export class LRUCache {
 
 let fontsReady = false;
 
-/**
- * Wait for fonts to load before measuring.
- * Uses document.fonts.ready to ensure Canvas measureText() uses the correct font.
- */
 export async function waitForFonts(): Promise<void> {
   if (fontsReady) return;
 
@@ -84,14 +80,12 @@ export async function waitForFonts(): Promise<void> {
   fontsReady = true;
 }
 
-/** Reset font ready state (for testing) */
 export function resetFontState(): void {
   fontsReady = false;
 }
 
 // ── Pretext integration ────────────────────────────────────────────
 
-// Dynamic import for pretext to avoid SSR issues
 let pretextModule: PretextModule | null = null;
 
 interface PretextModule {
@@ -141,16 +135,12 @@ export class MeasureLayer {
     this.cache = new LRUCache(this.options.cacheSize);
   }
 
-  /** Initialize the measure layer (wait for fonts + load pretext) */
   async init(): Promise<void> {
     if (this.initialized) return;
     await Promise.all([waitForFonts(), getPretext()]);
     this.initialized = true;
   }
 
-  /**
-   * Measure a block using pretext for text, or plugin.measure() for enriched content.
-   */
   async measureBlock(
     node: EnrichedNode,
     maxWidth: number,
@@ -158,18 +148,15 @@ export class MeasureLayer {
   ): Promise<MeasuredBlock> {
     await this.init();
 
-    // If a plugin provides measurement, use it
     if (plugin?.measure) {
       try {
         const dimensions = plugin.measure(node, maxWidth);
         return { blockId: node.blockId, node, dimensions };
       } catch (err) {
         console.warn(`[preframe] Plugin measure() failed for block ${node.blockId}:`, err);
-        // Fall through to text measurement
       }
     }
 
-    // Default: extract text and measure with pretext
     const text = extractText(node);
     if (!text) {
       return {
@@ -183,15 +170,10 @@ export class MeasureLayer {
     return { blockId: node.blockId, node, dimensions };
   }
 
-  /**
-   * Measure text using pretext's prepare()/layout() split.
-   * Caches prepare() handles in the LRU cache.
-   */
   async measureText(text: string, maxWidth: number): Promise<Dimensions> {
     const pretext = await getPretext();
 
     if (!pretext) {
-      // Fallback: estimate dimensions without pretext
       return this.fallbackMeasure(text, maxWidth);
     }
 
@@ -212,10 +194,7 @@ export class MeasureLayer {
     };
   }
 
-  /**
-   * Re-layout a previously measured block at a new width.
-   * Uses the cached prepare() handle — pure arithmetic, no re-measurement.
-   */
+  /** Re-layout at a new width using the cached prepare() handle. */
   async relayout(
     measured: MeasuredBlock,
     newWidth: number,
@@ -230,7 +209,6 @@ export class MeasureLayer {
     const handle = this.cache.get(cacheKey);
 
     if (!handle) {
-      // Cache miss — need to re-prepare
       return this.measureText(text, newWidth);
     }
 
@@ -238,7 +216,6 @@ export class MeasureLayer {
     return { width: newWidth, height: result.height };
   }
 
-  /** Get cache stats for the DevTools overlay */
   get cacheStats() {
     return {
       size: this.cache.size,
@@ -246,15 +223,10 @@ export class MeasureLayer {
     };
   }
 
-  /** Clear the measurement cache */
   clearCache(): void {
     this.cache.clear();
   }
 
-  /**
-   * Fallback measurement when pretext is not available.
-   * Estimates height based on character count and line width.
-   */
   private fallbackMeasure(text: string, maxWidth: number): Dimensions {
     const avgCharWidth = this.options.fontSize * 0.6;
     const charsPerLine = Math.max(1, Math.floor(maxWidth / avgCharWidth));

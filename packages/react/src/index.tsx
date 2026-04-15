@@ -15,7 +15,7 @@ import {
   type EnrichedNode,
   type PreframePlugin,
 } from "@preframe/core";
-import { createCopyHandler } from "./copy.js";
+import { createCopyHandler } from "./copy";
 
 // ── usePreframe hook ───────────────────────────────────────────────
 
@@ -243,7 +243,7 @@ export function Preframe({
     blockMargin,
   });
 
-  const prevContentRef = useRef<string | undefined>();
+  const prevContentRef = useRef<string | undefined>(undefined);
 
   // Update content when it changes
   useEffect(() => {

@@ -2,12 +2,11 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
-import type { ASTNode, Block, BlockType } from "./types.js";
+import type { ASTNode, Block, BlockType } from "./types";
 
 // ── Processor cache ────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let cachedProcessor: any = null;
+let cachedProcessor: { parse(doc: string): unknown; runSync(node: unknown): unknown } | null = null;
 
 function getProcessor() {
   if (!cachedProcessor) {
@@ -60,7 +59,9 @@ export function parseBlock(block: Block): ASTNode {
   try {
     // Parse markdown to MDAST, then transform to HAST
     const mdast = processor.parse(block.raw);
-    const hast = processor.runSync(mdast) as unknown as HastNode;
+    // unified's generic types don't track the mdast->hast conversion across .use() calls,
+    // so we assert the output shape which remark-rehype guarantees at runtime.
+    const hast = processor.runSync(mdast) as HastNode;
 
     return hastToASTNode(hast, block.id, block.type);
   } catch (err) {

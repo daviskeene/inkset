@@ -14,12 +14,11 @@ export type BlockType =
   | "thematic-break"
   | "custom";
 
+export type Properties = Record<string, unknown>;
+
 export interface Block {
-  /** Stable index-based identity */
   id: number;
-  /** Raw markdown source for this block */
   raw: string;
-  /** Block type determined by marked lexer */
   type: BlockType;
   /** Whether this block is still receiving streaming tokens */
   hot: boolean;
@@ -27,29 +26,22 @@ export interface Block {
 
 // ── AST types (post-parse) ─────────────────────────────────────────
 
-/** HAST-compatible node from the unified pipeline */
 export interface ASTNode {
   type: string;
   tagName?: string;
-  properties?: Record<string, unknown>;
+  properties?: Properties;
   children?: ASTNode[];
   value?: string;
-  /** Which block this node belongs to */
   blockId: number;
-  /** Original block type */
   blockType: BlockType;
-  /** Code fence language (for code blocks) */
   lang?: string;
-  /** Code fence metadata (for code blocks) */
   meta?: string;
 }
 
 // ── Enriched AST (post-transform) ──────────────────────────────────
 
 export interface EnrichedNode extends ASTNode {
-  /** Plugin-specific rendering data */
   pluginData?: Record<string, unknown>;
-  /** Name of the plugin that transformed this node */
   transformedBy?: string;
 }
 
@@ -64,7 +56,6 @@ export interface MeasuredBlock {
   blockId: number;
   node: EnrichedNode;
   dimensions: Dimensions;
-  /** Opaque handle from pretext.prepare() — reused across layouts */
   preparedHandle?: unknown;
 }
 
@@ -84,30 +75,24 @@ export type LayoutTree = LayoutBlock[];
 // ── Plugin types ───────────────────────────────────────────────────
 
 export interface PluginContext {
-  /** Current container width in px */
   containerWidth: number;
-  /** Whether the stream is still active */
   isStreaming: boolean;
 }
 
 export interface PreframePlugin {
-  /** Unique plugin name */
   name: string;
   /** AST node types this plugin handles (e.g., "code", "math-display") */
   handles: string[];
   /** If true, transform() re-runs when container width changes */
   widthSensitive?: boolean;
-  /** Transform an AST node into an enriched node with plugin data */
   transform(node: ASTNode, ctx: PluginContext): EnrichedNode;
-  /** Measure the rendered dimensions. If omitted, pretext measures text content. */
+  /** If omitted, pretext measures text content */
   measure?(node: EnrichedNode, maxWidth: number): Dimensions;
-  /** React component to render this node type */
   component: ComponentType<PluginComponentProps>;
 }
 
 export interface PluginComponentProps {
   node: EnrichedNode;
-  /** Whether this block is still receiving streaming content */
   isStreaming?: boolean;
 }
 
@@ -122,17 +107,12 @@ export type StreamEvent =
 // ── Preframe options ───────────────────────────────────────────────
 
 export interface PreframeOptions {
-  /** Plugins to apply to the rendering pipeline */
   plugins?: PreframePlugin[];
-  /** Font family used for pretext measurement. Must match CSS. */
+  /** Must match CSS font-family */
   font?: string;
-  /** Font size in px for pretext measurement. Default: 16 */
   fontSize?: number;
-  /** Line height in px for pretext layout. Default: 24 */
   lineHeight?: number;
-  /** Block margin in px. Default: 16 */
   blockMargin?: number;
-  /** Maximum LRU cache entries for prepare() handles. Default: 500 */
   cacheSize?: number;
 }
 

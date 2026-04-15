@@ -1,5 +1,5 @@
-import type { ASTNode, EnrichedNode, PluginContext } from "./types.js";
-import type { PluginRegistry } from "./plugin.js";
+import type { ASTNode, EnrichedNode, PluginContext } from "./types";
+import type { PluginRegistry } from "./plugin";
 
 /**
  * Transform AST nodes through registered plugins.

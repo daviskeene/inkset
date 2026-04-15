@@ -1,4 +1,4 @@
-import type { StreamEvent } from "./types.js";
+import type { StreamEvent } from "./types";
 
 /**
  * Ingest layer: accumulates streaming tokens, detects block boundaries,

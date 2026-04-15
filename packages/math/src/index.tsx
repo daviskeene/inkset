@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import type {
-  PreframePlugin,
-  ASTNode,
-  EnrichedNode,
-  PluginContext,
-  Dimensions,
-  PluginComponentProps,
+import {
+  extractText,
+  escapeHtml,
+  type PreframePlugin,
+  type ASTNode,
+  type EnrichedNode,
+  type PluginContext,
+  type Dimensions,
+  type PluginComponentProps,
 } from "@preframe/core";
 
 // ── Math renderer abstraction ──────────────────────────────────────
@@ -26,6 +28,19 @@ export interface MathRenderOptions {
   displayMode: boolean;
   /** Whether to throw on parse errors. Default: false */
   throwOnError?: boolean;
+}
+
+// ── MathJax global type ───────────────────────────────────────────
+
+/** Subset of the MathJax global API used by the renderer */
+interface MathJaxGlobal {
+  tex2svg?: (tex: string, options: { display: boolean }) => HTMLElement;
+  tex2chtml?: (tex: string, options: { display: boolean }) => HTMLElement;
+  startup: {
+    adaptor: {
+      outerHTML(node: HTMLElement): string;
+    };
+  };
 }
 
 // ── Built-in renderers ─────────────────────────────────────────────
@@ -73,9 +88,9 @@ export function createMathJaxRenderer(): MathRenderer {
     renderToString(latex: string, options: MathRenderOptions): string {
       if (!mathjaxReady) {
         // Try to access MathJax global (loaded via CDN or bundled)
-        const MathJax = (globalThis as any).MathJax;
+        const MathJax = (globalThis as Record<string, unknown>).MathJax as MathJaxGlobal | undefined;
         if (MathJax?.tex2svg || MathJax?.tex2chtml) {
-          const converter = MathJax.tex2chtml ?? MathJax.tex2svg;
+          const converter = MathJax.tex2chtml ?? MathJax.tex2svg!;
           renderFn = (tex: string, display: boolean) => {
             const node = converter(tex, { display });
             return MathJax.startup.adaptor.outerHTML(node);
@@ -228,16 +243,3 @@ function transformDisplayMath(
   };
 }
 
-function extractText(node: ASTNode): string {
-  if (node.value) return node.value;
-  if (!node.children) return "";
-  return node.children.map(extractText).join("");
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
