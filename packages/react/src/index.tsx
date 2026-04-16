@@ -251,6 +251,22 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     const pipeline = new StreamingPipeline(options);
     pipelineRef.current = pipeline;
     registryRef.current = pipeline.getRegistry();
+
+    // Seed width before setContent can schedule a measurement pass. The
+    // dedicated width effects below can't do this on first mount: the
+    // useLayoutEffect runs before this useEffect (so pipelineRef is still
+    // null), and the useEffect early-returns when options.width is provided.
+    // Without this seed, the first runPipeline measures at containerWidth=0
+    // and the fallback produces one-char-per-line heights, leaving huge gaps
+    // between blocks that only resolve on a later setWidth.
+    const seededWidth =
+      typeof options?.width === "number" && options.width > 0
+        ? options.width
+        : containerRef.current?.getBoundingClientRect().width ?? 0;
+    if (seededWidth > 0) {
+      pipeline.setWidth(seededWidth);
+    }
+
     setState(null);
     setPipelineVersion((v) => v + 1);
 
