@@ -8,17 +8,18 @@
     "start": "next start"
   },
   "dependencies": {
-    "@inkset/core": "workspace:*",
-    "@inkset/react": "workspace:*",
     "@inkset/code": "workspace:*",
+    "@inkset/core": "workspace:*",
     "@inkset/math": "workspace:*",
+    "@inkset/react": "workspace:*",
     "@inkset/table": "workspace:*",
+    "katex": "^0.16.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "katex": "^0.16.0"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/node": "25.6.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.8.0"

@@ -13,6 +13,7 @@ import {
   PluginRegistry,
   type PipelineState,
   type InksetOptions,
+  type HyphenationOption,
   type LayoutBlock,
   type EnrichedNode,
   type InksetPlugin,
@@ -217,9 +218,17 @@ export interface UseInksetOptions extends InksetOptions {
   width?: number;
 }
 
+const hyphenationSignature = (option: HyphenationOption | undefined): string => {
+  if (!option) return "off";
+  if (option === true) return "en-us";
+  return option.lang;
+};
+
 export type UseInksetResult = {
   state: PipelineState | null;
   registry: PluginRegistry;
+  /** Incremented every time the underlying pipeline is rebuilt. */
+  pipelineVersion: number;
   containerRef: React.RefObject<HTMLDivElement | null>;
   appendToken: (token: string) => Promise<void>;
   endStream: () => Promise<void>;
@@ -231,6 +240,9 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
   const pipelineRef = useRef<StreamingPipeline | null>(null);
   const registryRef = useRef<PluginRegistry>(new PluginRegistry());
   const [state, setState] = useState<PipelineState | null>(null);
+  // Bumped on every pipeline rebuild so consumers can re-submit content.
+  // (registryRef alone can't do this — ref writes don't trigger re-render.)
+  const [pipelineVersion, setPipelineVersion] = useState(0);
   const pluginSignature =
     options?.plugins?.map((plugin) => plugin.name).join("|") ?? "";
 
@@ -238,6 +250,8 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     const pipeline = new StreamingPipeline(options);
     pipelineRef.current = pipeline;
     registryRef.current = pipeline.getRegistry();
+    setState(null);
+    setPipelineVersion((v) => v + 1);
 
     const unsubscribe = pipeline.subscribe(setState);
     pipeline.init();
@@ -255,6 +269,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     options?.lineHeight,
     options?.blockMargin,
     options?.cacheSize,
+    hyphenationSignature(options?.hyphenation),
   ]);
 
   useEffect(() => {
@@ -264,6 +279,13 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
 
     const container = containerRef.current;
     if (!container) return;
+
+    // Seed the new pipeline with the current container width so the first
+    // runPipeline doesn't measure at zero.
+    const currentWidth = container.getBoundingClientRect().width;
+    if (currentWidth > 0) {
+      pipelineRef.current?.setWidth(currentWidth);
+    }
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -276,7 +298,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, [options?.width]);
+  }, [options?.width, pipelineVersion]);
 
   useLayoutEffect(() => {
     if (typeof options?.width !== "number" || options.width <= 0) {
@@ -284,7 +306,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     }
 
     pipelineRef.current?.setWidth(options.width);
-  }, [options?.width]);
+  }, [options?.width, pipelineVersion]);
 
   const appendToken = useCallback(async (token: string) => {
     await pipelineRef.current?.appendToken(token);
@@ -301,6 +323,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
   return {
     state,
     registry: registryRef.current,
+    pipelineVersion,
     containerRef,
     appendToken,
     endStream,
@@ -620,6 +643,11 @@ export type InksetProps = {
   fontSize?: number;
   lineHeight?: number;
   blockMargin?: number;
+  /**
+   * Insert soft hyphens for word-level line breaking. Also sets
+   * `hyphens: manual` on the root so browsers honour the breaks.
+   */
+  hyphenation?: HyphenationOption;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -634,22 +662,24 @@ export function Inkset({
   fontSize,
   lineHeight,
   blockMargin,
+  hyphenation,
   className,
   style,
   children,
 }: InksetProps) {
-  const { state, registry, containerRef, setContent, endStream } = useInkset({
+  const { state, registry, pipelineVersion, containerRef, setContent, endStream } = useInkset({
     plugins,
     width,
     font,
     fontSize,
     lineHeight,
     blockMargin,
+    hyphenation,
   });
 
   const prevContentRef = useRef<{
     content?: string;
-    registry?: PluginRegistry;
+    pipelineVersion?: number;
   }>({});
   const [resolvedHeights, setResolvedHeights] = useState<Map<number, ResolvedBlockHeight>>(
     () => new Map(),
@@ -661,14 +691,14 @@ export function Inkset({
     if (content === undefined) return;
     if (
       prevContentRef.current.content === content &&
-      prevContentRef.current.registry === registry
+      prevContentRef.current.pipelineVersion === pipelineVersion
     ) {
       return;
     }
 
-    prevContentRef.current = { content, registry };
+    prevContentRef.current = { content, pipelineVersion };
     setContent(content);
-  }, [content, registry, setContent]);
+  }, [content, pipelineVersion, setContent]);
 
   useEffect(() => {
     if (!streaming && prevContentRef.current.content !== undefined) {
@@ -863,6 +893,9 @@ export function Inkset({
     "--inkset-font-family": font ?? "system-ui, sans-serif",
     "--inkset-base-font-size": `${baseFontSize}px`,
     "--inkset-base-line-height-ratio": `${baseLineHeightRatio}`,
+    hyphens: hyphenation ? "manual" : undefined,
+    WebkitHyphens: hyphenation ? "manual" : undefined,
+    overflowWrap: hyphenation ? "break-word" : undefined,
     ...style,
   };
 
@@ -922,6 +955,7 @@ export function Inkset({
 export type {
   InksetPlugin,
   InksetOptions,
+  HyphenationOption,
   PluginComponentProps,
   PipelineState,
   PipelineMetrics,

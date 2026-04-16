@@ -216,6 +216,7 @@ export default function PlaygroundPage() {
     math: true,
     table: true,
   });
+  const [hyphenationEnabled, setHyphenationEnabled] = useState(false);
   const [panelWidth, setPanelWidth] = useState(600);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState("");
@@ -425,6 +426,29 @@ export default function PlaygroundPage() {
 
           <div style={{ width: 1, height: 20, background: "#333", margin: "0 4px" }} />
 
+          {/* Typography toggles */}
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 12,
+              cursor: "pointer",
+              opacity: hyphenationEnabled ? 1 : 0.4,
+            }}
+            title="Insert soft hyphens so Pretext and the browser can break long words"
+          >
+            <input
+              type="checkbox"
+              checked={hyphenationEnabled}
+              onChange={() => setHyphenationEnabled((v) => !v)}
+              style={{ accentColor: "#666" }}
+            />
+            hyphens
+          </label>
+
+          <div style={{ width: 1, height: 20, background: "#333", margin: "0 4px" }} />
+
           {/* Plugin toggles */}
           {Object.entries(enabledPlugins).map(([name, enabled]) => (
             <label
@@ -550,6 +574,7 @@ export default function PlaygroundPage() {
                 fontSize={15}
                 lineHeight={22}
                 blockMargin={12}
+                hyphenation={hyphenationEnabled}
               />
             </div>
           </div>
@@ -591,6 +616,7 @@ export default function PlaygroundPage() {
             </div>
             <div>Panel width: {Math.round(effectivePanelWidth)}px</div>
             <div>Plugins: {plugins.map((p) => p.name).join(", ") || "none"}</div>
+            <div>Hyphens: {hyphenationEnabled ? "en-us (soft)" : "off"}</div>
             <div>Streaming: {isStreaming ? "active" : "idle"}</div>
             <div style={{ marginTop: 16, fontSize: 11, opacity: 0.5 }}>
               Drag the resize handle to see pretext-powered reflow in action.

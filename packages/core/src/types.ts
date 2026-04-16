@@ -107,6 +107,10 @@ export type StreamEvent =
 
 // ── Inkset options ───────────────────────────────────────────────
 
+export type HyphenationOption =
+  | boolean
+  | { lang: "en-us" };
+
 export interface InksetOptions {
   plugins?: InksetPlugin[];
   /** Must match CSS font-family */
@@ -115,6 +119,12 @@ export interface InksetOptions {
   lineHeight?: number;
   blockMargin?: number;
   cacheSize?: number;
+  /**
+   * Insert soft hyphens so Pretext and the browser can break long words on
+   * syllable boundaries. `true` defaults to en-us. Pair with `hyphens: manual`
+   * (or `auto`) in CSS for the breaks to render.
+   */
+  hyphenation?: HyphenationOption;
 }
 
 // ── Error types ────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import { transformBlocks, retransformWidthSensitive } from "./transform";
 import { MeasureLayer } from "./measure";
 import { computeLayout, getLayoutHeight } from "./layout";
 import { PluginRegistry } from "./plugin";
+import { hyphenateBlock, loadHyphenator, type Hyphenator, type SupportedLanguage } from "./hyphenate";
 
 const DEFAULT_FONT = "system-ui, sans-serif";
 const DEFAULT_FONT_SIZE = 16;
@@ -48,6 +49,7 @@ export class StreamingPipeline {
 
   private parseCache = new Map<number, ASTNode>();
   private transformCache = new Map<number, EnrichedNode>();
+  private hyphenCache = new Map<number, { source: EnrichedNode; hyphenated: EnrichedNode }>();
   private measureCache = new Map<number, MeasuredBlock>();
 
   private currentNodes: EnrichedNode[] = [];
@@ -56,7 +58,10 @@ export class StreamingPipeline {
   private containerWidth = 0;
   private pendingRelayoutWidth: number | null = null;
   private relayoutInFlight = false;
-  private options: Required<Omit<InksetOptions, "plugins">>;
+  private options: Required<Omit<InksetOptions, "plugins" | "hyphenation">> & {
+    hyphenation: InksetOptions["hyphenation"];
+  };
+  private hyphenator: Hyphenator | null = null;
 
   private pendingUpdate: ReturnType<typeof setTimeout> | number | null = null;
   private initialized = false;
@@ -79,6 +84,7 @@ export class StreamingPipeline {
       lineHeight: options?.lineHeight ?? DEFAULT_LINE_HEIGHT,
       blockMargin: options?.blockMargin ?? DEFAULT_BLOCK_MARGIN,
       cacheSize: options?.cacheSize ?? DEFAULT_CACHE_SIZE,
+      hyphenation: options?.hyphenation,
     };
 
     this.measureLayer = new MeasureLayer({
@@ -97,8 +103,24 @@ export class StreamingPipeline {
 
   async init(): Promise<void> {
     if (this.initialized) return;
-    await this.measureLayer.init();
+
+    const hyphenationPromise = this.options.hyphenation
+      ? this.loadHyphenator().catch((err: unknown) => {
+          console.warn("[inkset] hyphenator failed to load; rendering without soft hyphens:", err);
+          this.hyphenator = null;
+        })
+      : Promise.resolve();
+
+    await Promise.all([this.measureLayer.init(), hyphenationPromise]);
     this.initialized = true;
+  }
+
+  private async loadHyphenator(): Promise<void> {
+    const lang: SupportedLanguage =
+      typeof this.options.hyphenation === "object" && this.options.hyphenation !== null
+        ? this.options.hyphenation.lang
+        : "en-us";
+    this.hyphenator = await loadHyphenator(lang);
   }
 
   async setWidth(width: number): Promise<void> {
@@ -143,6 +165,7 @@ export class StreamingPipeline {
     this.cancelPendingUpdate();
     this.parseCache.clear();
     this.transformCache.clear();
+    this.hyphenCache.clear();
     this.measureCache.clear();
     this.currentNodes = [];
     this.currentMeasured = [];
@@ -177,6 +200,7 @@ export class StreamingPipeline {
     this.listeners.clear();
     this.parseCache.clear();
     this.transformCache.clear();
+    this.hyphenCache.clear();
     this.measureCache.clear();
     this.measureLayer.clearCache();
     this.ingest.reset();
@@ -198,6 +222,29 @@ export class StreamingPipeline {
         this.runPipeline();
       }, 0);
     }
+  }
+
+  /**
+   * Cache keyed on the transform output's object identity: if transform returned
+   * the same reference as last time, hyphenation has nothing to redo.
+   */
+  private applyHyphenation(nodes: EnrichedNode[]): EnrichedNode[] {
+    if (!this.hyphenator) return nodes;
+    const hyphenator = this.hyphenator;
+
+    const result: EnrichedNode[] = new Array(nodes.length);
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const cached = this.hyphenCache.get(node.blockId);
+      if (cached && cached.source === node) {
+        result[i] = cached.hyphenated;
+        continue;
+      }
+      const hyphenated = hyphenateBlock(node, hyphenator);
+      this.hyphenCache.set(node.blockId, { source: node, hyphenated });
+      result[i] = hyphenated;
+    }
+    return result;
   }
 
   private cancelPendingUpdate(): void {
@@ -239,7 +286,8 @@ export class StreamingPipeline {
       containerWidth: this.containerWidth,
       isStreaming: this.ingest.isStreaming,
     };
-    this.currentNodes = transformBlocks(nodes, this.registry, ctx, this.transformCache, parsedBlockIds);
+    const transformed = transformBlocks(nodes, this.registry, ctx, this.transformCache, parsedBlockIds);
+    this.currentNodes = this.applyHyphenation(transformed);
     this.metrics.lastTransformMs = performance.now() - transformStart;
 
     const measureStart = performance.now();
@@ -280,7 +328,7 @@ export class StreamingPipeline {
     let nextMeasured = this.currentMeasured;
 
     if (changed) {
-      nextNodes = nodes;
+      nextNodes = this.applyHyphenation(nodes);
       nextMeasured = await this.measureBlocks(nextNodes, targetWidth);
     } else {
       const reMeasured: MeasuredBlock[] = [];
