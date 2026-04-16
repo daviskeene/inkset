@@ -111,6 +111,14 @@ export type HyphenationOption =
   | boolean
   | { lang: "en-us" };
 
+/**
+ * CSS `text-wrap` values. `"pretty"` asks the browser for its best
+ * line-breaking (Knuth-Plass-like on modern Chrome/Safari), `"balance"` evens
+ * out line lengths. Both are progressive enhancements — older browsers ignore
+ * them. Pretext measures greedy, so line-count drift is possible but small.
+ */
+export type TextWrapOption = "wrap" | "balance" | "pretty" | "stable";
+
 export interface InksetOptions {
   plugins?: InksetPlugin[];
   /** Must match CSS font-family */
@@ -125,6 +133,8 @@ export interface InksetOptions {
    * (or `auto`) in CSS for the breaks to render.
    */
   hyphenation?: HyphenationOption;
+  /** Sets CSS `text-wrap` on the inkset root. */
+  textWrap?: TextWrapOption;
 }
 
 // ── Error types ────────────────────────────────────────────────────

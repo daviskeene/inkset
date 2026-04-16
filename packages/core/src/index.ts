@@ -15,6 +15,7 @@ export type {
   InksetPlugin,
   Properties,
   StreamEvent,
+  TextWrapOption,
 } from "./types";
 
 export { InksetError } from "./types";

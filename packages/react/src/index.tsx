@@ -17,6 +17,7 @@ import {
   type LayoutBlock,
   type EnrichedNode,
   type InksetPlugin,
+  type TextWrapOption,
 } from "@inkset/core";
 import { createCopyHandler } from "./copy";
 
@@ -648,6 +649,8 @@ export type InksetProps = {
    * `hyphens: manual` on the root so browsers honour the breaks.
    */
   hyphenation?: HyphenationOption;
+  /** Sets CSS `text-wrap` on the root (e.g. `"pretty"` for browser K-P). */
+  textWrap?: TextWrapOption;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -663,6 +666,7 @@ export function Inkset({
   lineHeight,
   blockMargin,
   hyphenation,
+  textWrap,
   className,
   style,
   children,
@@ -896,6 +900,7 @@ export function Inkset({
     hyphens: hyphenation ? "manual" : undefined,
     WebkitHyphens: hyphenation ? "manual" : undefined,
     overflowWrap: hyphenation ? "break-word" : undefined,
+    textWrap,
     ...style,
   };
 
@@ -956,6 +961,7 @@ export type {
   InksetPlugin,
   InksetOptions,
   HyphenationOption,
+  TextWrapOption,
   PluginComponentProps,
   PipelineState,
   PipelineMetrics,

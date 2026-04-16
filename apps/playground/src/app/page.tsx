@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import Link from "next/link";
 import { Inkset } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
@@ -394,6 +395,19 @@ export default function PlaygroundPage() {
             inkset
           </h1>
           <span style={{ fontSize: 12, opacity: 0.5 }}>playground</span>
+          <Link
+            href="/justification-comparison"
+            style={{
+              fontSize: 12,
+              color: "#9aa",
+              textDecoration: "none",
+              padding: "3px 8px",
+              border: "1px solid #333",
+              borderRadius: 4,
+            }}
+          >
+            justification →
+          </Link>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

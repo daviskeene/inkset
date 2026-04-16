@@ -58,8 +58,9 @@ export class StreamingPipeline {
   private containerWidth = 0;
   private pendingRelayoutWidth: number | null = null;
   private relayoutInFlight = false;
-  private options: Required<Omit<InksetOptions, "plugins" | "hyphenation">> & {
+  private options: Required<Omit<InksetOptions, "plugins" | "hyphenation" | "textWrap">> & {
     hyphenation: InksetOptions["hyphenation"];
+    textWrap: InksetOptions["textWrap"];
   };
   private hyphenator: Hyphenator | null = null;
 
@@ -85,6 +86,7 @@ export class StreamingPipeline {
       blockMargin: options?.blockMargin ?? DEFAULT_BLOCK_MARGIN,
       cacheSize: options?.cacheSize ?? DEFAULT_CACHE_SIZE,
       hyphenation: options?.hyphenation,
+      textWrap: options?.textWrap,
     };
 
     this.measureLayer = new MeasureLayer({
