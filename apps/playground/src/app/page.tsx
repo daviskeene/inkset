@@ -769,9 +769,13 @@ function ChatInput({
         <div
           style={{
             display: "flex",
-            alignItems: "flex-end",
+            // Center for the single-line default so the placeholder sits in
+            // the middle of the pill. Multi-line content grows the textarea
+            // downward while the send button hugs the bottom-right via
+            // alignSelf below.
+            alignItems: "center",
             gap: 10,
-            padding: "10px 12px 10px 14px",
+            padding: "8px 10px 8px 16px",
             border: focused ? "1px solid #333" : "1px solid #1f1f1f",
             borderRadius: 22,
             background: "#101010",
@@ -819,6 +823,7 @@ function ChatInput({
               borderRadius: 999,
               border: "none",
               flexShrink: 0,
+              alignSelf: "flex-end",
               background: value.trim() ? "#ededed" : "#1f1f1f",
               color: value.trim() ? "#0a0a0a" : "#5a5a5a",
               cursor: value.trim() ? "pointer" : "default",
