@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
 import { Inkset } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
@@ -705,8 +705,10 @@ function ChatInput({
   const showPreview = focused && value.trim().length > 0;
 
   // Auto-grow the textarea up to a cap so paste-of-a-long-thing expands in
-  // place rather than scrolling inside a tiny box.
-  useEffect(() => {
+  // place rather than scrolling inside a tiny box. useLayoutEffect so the
+  // size is correct on the first paint, not a frame later (which reads as a
+  // height jump right after refresh).
+  useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "0px";
@@ -807,7 +809,10 @@ function ChatInput({
               fontSize: 14.5,
               lineHeight: 1.45,
               fontFamily: "inherit",
-              padding: "4px 0",
+              // border-box so assigning scrollHeight back to `height` converges
+              // immediately instead of growing by the padding amount each run.
+              boxSizing: "border-box",
+              padding: 0,
               maxHeight: 180,
               overflowY: "auto",
             }}
