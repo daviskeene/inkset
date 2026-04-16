@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { prepareWithSegments } from "@chenglou/pretext";
 import { loadHyphenator, type Hyphenator } from "@inkset/core";
@@ -247,55 +247,47 @@ function PretextCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
 
-  useEffect(() => {
+  // Synchronous layout effect so the canvas resizes in the same commit as the
+  // CSS column next to it — otherwise canvas.style.width lags by one frame and
+  // the two columns visibly drift sub-pixel during a drag.
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    let cancelled = false;
+    try {
+      const prepared = prepareWithSegments(text, canvasFont);
+      const { lines } = knuthPlassLayout(prepared, width);
+      const materialized = materializeLines(prepared, lines, width);
 
-    const render = async () => {
-      try {
-        const prepared = prepareWithSegments(text, canvasFont);
-        const { lines } = knuthPlassLayout(prepared, width);
-        const materialized = materializeLines(prepared, lines, width);
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+      const cssHeight = Math.max(LINE_HEIGHT, LINE_HEIGHT * materialized.lines.length);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(cssHeight * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${cssHeight}px`;
 
-        if (cancelled) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, cssHeight);
 
-        const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-        const cssHeight = Math.max(LINE_HEIGHT, LINE_HEIGHT * materialized.lines.length);
-        canvas.width = Math.round(width * dpr);
-        canvas.height = Math.round(cssHeight * dpr);
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${cssHeight}px`;
+      drawJustifiedLines(ctx, materialized.lines, {
+        font: canvasFont,
+        lineHeight: LINE_HEIGHT,
+        color: "#ededed",
+        justify: true,
+      });
 
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, width, cssHeight);
-
-        drawJustifiedLines(ctx, materialized.lines, {
-          font: canvasFont,
-          lineHeight: LINE_HEIGHT,
-          color: "#ededed",
-          justify: true,
-        });
-
-        setMetrics({
-          lineCount: materialized.lines.length,
-          avgStretchRatio: materialized.avgStretchRatio,
-          maxStretchRatio: materialized.maxStretchRatio,
-          stretchStdDev: materialized.stretchStdDev,
-          riverCount: materialized.riverCount,
-        });
-      } catch (err) {
-        console.warn("[justification-demo] pretext layout failed:", err);
-      }
-    };
-
-    render();
-    return () => {
-      cancelled = true;
-    };
+      setMetrics({
+        lineCount: materialized.lines.length,
+        avgStretchRatio: materialized.avgStretchRatio,
+        maxStretchRatio: materialized.maxStretchRatio,
+        stretchStdDev: materialized.stretchStdDev,
+        riverCount: materialized.riverCount,
+      });
+    } catch (err) {
+      console.warn("[justification-demo] pretext layout failed:", err);
+    }
   }, [text, width]);
 
   return (
