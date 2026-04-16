@@ -214,6 +214,10 @@ export const createCodePlugin = (options?: CodePluginOptions): InksetPlugin => {
 
   return {
     name: "code",
+    // Any option that affects the rendered HTML must participate in the
+    // plugin identity so swapping instances (e.g. dark → light shiki theme)
+    // invalidates transform caches and re-highlights existing blocks.
+    key: [theme, lightTheme ?? "", showHeader, showCopy, showLangLabel, wrapLongLines].join("|"),
     handles: ["code"],
 
     async preload(): Promise<void> {

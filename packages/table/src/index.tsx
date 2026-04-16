@@ -94,6 +94,7 @@ export const createTablePlugin = (options?: TablePluginOptions): InksetPlugin =>
 
   return {
     name: "table",
+    key: [showCopy, borderStyle, zebra, stickyHeader].join("|"),
     handles: ["table"],
 
     transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {

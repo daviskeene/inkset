@@ -526,7 +526,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
   // (registryRef alone can't do this — ref writes don't trigger re-render.)
   const [pipelineVersion, setPipelineVersion] = useState(0);
   const pluginSignature =
-    options?.plugins?.map((plugin) => plugin.name).join("|") ?? "";
+    options?.plugins?.map((plugin) => `${plugin.name}:${plugin.key ?? ""}`).join("|") ?? "";
 
   useEffect(() => {
     const pipeline = new StreamingPipeline(options);

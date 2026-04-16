@@ -177,6 +177,7 @@ export const createMathPlugin = (options?: MathPluginOptions): InksetPlugin => {
 
   const plugin: InksetPlugin & { rendererName: string } = {
     name: "math",
+    key: [renderer.name, displayAlign, errorDisplay].join("|"),
     handles: ["math-display"],
     rendererName: renderer.name,
 

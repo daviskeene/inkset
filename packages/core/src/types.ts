@@ -86,6 +86,14 @@ export type PluginContext = {
 
 export interface InksetPlugin {
   name: string;
+  /**
+   * Optional identity key that differentiates instances of the same
+   * plugin when their options differ. Participates in the plugin signature
+   * used by `useInkset` — changing this rebuilds the pipeline, invalidating
+   * caches so transform() runs again with the new options. Typically
+   * derived by hashing the options object.
+   */
+  key?: string;
   /** AST node types this plugin handles (e.g., "code", "math-display") */
   handles: string[];
   /** If true, transform() re-runs when container width changes */
