@@ -57,23 +57,33 @@ export type InksetTheme = {
     headerPadding?: string;
     headerFontSize?: string;
     headerOpacity?: number;
+    headerBorderColor?: string;
     copyPadding?: string;
     copyOpacity?: number;
+    selectionBg?: string;
+    scrollbarColor?: string;
   };
   table?: {
     border?: string;
     headerText?: string;
+    headerBg?: string;
     headerFontSize?: string;
     headerWeight?: number;
     headerTracking?: string;
     headerPadding?: string;
     cellPadding?: string;
+    zebraBg?: string;
+    rowHoverBg?: string;
   };
   math?: {
     errorColor?: string;
     errorFontSize?: string;
     displayPadding?: string;
     displayLineHeight?: string | number;
+    displayBg?: string;
+    displayRadius?: string;
+    inlineBg?: string;
+    selectionBg?: string;
     rawFontSize?: string;
     rawOpacity?: number;
   };
@@ -150,8 +160,11 @@ export const themeToCssVars = (theme: InksetTheme | undefined): InksetCssVars =>
     set("--inkset-code-header-padding", code.headerPadding);
     set("--inkset-code-header-font-size", code.headerFontSize);
     set("--inkset-code-header-opacity", code.headerOpacity);
+    set("--inkset-code-header-border", code.headerBorderColor);
     set("--inkset-code-copy-padding", code.copyPadding);
     set("--inkset-code-copy-opacity", code.copyOpacity);
+    set("--inkset-code-selection-bg", code.selectionBg);
+    set("--inkset-code-scrollbar-color", code.scrollbarColor);
   }
 
   // ── Table ───────────────────────────────────────────────────
@@ -159,11 +172,14 @@ export const themeToCssVars = (theme: InksetTheme | undefined): InksetCssVars =>
   if (table) {
     set("--inkset-table-border", table.border);
     set("--inkset-table-header-text", table.headerText);
+    set("--inkset-table-header-bg", table.headerBg);
     set("--inkset-table-header-font-size", table.headerFontSize);
     set("--inkset-table-header-weight", table.headerWeight);
     set("--inkset-table-header-tracking", table.headerTracking);
     set("--inkset-table-header-padding", table.headerPadding);
     set("--inkset-table-cell-padding", table.cellPadding);
+    set("--inkset-table-zebra-bg", table.zebraBg);
+    set("--inkset-table-row-hover-bg", table.rowHoverBg);
   }
 
   // ── Math ────────────────────────────────────────────────────
@@ -173,6 +189,10 @@ export const themeToCssVars = (theme: InksetTheme | undefined): InksetCssVars =>
     set("--inkset-math-error-font-size", math.errorFontSize);
     set("--inkset-math-display-padding", math.displayPadding);
     set("--inkset-math-display-line-height", math.displayLineHeight);
+    set("--inkset-math-display-bg", math.displayBg);
+    set("--inkset-math-display-radius", math.displayRadius);
+    set("--inkset-math-inline-bg", math.inlineBg);
+    set("--inkset-math-selection-bg", math.selectionBg);
     set("--inkset-math-raw-font-size", math.rawFontSize);
     set("--inkset-math-raw-opacity", math.rawOpacity);
   }

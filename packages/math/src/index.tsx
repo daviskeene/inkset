@@ -67,6 +67,8 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
   const latex = (node.pluginData?.latex as string) ?? "";
   const displayMode = (node.pluginData?.displayMode as boolean) ?? true;
   const rendererName = (node.pluginData?.renderer as string) ?? "katex";
+  const displayAlign = (node.pluginData?.displayAlign as MathDisplayAlign) ?? "center";
+  const errorDisplay = (node.pluginData?.errorDisplay as MathErrorDisplay) ?? "source";
 
   // Render math client-side with dynamic import
   useEffect(() => {
@@ -120,17 +122,24 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
 
   const Tag = displayMode ? "div" : "span";
 
+  const errorContent = errorDisplay === "message"
+    ? error
+    : errorDisplay === "hide"
+      ? null
+      : latex;
+
   return (
     <Tag
       className={`inkset-math ${displayMode ? "inkset-math-display" : "inkset-math-inline"}`}
       data-latex={latex}
+      data-display-align={displayMode ? displayAlign : undefined}
       aria-label={`Math: ${latex}`}
     >
       {html ? (
         <span dangerouslySetInnerHTML={{ __html: html }} />
-      ) : error && !isStreaming ? (
+      ) : error && !isStreaming && errorContent !== null ? (
         <span className="inkset-math-error" title={error}>
-          {latex}
+          {errorContent}
         </span>
       ) : (
         <span className="inkset-math-raw">{latex}</span>
@@ -141,14 +150,30 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
 
 // ── Plugin definition ─────────────────────────────────────────────
 
+export type MathDisplayAlign = "left" | "center" | "right";
+export type MathErrorDisplay = "source" | "message" | "hide";
+
 export type MathPluginOptions = {
   renderer?: MathRenderer;
   singleDollarInline?: boolean;
   throwOnError?: boolean;
+  /**
+   * Horizontal alignment for display-mode equations. Default `"center"`.
+   * Emitted as a `data-display-align` attr so the default stylesheet can
+   * translate it to `text-align` without JS.
+   */
+  displayAlign?: MathDisplayAlign;
+  /**
+   * How to render a parse error. `"source"` (default) shows the raw LaTeX,
+   * `"message"` shows the KaTeX error text inline, `"hide"` renders nothing.
+   */
+  errorDisplay?: MathErrorDisplay;
 };
 
 export const createMathPlugin = (options?: MathPluginOptions): InksetPlugin => {
   const renderer = options?.renderer ?? createKaTeXRenderer();
+  const displayAlign: MathDisplayAlign = options?.displayAlign ?? "center";
+  const errorDisplay: MathErrorDisplay = options?.errorDisplay ?? "source";
 
   const plugin: InksetPlugin & { rendererName: string } = {
     name: "math",
@@ -172,6 +197,8 @@ export const createMathPlugin = (options?: MathPluginOptions): InksetPlugin => {
           latex,
           displayMode: true,
           renderer: renderer.name,
+          displayAlign,
+          errorDisplay,
         },
       };
     },

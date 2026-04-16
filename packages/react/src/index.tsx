@@ -84,9 +84,18 @@ const INKSET_STYLES = `
     --inkset-inline-code-bg: rgba(255, 255, 255, 0.08);
     --inkset-inline-code-text: inherit;
     --inkset-code-block-bg: #24292e;
+    --inkset-code-scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    --inkset-code-selection-bg: rgba(100, 140, 220, 0.35);
+    --inkset-code-header-border: rgba(255, 255, 255, 0.06);
     --inkset-table-border: rgba(255, 255, 255, 0.08);
     --inkset-table-header-text: rgba(232, 232, 235, 0.72);
+    --inkset-table-header-bg: transparent;
+    --inkset-table-zebra-bg: rgba(255, 255, 255, 0.03);
+    --inkset-table-row-hover-bg: rgba(255, 255, 255, 0.04);
     --inkset-math-error: #f87171;
+    --inkset-math-display-bg: transparent;
+    --inkset-math-inline-bg: transparent;
+    --inkset-math-selection-bg: rgba(100, 140, 220, 0.35);
 
     /* Typography */
     --inkset-font-family: system-ui, sans-serif;
@@ -132,6 +141,7 @@ const INKSET_STYLES = `
     --inkset-table-header-padding: 2px 8px;
     --inkset-math-display-padding: 8px 0;
     --inkset-math-display-line-height: 1.2;
+    --inkset-math-display-radius: 0;
     --inkset-math-raw-font-size: 14px;
     --inkset-math-raw-opacity: 0.6;
     --inkset-math-error-font-size: 13px;
@@ -227,6 +237,7 @@ const INKSET_STYLES = `
     line-height: 16px;
     font-family: var(--inkset-font-family);
     opacity: var(--inkset-code-header-opacity);
+    border-bottom: 1px solid var(--inkset-code-header-border);
   }
 
   :where(.inkset-root .inkset-code-copy, .inkset-root .inkset-table-copy) {
@@ -250,12 +261,42 @@ const INKSET_STYLES = `
     font-family: var(--inkset-font-family-mono);
     font-size: var(--inkset-code-block-font-size);
     line-height: var(--inkset-code-block-line-height);
+    scrollbar-color: var(--inkset-code-scrollbar-color);
+  }
+
+  :where(.inkset-root .inkset-code-block[data-wrap="true"] .inkset-code-content pre,
+         .inkset-root .inkset-code-block[data-wrap="true"] .inkset-code-content .shiki) {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: visible;
+  }
+
+  :where(.inkset-root .inkset-code-content pre)::selection,
+  :where(.inkset-root .inkset-code-content code)::selection,
+  :where(.inkset-root .inkset-code-content .shiki span)::selection {
+    background: var(--inkset-code-selection-bg);
   }
 
   :where(.inkset-root .inkset-code-content code) {
     background: transparent;
     padding: 0;
     border-radius: 0;
+  }
+
+  /* Dual light/dark render: when data-has-light is set, show dark by default
+     and swap to the light render under prefers-color-scheme: light. Without
+     the flag there's only one render and it always shows. */
+  :where(.inkset-root .inkset-code-block[data-has-light="true"] .inkset-code-light) {
+    display: none;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :where(.inkset-root .inkset-code-block[data-has-light="true"] .inkset-code-dark) {
+      display: none;
+    }
+    :where(.inkset-root .inkset-code-block[data-has-light="true"] .inkset-code-light) {
+      display: block;
+    }
   }
 
   :where(.inkset-root .inkset-code-streaming) {
@@ -294,6 +335,30 @@ const INKSET_STYLES = `
     white-space: nowrap;
   }
 
+  :where(.inkset-root .inkset-table-block[data-border-style="all"] .inkset-table-scroll th,
+         .inkset-root .inkset-table-block[data-border-style="all"] .inkset-table-scroll td) {
+    border: 1px solid var(--inkset-table-border);
+  }
+
+  :where(.inkset-root .inkset-table-block[data-border-style="none"] .inkset-table-scroll th,
+         .inkset-root .inkset-table-block[data-border-style="none"] .inkset-table-scroll td) {
+    border: 0;
+  }
+
+  :where(.inkset-root .inkset-table-block[data-zebra="true"] .inkset-table-scroll tbody tr:nth-child(even) td) {
+    background: var(--inkset-table-zebra-bg);
+  }
+
+  :where(.inkset-root .inkset-table-block .inkset-table-scroll tbody tr:hover td) {
+    background: var(--inkset-table-row-hover-bg);
+  }
+
+  :where(.inkset-root .inkset-table-block[data-sticky-header="true"] .inkset-table-scroll thead th) {
+    position: sticky;
+    top: 0;
+    background: var(--inkset-table-header-bg);
+  }
+
   :where(.inkset-root .inkset-table-scroll th) {
     color: var(--inkset-table-header-text);
     font-size: var(--inkset-table-header-font-size);
@@ -307,10 +372,26 @@ const INKSET_STYLES = `
     padding: var(--inkset-math-display-padding);
     overflow: auto;
     line-height: var(--inkset-math-display-line-height);
+    background: var(--inkset-math-display-bg);
+    border-radius: var(--inkset-math-display-radius);
+  }
+
+  :where(.inkset-root .inkset-math-display[data-display-align="left"]) {
+    text-align: left;
+  }
+
+  :where(.inkset-root .inkset-math-display[data-display-align="right"]) {
+    text-align: right;
   }
 
   :where(.inkset-root .inkset-math-inline) {
     display: inline;
+    background: var(--inkset-math-inline-bg);
+  }
+
+  :where(.inkset-root .inkset-math-display)::selection,
+  :where(.inkset-root .inkset-math-inline)::selection {
+    background: var(--inkset-math-selection-bg);
   }
 
   :where(.inkset-root .inkset-math-error) {
