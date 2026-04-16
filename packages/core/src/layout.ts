@@ -41,6 +41,7 @@ export const computeLayout = (
       width,
       height,
       node: block.node,
+      shrinkwrapWidth: block.shrinkwrapWidth,
     });
 
     y += height + (i < measured.length - 1 ? blockMargin : 0);

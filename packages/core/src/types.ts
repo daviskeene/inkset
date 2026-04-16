@@ -58,6 +58,8 @@ export type MeasuredBlock = {
   node: EnrichedNode;
   dimensions: Dimensions;
   preparedHandle?: unknown;
+  /** Narrowest width that preserves greedy line count. Set when shrinkwrap is enabled. */
+  shrinkwrapWidth?: number;
 };
 
 // ── Layout types ───────────────────────────────────────────────────
@@ -69,6 +71,8 @@ export type LayoutBlock = {
   width: number;
   height: number;
   node: EnrichedNode;
+  /** Carried through from MeasuredBlock so renderers can apply `max-width`. */
+  shrinkwrapWidth?: number;
 };
 
 export type LayoutTree = LayoutBlock[];
@@ -126,6 +130,25 @@ export type HyphenationOption =
 export type TextWrapOption = "wrap" | "balance" | "pretty" | "stable";
 
 /**
+ * Which blocks to shrinkwrap: narrow each applicable block to the width of
+ * its longest greedy-wrapped line. The visual effect is balanced paragraphs
+ * and headings (no trailing whitespace after the last line) without needing
+ * CSS `text-wrap: balance`.
+ *
+ * - `false` (default): no shrinkwrap.
+ * - `"headings"`: apply to heading blocks only. Usually the best-looking
+ *   default — heading text often has a short trailing fragment that looks
+ *   ragged.
+ * - `"paragraphs"`: apply to paragraphs and blockquotes.
+ * - `true`: apply to everything text-shaped (headings, paragraphs,
+ *   blockquotes, list items).
+ */
+export type ShrinkwrapOption =
+  | boolean
+  | "headings"
+  | "paragraphs";
+
+/**
  * Heading metric tuples indexed h1..h4 (h5 and h6 inherit h4). Kept as fixed-
  * length tuples rather than objects because measurement is hot and indexed
  * access is cheaper than property lookup.
@@ -167,6 +190,12 @@ export interface InksetOptions {
    * heading's computed fontSize.
    */
   headingLineHeights?: HeadingLineHeightTuple;
+  /**
+   * Balance text by narrowing each applicable block to its longest greedy
+   * line. Cheaper and more compatible than CSS `text-wrap: balance` since
+   * pretext already does the measurement.
+   */
+  shrinkwrap?: ShrinkwrapOption;
 }
 
 // ── Error types ────────────────────────────────────────────────────

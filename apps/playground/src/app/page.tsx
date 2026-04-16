@@ -286,6 +286,7 @@ export default function PlaygroundPage() {
     table: true,
   });
   const [hyphenationEnabled, setHyphenationEnabled] = useState(false);
+  const [shrinkwrapMode, setShrinkwrapMode] = useState<"off" | "headings" | "on">("off");
   const [themeKey, setThemeKey] = useState<ThemeKey>("default");
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -465,6 +466,30 @@ export default function PlaygroundPage() {
             hyphens
           </label>
 
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: "pointer",
+              opacity: shrinkwrapMode !== "off" ? 1 : 0.45,
+            }}
+            title="Narrow each paragraph/heading to the width of its longest line"
+          >
+            <input
+              type="checkbox"
+              checked={shrinkwrapMode !== "off"}
+              onChange={() =>
+                setShrinkwrapMode((m) => (m === "off" ? "headings" : m === "headings" ? "on" : "off"))
+              }
+              style={{ accentColor: "#888" }}
+            />
+            shrinkwrap
+            {shrinkwrapMode !== "off" && (
+              <span style={{ opacity: 0.6, fontSize: 11 }}>({shrinkwrapMode})</span>
+            )}
+          </label>
+
           <div style={{ width: 1, height: 18, background: "#222" }} />
 
           {Object.entries(enabledPlugins).map(([name, enabled]) => (
@@ -595,6 +620,13 @@ export default function PlaygroundPage() {
                 plugins={plugins}
                 width={assistantWidth}
                 hyphenation={hyphenationEnabled}
+                shrinkwrap={
+                  shrinkwrapMode === "off"
+                    ? false
+                    : shrinkwrapMode === "headings"
+                      ? "headings"
+                      : true
+                }
                 theme={THEMES[themeKey].theme}
                 onRegenerate={regenerate}
               />
@@ -705,6 +737,7 @@ type AssistantMessageProps = {
   plugins: ReturnType<typeof createCodePlugin>[];
   width: number;
   hyphenation: boolean;
+  shrinkwrap: boolean | "headings" | "paragraphs";
   theme: InksetTheme | undefined;
   onRegenerate: () => void;
 };
@@ -715,6 +748,7 @@ function AssistantMessage({
   plugins,
   width,
   hyphenation,
+  shrinkwrap,
   theme,
   onRegenerate,
 }: AssistantMessageProps) {
@@ -747,6 +781,7 @@ function AssistantMessage({
           lineHeight={22}
           blockMargin={12}
           hyphenation={hyphenation}
+          shrinkwrap={shrinkwrap}
           theme={theme}
         />
       </div>

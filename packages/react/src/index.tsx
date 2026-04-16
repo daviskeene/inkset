@@ -24,6 +24,7 @@ import {
   type HeadingSizeTuple,
   type HeadingWeightTuple,
   type HeadingLineHeightTuple,
+  type ShrinkwrapOption,
 } from "@inkset/core";
 import { createCopyHandler } from "./copy";
 import { themeToCssVars, type InksetTheme } from "./theme";
@@ -157,6 +158,13 @@ const INKSET_STYLES = `
   :where(.inkset-root) > [data-block-id] {
     left: 0;
     top: 0;
+  }
+
+  /* Shrinkwrap: a per-block CSS var set inline by BlockRenderer. Routes to
+     max-width on the text-level child so the block's allocated width stays
+     intact (for positioning math) while the text column narrows. */
+  :where(.inkset-root) > [data-block-id][style*="--inkset-shrinkwrap-width"] > :where(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol) {
+    max-width: var(--inkset-shrinkwrap-width);
   }
 
   :where(.inkset-root h1, .inkset-root h2, .inkset-root h3, .inkset-root h4, .inkset-root h5, .inkset-root h6, .inkset-root p, .inkset-root pre, .inkset-root blockquote, .inkset-root ul, .inkset-root ol, .inkset-root table) {
@@ -560,6 +568,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     options?.blockMargin,
     options?.cacheSize,
     hyphenationSignature(options?.hyphenation),
+    String(options?.shrinkwrap ?? false),
     options?.headingSizes?.join(",") ?? "",
     options?.headingWeights?.join(",") ?? "",
     options?.headingLineHeights?.join(",") ?? "",
@@ -651,7 +660,7 @@ const BlockRenderer = memo(
     observeHeight,
     onHeightChange,
   }: BlockRendererProps) {
-    const { node, x, y, width, height } = block;
+    const { node, x, y, width, height, shrinkwrapWidth } = block;
     const blockRef = useRef<HTMLDivElement>(null);
 
     const plugin = node.transformedBy
@@ -659,6 +668,12 @@ const BlockRenderer = memo(
       : undefined;
 
     const PluginComponent = plugin?.component;
+
+    // Shrinkwrap narrows the text content without changing the block's allocated
+    // width, so positioning math and plugin-rendered blocks stay unaffected.
+    const contentMaxWidth = shrinkwrapWidth && shrinkwrapWidth < width
+      ? shrinkwrapWidth
+      : undefined;
 
     const style: React.CSSProperties =
       positioning === "absolute"
@@ -673,6 +688,13 @@ const BlockRenderer = memo(
         : {
             width,
           };
+    if (contentMaxWidth) {
+      // Apply via a CSS var so the default stylesheet can route it to `max-width`
+      // on child text elements (p, h1..h6, blockquote) without clamping
+      // plugin-rendered blocks that fill their own container.
+      (style as Record<string, string | number>)["--inkset-shrinkwrap-width"] =
+        `${contentMaxWidth}px`;
+    }
 
     // Capture real DOM height so frozen absolute layout inherits it seamlessly
     useLayoutEffect(() => {
@@ -956,6 +978,13 @@ export type InksetProps = {
   /** Sets CSS `text-wrap` on the root (e.g. `"pretty"` for browser K-P). */
   textWrap?: TextWrapOption;
   /**
+   * Narrow each applicable block to the width of its longest greedy line.
+   * `"headings"` is the most conservative default (headings benefit the
+   * most); `"paragraphs"` covers paragraphs + blockquotes; `true` covers
+   * everything text-shaped.
+   */
+  shrinkwrap?: ShrinkwrapOption;
+  /**
    * Size multipliers for h1..h4 applied both to measurement and to the
    * `--inkset-heading-N-size` CSS variables (as `em` units). Default is
    * `[3, 2.15, 1.3, 1]`. h5 and h6 inherit h4.
@@ -1008,6 +1037,7 @@ export function Inkset({
   blockMargin,
   hyphenation,
   textWrap,
+  shrinkwrap,
   headingSizes,
   headingWeights,
   headingLineHeights,
@@ -1026,6 +1056,7 @@ export function Inkset({
     lineHeight,
     blockMargin,
     hyphenation,
+    shrinkwrap,
     headingSizes,
     headingWeights,
     headingLineHeights,

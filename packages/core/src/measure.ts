@@ -108,11 +108,20 @@ let pretextModule: PretextModule | null = null;
 
 type PretextModule = {
   prepare: (text: string, font: string, options?: { fontSize?: number }) => unknown;
+  prepareWithSegments: (
+    text: string,
+    font: string,
+    options?: { fontSize?: number },
+  ) => unknown;
   layout: (
     prepared: unknown,
     maxWidth: number,
     lineHeight: number,
   ) => { height: number; lineCount: number };
+  measureLineStats: (
+    prepared: unknown,
+    maxWidth: number,
+  ) => { lineCount: number; maxLineWidth: number };
 };
 
 const getPretext = async (): Promise<PretextModule | null> => {
@@ -287,6 +296,50 @@ export class MeasureLayer {
       maxWidth,
       this.getBaseTypography(),
     );
+  }
+
+  /**
+   * Returns the narrowest container width at which `text` still greedy-wraps
+   * into the same number of lines it would at `maxWidth`. Equivalent to
+   * "shrinkwrap" in pretext terms: the visual effect is a paragraph whose
+   * right edge hugs the longest line, eliminating trailing whitespace on
+   * short final lines. When pretext is unavailable (e.g. SSR / Node tests
+   * without Canvas) this returns `null` so the caller can fall back to the
+   * full container width.
+   *
+   * @param headingLevel 1..4 when measuring headings so the typography
+   *   matches what `getHeadingTypography` uses; omit for body text.
+   */
+  async measureShrinkwrapWidth(
+    text: string,
+    maxWidth: number,
+    headingLevel?: number,
+  ): Promise<{ width: number; lineCount: number } | null> {
+    await this.init();
+    if (!text) return null;
+
+    const pretext = await getPretext();
+    if (!pretext || this.pretextUnavailable) return null;
+    if (!pretext.measureLineStats || !pretext.prepareWithSegments) return null;
+
+    const typography = headingLevel
+      ? this.getHeadingTypography(headingLevel)
+      : this.getBaseTypography();
+
+    try {
+      const prepared = pretext.prepareWithSegments(text, typography.font);
+      const stats = pretext.measureLineStats(prepared, maxWidth);
+      if (stats.lineCount <= 1) {
+        // One-line content is already balanced: return its natural width so
+        // callers can still opt to shrink the container.
+        return { width: stats.maxLineWidth, lineCount: 1 };
+      }
+      return { width: Math.ceil(stats.maxLineWidth), lineCount: stats.lineCount };
+    } catch (err) {
+      this.pretextUnavailable = true;
+      console.warn("[inkset] pretext shrinkwrap failed:", err);
+      return null;
+    }
   }
 
   private async measureTextWithTypography(

@@ -17,6 +17,7 @@ export type {
   InksetOptions,
   InksetPlugin,
   Properties,
+  ShrinkwrapOption,
   StreamEvent,
   TextWrapOption,
 } from "./types";

@@ -67,6 +67,7 @@ export class StreamingPipeline {
       | "headingSizes"
       | "headingWeights"
       | "headingLineHeights"
+      | "shrinkwrap"
     >
   > & {
     hyphenation: InksetOptions["hyphenation"];
@@ -74,6 +75,7 @@ export class StreamingPipeline {
     headingSizes: InksetOptions["headingSizes"];
     headingWeights: InksetOptions["headingWeights"];
     headingLineHeights: InksetOptions["headingLineHeights"];
+    shrinkwrap: InksetOptions["shrinkwrap"];
   };
   private hyphenator: Hyphenator | null = null;
 
@@ -103,6 +105,7 @@ export class StreamingPipeline {
       headingSizes: options?.headingSizes,
       headingWeights: options?.headingWeights,
       headingLineHeights: options?.headingLineHeights,
+      shrinkwrap: options?.shrinkwrap ?? false,
     };
 
     this.measureLayer = new MeasureLayer({
@@ -420,6 +423,24 @@ export class StreamingPipeline {
         containerWidth,
         plugin,
       );
+
+      // Shrinkwrap only applies to text-shaped blocks; plugin-rendered blocks
+      // (code, table, math) own their own width and shouldn't be narrowed.
+      if (
+        this.options.shrinkwrap &&
+        shouldShrinkwrap(node.blockType, this.options.shrinkwrap) &&
+        !plugin?.measure
+      ) {
+        const shrink = await this.measureLayer.measureShrinkwrapWidth(
+          extractText(node),
+          containerWidth,
+          node.blockType === "heading" ? getHeadingLevelFromNode(node) : undefined,
+        );
+        if (shrink && shrink.width > 0 && shrink.width < containerWidth) {
+          result.shrinkwrapWidth = shrink.width;
+        }
+      }
+
       this.measureCache.set(node.blockId, result);
       measured.push(result);
     }
@@ -434,3 +455,29 @@ export class StreamingPipeline {
     }
   }
 }
+
+// ── Shrinkwrap helpers ────────────────────────────────────────────
+
+const shouldShrinkwrap = (
+  blockType: string,
+  option: NonNullable<InksetOptions["shrinkwrap"]>,
+): boolean => {
+  if (option === false) return false;
+  if (option === "headings") return blockType === "heading";
+  if (option === "paragraphs") {
+    return blockType === "paragraph" || blockType === "blockquote";
+  }
+  // option === true: everything text-shaped
+  return (
+    blockType === "paragraph" ||
+    blockType === "heading" ||
+    blockType === "blockquote" ||
+    blockType === "list"
+  );
+};
+
+const getHeadingLevelFromNode = (node: EnrichedNode): number | undefined => {
+  const tag = node.tagName ?? node.children?.[0]?.tagName ?? "";
+  const match = /^h([1-6])$/.exec(tag);
+  return match ? parseInt(match[1], 10) : undefined;
+};
