@@ -1,4 +1,6 @@
 // Code block plugin: syntax highlighting via shiki with streaming support.
+declare const process: { env: { NODE_ENV?: string } };
+
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   extractText,

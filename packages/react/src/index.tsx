@@ -856,7 +856,7 @@ export function Inkset({
     ? baseLineHeight / baseFontSize
     : DEFAULT_LINE_HEIGHT_RATIO;
 
-  const containerStyle: React.CSSProperties & Record<string, string | number> = {
+  const containerStyle: React.CSSProperties & Record<`--${string}`, string | number> = {
     position: "relative",
     overflow: "hidden",
     minHeight: containerMinHeight,

@@ -1,4 +1,6 @@
 // Math block plugin: LaTeX rendering via KaTeX or MathJax with streaming fallback.
+declare const process: { env: { NODE_ENV?: string } };
+
 import React, { useEffect, useState } from "react";
 import {
   extractText,

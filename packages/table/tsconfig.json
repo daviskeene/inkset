@@ -8,5 +8,8 @@
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["test/**/*", "dist/**/*"]
+  "exclude": ["test/**/*", "dist/**/*"],
+  "references": [
+    { "path": "../core" }
+  ]
 }
