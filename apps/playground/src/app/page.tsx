@@ -193,44 +193,146 @@ const SCENARIOS = Object.fromEntries(SCENARIO_LIST.map((s) => [s.key, s]));
 
 // ── Plugins ────────────────────────────────────────────────────────
 
-const codePlugin = createCodePlugin({ theme: "github-dark" });
+// Per-theme-key shiki theme so the syntax highlighter inverts alongside
+// the rest of the page. Cached once at module load to match the plugin
+// contract (same identity between renders while the key is unchanged).
+const CODE_PLUGINS_BY_THEME: Record<string, ReturnType<typeof createCodePlugin>> = {
+  default: createCodePlugin({ theme: "github-dark" }),
+  light: createCodePlugin({ theme: "github-light" }),
+  highContrast: createCodePlugin({ theme: "github-dark" }),
+  compact: createCodePlugin({ theme: "github-dark" }),
+};
 const mathPlugin = createMathPlugin();
 const tablePlugin = createTablePlugin();
 
-const ALL_PLUGINS = { code: codePlugin, math: mathPlugin, table: tablePlugin };
-
 // ── Themes ─────────────────────────────────────────────────────────
 
-type ThemeKey = "default" | "warm" | "highContrast" | "compact";
+type ThemeKey = "default" | "light" | "highContrast" | "compact";
 
-const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme }> = {
+// Page chrome palette. `default` keeps the current dark look; `light` flips
+// the whole page (header, sidebar, chat bg, borders, text) in addition to
+// the Inkset content theme. Other themes inherit the dark palette — they
+// only affect the rendered markdown, not the surrounding UI.
+type PagePalette = {
+  bg: string;
+  surface: string;
+  surfaceRaised: string;
+  borderSubtle: string;
+  borderDefault: string;
+  borderStrong: string;
+  textPrimary: string;
+  textMuted: string;
+  textFaint: string;
+  divider: string;
+  chipActiveBg: string;
+  chipActiveText: string;
+  userBubbleBg: string;
+  userBubbleText: string;
+  submitBg: string;
+  submitText: string;
+  submitDisabledBg: string;
+  submitDisabledText: string;
+  sidebarCodeText: string;
+};
+
+const DARK_PALETTE: PagePalette = {
+  bg: "#0a0a0a",
+  surface: "#101010",
+  surfaceRaised: "#181818",
+  borderSubtle: "#1a1a1a",
+  borderDefault: "#1f1f1f",
+  borderStrong: "#333",
+  textPrimary: "#ededed",
+  textMuted: "#8b8fa6",
+  textFaint: "#5a5a5a",
+  divider: "#222",
+  chipActiveBg: "#181818",
+  chipActiveText: "#ededed",
+  userBubbleBg: "#1c1c1f",
+  userBubbleText: "#ededed",
+  submitBg: "#ededed",
+  submitText: "#0a0a0a",
+  submitDisabledBg: "#1f1f1f",
+  submitDisabledText: "#5a5a5a",
+  sidebarCodeText: "#c8c8cc",
+};
+
+const LIGHT_PALETTE: PagePalette = {
+  bg: "#fafaf9",
+  surface: "#ffffff",
+  surfaceRaised: "#f2f2f0",
+  borderSubtle: "#ececea",
+  borderDefault: "#dddcd8",
+  borderStrong: "#b5b4af",
+  textPrimary: "#1a1a1a",
+  textMuted: "#6a6a6a",
+  textFaint: "#a8a8a6",
+  divider: "#e4e4e2",
+  chipActiveBg: "#ffffff",
+  chipActiveText: "#1a1a1a",
+  userBubbleBg: "#ebeae7",
+  userBubbleText: "#1a1a1a",
+  submitBg: "#1a1a1a",
+  submitText: "#fafaf9",
+  submitDisabledBg: "#e4e4e2",
+  submitDisabledText: "#b0b0ae",
+  sidebarCodeText: "#2a2a2a",
+};
+
+const paletteToCssVars = (p: PagePalette): Record<string, string> => ({
+  "--pg-bg": p.bg,
+  "--pg-surface": p.surface,
+  "--pg-surface-raised": p.surfaceRaised,
+  "--pg-border-subtle": p.borderSubtle,
+  "--pg-border-default": p.borderDefault,
+  "--pg-border-strong": p.borderStrong,
+  "--pg-text-primary": p.textPrimary,
+  "--pg-text-muted": p.textMuted,
+  "--pg-text-faint": p.textFaint,
+  "--pg-divider": p.divider,
+  "--pg-chip-active-bg": p.chipActiveBg,
+  "--pg-chip-active-text": p.chipActiveText,
+  "--pg-user-bubble-bg": p.userBubbleBg,
+  "--pg-user-bubble-text": p.userBubbleText,
+  "--pg-submit-bg": p.submitBg,
+  "--pg-submit-text": p.submitText,
+  "--pg-submit-disabled-bg": p.submitDisabledBg,
+  "--pg-submit-disabled-text": p.submitDisabledText,
+  "--pg-sidebar-code-text": p.sidebarCodeText,
+});
+
+const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme; palette: PagePalette }> = {
   default: {
     label: "default",
+    palette: DARK_PALETTE,
     // Undefined theme → fall through to the CSS-var defaults in :where().
   },
-  warm: {
-    label: "warm",
+  light: {
+    label: "light",
+    palette: LIGHT_PALETTE,
     theme: {
       colors: {
-        text: "#f4e9d8",
-        textMuted: "rgba(244, 233, 216, 0.72)",
-        blockquoteAccent: "#e0975c",
-        blockquoteText: "rgba(244, 233, 216, 0.82)",
-        inlineCodeBg: "rgba(224, 151, 92, 0.18)",
-        inlineCodeText: "#f7c893",
-        hr: "rgba(224, 151, 92, 0.3)",
+        text: "#1a1a1a",
+        textMuted: "rgba(26, 26, 26, 0.7)",
+        blockquoteAccent: "#c8c8c6",
+        blockquoteText: "rgba(26, 26, 26, 0.78)",
+        inlineCodeBg: "rgba(0, 0, 0, 0.06)",
+        inlineCodeText: "#1a1a1a",
+        hr: "rgba(0, 0, 0, 0.1)",
       },
       code: {
-        background: "#1c1512",
+        background: "#f6f8fa",
+        headerBorderColor: "rgba(0, 0, 0, 0.08)",
       },
       table: {
-        border: "rgba(224, 151, 92, 0.2)",
-        headerText: "#e0975c",
+        border: "rgba(0, 0, 0, 0.08)",
+        headerText: "rgba(26, 26, 26, 0.7)",
       },
     },
   },
   highContrast: {
     label: "hi-contrast",
+    palette: DARK_PALETTE,
     theme: {
       colors: {
         text: "#ffffff",
@@ -251,6 +353,7 @@ const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme }> = {
   },
   compact: {
     label: "compact",
+    palette: DARK_PALETTE,
     theme: {
       typography: {
         fontSize: 14,
@@ -299,9 +402,19 @@ export default function PlaygroundPage() {
   const [inputValue, setInputValue] = useState("");
   const [inputHasFocus, setInputHasFocus] = useState(false);
 
-  const plugins = Object.entries(enabledPlugins)
-    .filter(([, enabled]) => enabled)
-    .map(([name]) => ALL_PLUGINS[name as keyof typeof ALL_PLUGINS]);
+  // Recompute the plugin bundle when the theme changes so the code plugin's
+  // shiki theme stays in sync. Other plugins are theme-independent.
+  const plugins = React.useMemo(() => {
+    const byName: Record<string, ReturnType<typeof createCodePlugin>> = {
+      code: CODE_PLUGINS_BY_THEME[themeKey] ?? CODE_PLUGINS_BY_THEME.default,
+      math: mathPlugin,
+      table: tablePlugin,
+    };
+    return Object.entries(enabledPlugins)
+      .filter(([, enabled]) => enabled)
+      .map(([name]) => byName[name])
+      .filter(Boolean);
+  }, [enabledPlugins, themeKey]);
 
   const activeScenario = SCENARIOS[activeKey] ?? SCENARIOS.mixed;
 
@@ -389,17 +502,28 @@ export default function PlaygroundPage() {
 
   // ── Render ─────────────────────────────────────────────────────────
 
+  const activePalette = THEMES[themeKey].palette;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        background: "var(--pg-bg)",
+        color: "var(--pg-text-primary)",
+        ...paletteToCssVars(activePalette),
+      }}
+    >
       <header
         style={{
           padding: "12px 20px",
-          borderBottom: "1px solid #1a1a1a",
+          borderBottom: "1px solid var(--pg-border-subtle)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           flexShrink: 0,
-          background: "#0a0a0a",
+          background: "var(--pg-bg)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -411,10 +535,10 @@ export default function PlaygroundPage() {
             href="/justification-comparison"
             style={{
               fontSize: 11.5,
-              color: "#8b8fa6",
+              color: "var(--pg-text-muted)",
               textDecoration: "none",
               padding: "3px 9px",
-              border: "1px solid #242424",
+              border: "1px solid var(--pg-border-default)",
               borderRadius: 999,
               marginLeft: 4,
             }}
@@ -433,10 +557,13 @@ export default function PlaygroundPage() {
                 style={{
                   padding: "3px 9px",
                   fontSize: 11.5,
-                  border: themeKey === key ? "1px solid #3a3a3a" : "1px solid #1f1f1f",
+                  border:
+                    themeKey === key
+                      ? "1px solid var(--pg-border-strong)"
+                      : "1px solid var(--pg-border-default)",
                   borderRadius: 999,
-                  background: themeKey === key ? "#181818" : "transparent",
-                  color: themeKey === key ? "#ededed" : "#999",
+                  background: themeKey === key ? "var(--pg-chip-active-bg)" : "transparent",
+                  color: themeKey === key ? "var(--pg-chip-active-text)" : "var(--pg-text-muted)",
                   cursor: "pointer",
                 }}
               >
@@ -445,7 +572,7 @@ export default function PlaygroundPage() {
             ))}
           </div>
 
-          <div style={{ width: 1, height: 18, background: "#222" }} />
+          <div style={{ width: 1, height: 18, background: "var(--pg-divider)" }} />
 
           <label
             style={{
@@ -490,7 +617,7 @@ export default function PlaygroundPage() {
             )}
           </label>
 
-          <div style={{ width: 1, height: 18, background: "#222" }} />
+          <div style={{ width: 1, height: 18, background: "var(--pg-divider)" }} />
 
           {Object.entries(enabledPlugins).map(([name, enabled]) => (
             <label
@@ -526,10 +653,10 @@ export default function PlaygroundPage() {
           style={{
             width: MARKDOWN_PANEL_WIDTH,
             flexShrink: 0,
-            borderRight: "1px solid #1a1a1a",
+            borderRight: "1px solid var(--pg-border-subtle)",
             display: "flex",
             flexDirection: "column",
-            background: "#0a0a0a",
+            background: "var(--pg-bg)",
           }}
         >
           <div
@@ -539,7 +666,7 @@ export default function PlaygroundPage() {
               letterSpacing: 0.4,
               opacity: 0.5,
               textTransform: "uppercase",
-              borderBottom: "1px solid #1a1a1a",
+              borderBottom: "1px solid var(--pg-border-subtle)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -563,8 +690,8 @@ export default function PlaygroundPage() {
                 "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
               fontSize: 12.5,
               lineHeight: 1.55,
-              background: "#0a0a0a",
-              color: "#c8c8cc",
+              background: "var(--pg-bg)",
+              color: "var(--pg-sidebar-code-text)",
               border: "none",
               resize: "none",
               outline: "none",
@@ -580,7 +707,7 @@ export default function PlaygroundPage() {
             minWidth: 0,
             display: "flex",
             flexDirection: "column",
-            background: "#0a0a0a",
+            background: "var(--pg-bg)",
           }}
         >
           {/* Scrollable transcript */}
@@ -692,10 +819,13 @@ function ScenarioStrip({
           style={{
             padding: "4px 10px",
             fontSize: 12,
-            border: active === s.key ? "1px solid #3a3a3a" : "1px solid #1f1f1f",
+            border:
+              active === s.key
+                ? "1px solid var(--pg-border-strong)"
+                : "1px solid var(--pg-border-default)",
             borderRadius: 999,
-            background: active === s.key ? "#181818" : "transparent",
-            color: active === s.key ? "#ededed" : "#999",
+            background: active === s.key ? "var(--pg-chip-active-bg)" : "transparent",
+            color: active === s.key ? "var(--pg-chip-active-text)" : "var(--pg-text-muted)",
             cursor: "pointer",
           }}
         >
@@ -716,8 +846,8 @@ function UserBubble({ text }: { text: string }) {
           maxWidth: "80%",
           padding: "10px 14px",
           borderRadius: 18,
-          background: "#1c1c1f",
-          color: "#ededed",
+          background: "var(--pg-user-bubble-bg)",
+          color: "var(--pg-user-bubble-text)",
           fontSize: 14.5,
           lineHeight: 1.5,
           boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset",
@@ -867,9 +997,9 @@ function ChatInput({
   return (
     <div
       style={{
-        borderTop: "1px solid #1a1a1a",
+        borderTop: "1px solid var(--pg-border-subtle)",
         padding: `14px ${CHAT_SIDE_PADDING}px 20px`,
-        background: "#0a0a0a",
+        background: "var(--pg-bg)",
         display: "flex",
         justifyContent: "center",
       }}
@@ -880,9 +1010,9 @@ function ChatInput({
             style={{
               marginBottom: 10,
               padding: "10px 14px",
-              border: "1px solid #1f1f1f",
+              border: "1px solid var(--pg-border-default)",
               borderRadius: 12,
-              background: "#0c0c0c",
+              background: "var(--pg-surface)",
               maxHeight: 220,
               overflowY: "auto",
             }}
@@ -921,9 +1051,11 @@ function ChatInput({
             alignItems: "center",
             gap: 10,
             padding: "8px 10px 8px 16px",
-            border: focused ? "1px solid #333" : "1px solid #1f1f1f",
+            border: focused
+              ? "1px solid var(--pg-border-strong)"
+              : "1px solid var(--pg-border-default)",
             borderRadius: 22,
-            background: "#101010",
+            background: "var(--pg-surface)",
             transition: "border-color 120ms",
           }}
         >
@@ -948,7 +1080,7 @@ function ChatInput({
               background: "transparent",
               border: "none",
               outline: "none",
-              color: "#ededed",
+              color: "var(--pg-text-primary)",
               fontSize: 14.5,
               lineHeight: 1.45,
               fontFamily: "inherit",
@@ -972,8 +1104,8 @@ function ChatInput({
               border: "none",
               flexShrink: 0,
               alignSelf: "flex-end",
-              background: value.trim() ? "#ededed" : "#1f1f1f",
-              color: value.trim() ? "#0a0a0a" : "#5a5a5a",
+              background: value.trim() ? "var(--pg-submit-bg)" : "var(--pg-submit-disabled-bg)",
+              color: value.trim() ? "var(--pg-submit-text)" : "var(--pg-submit-disabled-text)",
               cursor: value.trim() ? "pointer" : "default",
               display: "flex",
               alignItems: "center",
@@ -1023,8 +1155,8 @@ function IconButton({
         height: 28,
         borderRadius: 6,
         border: "none",
-        background: active ? "#202023" : "transparent",
-        color: active ? "#ededed" : "#7a7a82",
+        background: active ? "var(--pg-chip-active-bg)" : "transparent",
+        color: active ? "var(--pg-text-primary)" : "var(--pg-text-muted)",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -1032,10 +1164,10 @@ function IconButton({
         transition: "background 120ms, color 120ms",
       }}
       onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.color = "#ededed";
+        if (!active) e.currentTarget.style.color = "var(--pg-text-primary)";
       }}
       onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.color = "#7a7a82";
+        if (!active) e.currentTarget.style.color = "var(--pg-text-muted)";
       }}
     >
       {children}
