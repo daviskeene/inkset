@@ -153,6 +153,7 @@ export class MeasureLayer {
   private cache: LRUCache;
   private options: MeasureOptions;
   private initialized = false;
+  private pretextUnavailable = false;
 
   constructor(options?: Partial<MeasureOptions>) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -278,7 +279,7 @@ export class MeasureLayer {
   ): Promise<Dimensions> {
     const pretext = await getPretext();
 
-    if (!pretext) {
+    if (!pretext || this.pretextUnavailable) {
       return this.fallbackMeasure(
         text,
         maxWidth,
@@ -290,16 +291,31 @@ export class MeasureLayer {
     const cacheKey = `${text}|${typography.font}`;
     let handle = this.cache.get(cacheKey);
 
-    if (!handle) {
-      handle = pretext.prepare(text, typography.font);
-      this.cache.set(cacheKey, handle);
+    try {
+      if (!handle) {
+        handle = pretext.prepare(text, typography.font);
+        this.cache.set(cacheKey, handle);
+      }
+      const result = pretext.layout(handle, maxWidth, typography.lineHeight);
+      return {
+        width: maxWidth,
+        height: result.height,
+      };
+    } catch (err) {
+      // Pretext throws when Canvas/OffscreenCanvas isn't available (SSR, Node tests).
+      // Latch the flag so subsequent calls skip the try/catch overhead.
+      this.pretextUnavailable = true;
+      console.warn(
+        "[inkset] pretext measurement failed; falling back to character-width estimate:",
+        err,
+      );
+      return this.fallbackMeasure(
+        text,
+        maxWidth,
+        typography.fontSize,
+        typography.lineHeight,
+      );
     }
-
-    const result = pretext.layout(handle, maxWidth, typography.lineHeight);
-    return {
-      width: maxWidth,
-      height: result.height,
-    };
   }
 
   async relayout(
