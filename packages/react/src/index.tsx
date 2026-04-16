@@ -11,6 +11,9 @@ import React, {
 import {
   StreamingPipeline,
   PluginRegistry,
+  DEFAULT_HEADING_SIZES,
+  DEFAULT_HEADING_WEIGHTS,
+  DEFAULT_HEADING_LINE_HEIGHTS,
   type PipelineState,
   type InksetOptions,
   type HyphenationOption,
@@ -18,6 +21,9 @@ import {
   type EnrichedNode,
   type InksetPlugin,
   type TextWrapOption,
+  type HeadingSizeTuple,
+  type HeadingWeightTuple,
+  type HeadingLineHeightTuple,
 } from "@inkset/core";
 import { createCopyHandler } from "./copy";
 import { themeToCssVars, type InksetTheme } from "./theme";
@@ -26,6 +32,33 @@ const DEFAULT_BLOCK_MARGIN = 16;
 const DEFAULT_FONT_SIZE = 16;
 const DEFAULT_LINE_HEIGHT = 24;
 const DEFAULT_LINE_HEIGHT_RATIO = 1.5;
+
+// Emits the `--inkset-heading-N-*` CSS vars from the numeric tuple props so
+// visuals track measurement. Sizes become `em` (relative to base font-size),
+// line-heights stay unitless, weights pass through.
+const headingTuplesToCssVars = (
+  sizes: HeadingSizeTuple | undefined,
+  weights: HeadingWeightTuple | undefined,
+  lineHeights: HeadingLineHeightTuple | undefined,
+): Record<`--${string}`, string | number> => {
+  const vars: Record<`--${string}`, string | number> = {};
+  if (sizes) {
+    for (let i = 0; i < 4; i++) {
+      vars[`--inkset-heading-${i + 1}-size`] = `${sizes[i]}em`;
+    }
+  }
+  if (weights) {
+    for (let i = 0; i < 4; i++) {
+      vars[`--inkset-heading-${i + 1}-weight`] = weights[i];
+    }
+  }
+  if (lineHeights) {
+    for (let i = 0; i < 4; i++) {
+      vars[`--inkset-heading-${i + 1}-line-height`] = lineHeights[i];
+    }
+  }
+  return vars;
+};
 
 // Inkset ships a single stylesheet with two layers:
 //
@@ -446,6 +479,9 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     options?.blockMargin,
     options?.cacheSize,
     hyphenationSignature(options?.hyphenation),
+    options?.headingSizes?.join(",") ?? "",
+    options?.headingWeights?.join(",") ?? "",
+    options?.headingLineHeights?.join(",") ?? "",
   ]);
 
   useEffect(() => {
@@ -839,6 +875,23 @@ export type InksetProps = {
   /** Sets CSS `text-wrap` on the root (e.g. `"pretty"` for browser K-P). */
   textWrap?: TextWrapOption;
   /**
+   * Size multipliers for h1..h4 applied both to measurement and to the
+   * `--inkset-heading-N-size` CSS variables (as `em` units). Default is
+   * `[3, 2.15, 1.3, 1]`. h5 and h6 inherit h4.
+   *
+   * Prefer this over `theme.typography.headingSizes` when you need visuals
+   * and layout to stay aligned — `theme` only drives CSS and leaves the
+   * measurement layer reserving space at the default multipliers.
+   */
+  headingSizes?: HeadingSizeTuple;
+  /** CSS font weights for h1..h4. Default `[800, 780, 720, 680]`. */
+  headingWeights?: HeadingWeightTuple;
+  /**
+   * Line-height multipliers for h1..h4 relative to each heading's own
+   * fontSize. Default `[1.05, 1.08, 1.15, 1.2]`.
+   */
+  headingLineHeights?: HeadingLineHeightTuple;
+  /**
    * Structured theme overrides. Compiles to `--inkset-*` CSS variables on
    * the root. The `style` prop still has final say, so consumers can escape-
    * hatch any specific property after the theme is applied.
@@ -866,6 +919,9 @@ export function Inkset({
   blockMargin,
   hyphenation,
   textWrap,
+  headingSizes,
+  headingWeights,
+  headingLineHeights,
   theme,
   loadingFallback,
   className,
@@ -880,6 +936,9 @@ export function Inkset({
     lineHeight,
     blockMargin,
     hyphenation,
+    headingSizes,
+    headingWeights,
+    headingLineHeights,
   });
 
   const prevContentRef = useRef<{
@@ -1092,9 +1151,11 @@ export function Inkset({
     : DEFAULT_LINE_HEIGHT_RATIO;
 
   // Precedence (low → high): CSS defaults in INKSET_STYLES → font/fontSize/
-  // lineHeight props → `theme` prop → `style` prop. Keeping theme *before*
-  // style means consumers can still escape-hatch any single property without
-  // building a whole theme variant.
+  // lineHeight props → heading tuple props → `theme` prop → `style` prop.
+  // Heading tuple props go *before* `theme` so that a structured theme override
+  // can still win, but *after* the font props so they override the base-size
+  // em calculation. Theme before style means consumers can escape-hatch any
+  // single property without building a whole theme variant.
   const containerStyle: React.CSSProperties & Record<`--${string}`, string | number> = {
     position: "relative",
     overflow: "hidden",
@@ -1102,6 +1163,7 @@ export function Inkset({
     "--inkset-font-family": font ?? "system-ui, sans-serif",
     "--inkset-base-font-size": `${baseFontSize}px`,
     "--inkset-base-line-height-ratio": `${baseLineHeightRatio}`,
+    ...headingTuplesToCssVars(headingSizes, headingWeights, headingLineHeights),
     ...themeToCssVars(theme),
     hyphens: hyphenation ? "manual" : undefined,
     WebkitHyphens: hyphenation ? "manual" : undefined,

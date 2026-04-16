@@ -58,9 +58,22 @@ export class StreamingPipeline {
   private containerWidth = 0;
   private pendingRelayoutWidth: number | null = null;
   private relayoutInFlight = false;
-  private options: Required<Omit<InksetOptions, "plugins" | "hyphenation" | "textWrap">> & {
+  private options: Required<
+    Omit<
+      InksetOptions,
+      | "plugins"
+      | "hyphenation"
+      | "textWrap"
+      | "headingSizes"
+      | "headingWeights"
+      | "headingLineHeights"
+    >
+  > & {
     hyphenation: InksetOptions["hyphenation"];
     textWrap: InksetOptions["textWrap"];
+    headingSizes: InksetOptions["headingSizes"];
+    headingWeights: InksetOptions["headingWeights"];
+    headingLineHeights: InksetOptions["headingLineHeights"];
   };
   private hyphenator: Hyphenator | null = null;
 
@@ -87,6 +100,9 @@ export class StreamingPipeline {
       cacheSize: options?.cacheSize ?? DEFAULT_CACHE_SIZE,
       hyphenation: options?.hyphenation,
       textWrap: options?.textWrap,
+      headingSizes: options?.headingSizes,
+      headingWeights: options?.headingWeights,
+      headingLineHeights: options?.headingLineHeights,
     };
 
     this.measureLayer = new MeasureLayer({
@@ -94,6 +110,9 @@ export class StreamingPipeline {
       fontSize: this.options.fontSize,
       lineHeight: this.options.lineHeight,
       cacheSize: this.options.cacheSize,
+      headingSizes: this.options.headingSizes,
+      headingWeights: this.options.headingWeights,
+      headingLineHeights: this.options.headingLineHeights,
     });
 
     if (options?.plugins) {

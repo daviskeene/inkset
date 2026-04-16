@@ -5,6 +5,9 @@ export type {
   BlockType,
   Dimensions,
   EnrichedNode,
+  HeadingLineHeightTuple,
+  HeadingSizeTuple,
+  HeadingWeightTuple,
   HyphenationOption,
   LayoutBlock,
   LayoutTree,
@@ -23,7 +26,13 @@ export { PluginRegistry } from "./plugin";
 export { Ingest, splitBlocks, repair } from "./ingest";
 export { createBlocks, parseBlock, parseBlocks, extractText } from "./parse";
 export { transformBlocks, retransformWidthSensitive } from "./transform";
-export { MeasureLayer, LRUCache } from "./measure";
+export {
+  MeasureLayer,
+  LRUCache,
+  DEFAULT_HEADING_SIZES,
+  DEFAULT_HEADING_WEIGHTS,
+  DEFAULT_HEADING_LINE_HEIGHTS,
+} from "./measure";
 export { escapeHtml, nodeToHtml, propsToAttrs } from "./html";
 export { computeLayout, getLayoutHeight, getVisibleBlocks } from "./layout";
 export { StreamingPipeline } from "./stream";

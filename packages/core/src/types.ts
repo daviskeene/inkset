@@ -125,6 +125,19 @@ export type HyphenationOption =
  */
 export type TextWrapOption = "wrap" | "balance" | "pretty" | "stable";
 
+/**
+ * Heading metric tuples indexed h1..h4 (h5 and h6 inherit h4). Kept as fixed-
+ * length tuples rather than objects because measurement is hot and indexed
+ * access is cheaper than property lookup.
+ *
+ * - HeadingSizeTuple: multipliers of base `fontSize` (e.g. [3, 2.15, 1.3, 1])
+ * - HeadingWeightTuple: CSS weight numbers (e.g. [800, 780, 720, 680])
+ * - HeadingLineHeightTuple: multipliers of the heading's own fontSize
+ */
+export type HeadingSizeTuple = readonly [number, number, number, number];
+export type HeadingWeightTuple = readonly [number, number, number, number];
+export type HeadingLineHeightTuple = readonly [number, number, number, number];
+
 export interface InksetOptions {
   plugins?: InksetPlugin[];
   /** Must match CSS font-family */
@@ -141,6 +154,19 @@ export interface InksetOptions {
   hyphenation?: HyphenationOption;
   /** Sets CSS `text-wrap` on the inkset root. */
   textWrap?: TextWrapOption;
+  /**
+   * Size multipliers per heading level (h1..h4) applied to `fontSize` during
+   * measurement. Must match the CSS `--inkset-heading-N-size` the consumer
+   * renders with, or layout will reserve the wrong block height.
+   */
+  headingSizes?: HeadingSizeTuple;
+  /** CSS font weights per heading level (h1..h4) used during measurement. */
+  headingWeights?: HeadingWeightTuple;
+  /**
+   * Line-height multipliers per heading level (h1..h4) relative to that
+   * heading's computed fontSize.
+   */
+  headingLineHeights?: HeadingLineHeightTuple;
 }
 
 // ── Error types ────────────────────────────────────────────────────

@@ -4,6 +4,9 @@ import type {
   EnrichedNode,
   MeasuredBlock,
   InksetPlugin,
+  HeadingSizeTuple,
+  HeadingWeightTuple,
+  HeadingLineHeightTuple,
 } from "./types";
 import type { PluginRegistry } from "./plugin";
 import { extractText } from "./parse";
@@ -131,6 +134,9 @@ export type MeasureOptions = {
   fontSize: number;
   lineHeight: number;
   cacheSize?: number;
+  headingSizes?: HeadingSizeTuple;
+  headingWeights?: HeadingWeightTuple;
+  headingLineHeights?: HeadingLineHeightTuple;
 };
 
 type TypographySpec = {
@@ -142,11 +148,22 @@ type TypographySpec = {
 const DEFAULT_FONT_SIZE = 16;
 const DEFAULT_LINE_HEIGHT = 24;
 
+// Defaults chosen to preserve the historical hardcoded metrics (pre-Phase-3).
+// Anyone touching these numbers is changing how much vertical space headings
+// reserve in the layout, not just how they look — keep the CSS vars in
+// `INKSET_STYLES` in sync with whatever the consumer passes.
+export const DEFAULT_HEADING_SIZES: HeadingSizeTuple = [3, 2.15, 1.3, 1];
+export const DEFAULT_HEADING_WEIGHTS: HeadingWeightTuple = [800, 780, 720, 680];
+export const DEFAULT_HEADING_LINE_HEIGHTS: HeadingLineHeightTuple = [1.05, 1.08, 1.15, 1.2];
+
 const DEFAULT_OPTIONS: MeasureOptions = {
   font: "system-ui, sans-serif",
   fontSize: DEFAULT_FONT_SIZE,
   lineHeight: DEFAULT_LINE_HEIGHT,
   cacheSize: LRU_DEFAULT_MAX_SIZE,
+  headingSizes: DEFAULT_HEADING_SIZES,
+  headingWeights: DEFAULT_HEADING_WEIGHTS,
+  headingLineHeights: DEFAULT_HEADING_LINE_HEIGHTS,
 };
 
 export class MeasureLayer {
@@ -361,39 +378,18 @@ export class MeasureLayer {
 
   private getHeadingTypography(level: number): TypographySpec {
     const base = this.options.fontSize;
+    const sizes = this.options.headingSizes ?? DEFAULT_HEADING_SIZES;
+    const weights = this.options.headingWeights ?? DEFAULT_HEADING_WEIGHTS;
+    const lineHeights = this.options.headingLineHeights ?? DEFAULT_HEADING_LINE_HEIGHTS;
 
-    if (level === 1) {
-      const fontSize = base * 3;
-      return {
-        font: buildFontShorthand(800, fontSize, this.options.font),
-        fontSize,
-        lineHeight: fontSize * 1.05,
-      };
-    }
+    // h1..h4 are explicit; h5/h6 (and anything higher) inherit h4.
+    const idx = Math.max(0, Math.min(3, level - 1));
+    const fontSize = base * sizes[idx];
 
-    if (level === 2) {
-      const fontSize = base * 2.15;
-      return {
-        font: buildFontShorthand(780, fontSize, this.options.font),
-        fontSize,
-        lineHeight: fontSize * 1.08,
-      };
-    }
-
-    if (level === 3) {
-      const fontSize = base * 1.3;
-      return {
-        font: buildFontShorthand(720, fontSize, this.options.font),
-        fontSize,
-        lineHeight: fontSize * 1.15,
-      };
-    }
-
-    const fontSize = base;
     return {
-      font: buildFontShorthand(680, fontSize, this.options.font),
+      font: buildFontShorthand(weights[idx], fontSize, this.options.font),
       fontSize,
-      lineHeight: fontSize * 1.2,
+      lineHeight: fontSize * lineHeights[idx],
     };
   }
 
