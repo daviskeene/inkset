@@ -2,11 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: [
-    "@preframe/core",
-    "@preframe/react",
-    "@preframe/code",
-    "@preframe/math",
-    "@preframe/table",
+    "@inkset/core",
+    "@inkset/react",
+    "@inkset/code",
+    "@inkset/math",
+    "@inkset/table",
   ],
 };
 

@@ -1,5 +1,5 @@
 {
-  "name": "@preframe/playground",
+  "name": "@inkset/playground",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,11 +8,11 @@
     "start": "next start"
   },
   "dependencies": {
-    "@preframe/core": "workspace:*",
-    "@preframe/react": "workspace:*",
-    "@preframe/code": "workspace:*",
-    "@preframe/math": "workspace:*",
-    "@preframe/table": "workspace:*",
+    "@inkset/core": "workspace:*",
+    "@inkset/react": "workspace:*",
+    "@inkset/code": "workspace:*",
+    "@inkset/math": "workspace:*",
+    "@inkset/table": "workspace:*",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

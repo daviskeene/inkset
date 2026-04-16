@@ -1,4 +1,4 @@
-// Test configuration for @preframe/core.
+// Test configuration for @inkset/core.
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({

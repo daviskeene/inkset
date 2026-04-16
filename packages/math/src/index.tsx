@@ -2,13 +2,13 @@
 import React, { useEffect, useState } from "react";
 import {
   extractText,
-  type PreframePlugin,
+  type InksetPlugin,
   type ASTNode,
   type EnrichedNode,
   type PluginContext,
   type Dimensions,
   type PluginComponentProps,
-} from "@preframe/core";
+} from "@inkset/core";
 
 const MATH_LINE_HEIGHT = 44;
 const MATH_PADDING = 16;
@@ -94,7 +94,7 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
       }).catch((loadErr: unknown) => {
         if (cancelled) return;
         if (process.env.NODE_ENV !== "production") {
-          console.debug("[preframe/math] KaTeX import failed:", loadErr);
+          console.debug("[inkset/math] KaTeX import failed:", loadErr);
         }
         setHtml("");
         if (isStreaming) {
@@ -115,7 +115,7 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
 
   return (
     <Tag
-      className={`preframe-math ${displayMode ? "preframe-math-display" : "preframe-math-inline"}`}
+      className={`inkset-math ${displayMode ? "inkset-math-display" : "inkset-math-inline"}`}
       style={style}
       data-latex={latex}
       aria-label={`Math: ${latex}`}
@@ -123,11 +123,11 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
       {html ? (
         <span dangerouslySetInnerHTML={{ __html: html }} />
       ) : error && !isStreaming ? (
-        <span className="preframe-math-error" title={error} style={{ color: "#f87171", fontFamily: "ui-monospace, monospace", fontSize: "13px", lineHeight: 1.4 }}>
+        <span className="inkset-math-error" title={error} style={{ color: "#f87171", fontFamily: "ui-monospace, monospace", fontSize: "13px", lineHeight: 1.4 }}>
           {latex}
         </span>
       ) : (
-        <span className="preframe-math-raw" style={{ fontFamily: "ui-monospace, monospace", fontSize: "14px", lineHeight: 1.4, opacity: 0.6 }}>
+        <span className="inkset-math-raw" style={{ fontFamily: "ui-monospace, monospace", fontSize: "14px", lineHeight: 1.4, opacity: 0.6 }}>
           {latex}
         </span>
       )}
@@ -143,10 +143,10 @@ export type MathPluginOptions = {
   throwOnError?: boolean;
 };
 
-export const createMathPlugin = (options?: MathPluginOptions): PreframePlugin => {
+export const createMathPlugin = (options?: MathPluginOptions): InksetPlugin => {
   const renderer = options?.renderer ?? createKaTeXRenderer();
 
-  const plugin: PreframePlugin & { rendererName: string } = {
+  const plugin: InksetPlugin & { rendererName: string } = {
     name: "math",
     handles: ["math-display"],
     rendererName: renderer.name,

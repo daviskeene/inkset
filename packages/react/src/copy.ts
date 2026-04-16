@@ -1,5 +1,5 @@
 // Smart copy handler: extracts source-friendly text from code, math, and table blocks.
-import type { PluginRegistry } from "@preframe/core";
+import type { PluginRegistry } from "@inkset/core";
 
 export type CopyHandler = {
   attach(container: HTMLElement): () => void;
@@ -43,7 +43,7 @@ const extractSmartText = (
 
     switch (blockType) {
       case "code": {
-        const codeEl = blockEl.querySelector("pre code, .preframe-code-content code");
+        const codeEl = blockEl.querySelector("pre code, .inkset-code-content code");
         parts.push((codeEl ?? blockEl).textContent ?? "");
         break;
       }

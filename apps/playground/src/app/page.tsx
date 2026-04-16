@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Preframe } from "@preframe/react";
-import { createCodePlugin } from "@preframe/code";
-import { createMathPlugin } from "@preframe/math";
-import { createTablePlugin } from "@preframe/table";
+import { Inkset } from "@inkset/react";
+import { createCodePlugin } from "@inkset/code";
+import { createMathPlugin } from "@inkset/math";
+import { createTablePlugin } from "@inkset/table";
 
 const MARKDOWN_PANEL_WIDTH = 360;
 const MIN_RENDER_PANEL_WIDTH = 320;
@@ -26,7 +26,7 @@ function getMaxRenderPanelWidth(containerWidth: number) {
 // ── Sample content presets ─────────────────────────────────────────
 
 const PRESETS: Record<string, string> = {
-  mixed: `# Preframe
+  mixed: `# Inkset
 
 A renderer for model output that measures text without touching the DOM.
 
@@ -34,7 +34,7 @@ Most chat UIs stream markdown tokens into the page and let the browser figure ou
 
 The problem is that measuring text with \`getBoundingClientRect()\` forces the browser to reflow the page. Do that on every token and you're fighting the rendering engine.
 
-> Preframe measures text once with pretext, then re-layouts with arithmetic. No DOM reads in the hot path.
+> Inkset measures text once with pretext, then re-layouts with arithmetic. No DOM reads in the hot path.
 
 ## How it works
 
@@ -58,9 +58,9 @@ Drag the resize handle on this playground to feel the difference.
 
 ## Compared to Streamdown
 
-Streamdown turns markdown into HTML fast. Preframe is solving a different thing: keeping layout stable while content streams in and the container changes size.
+Streamdown turns markdown into HTML fast. Inkset is solving a different thing: keeping layout stable while content streams in and the container changes size.
 
-| | Streamdown | Preframe |
+| | Streamdown | Inkset |
 |---------|------------------------------|----------|
 | Text measurement | DOM reads | pretext (Canvas) |
 | Resize | Browser reflow | Arithmetic |
@@ -181,11 +181,11 @@ $$\\nabla \\times \\mathbf{B} = \\mu_0 \\mathbf{J} + \\mu_0 \\epsilon_0 \\frac{\
 
 Watch this content appear token by token, simulating an LLM response...
 
-The **key insight** behind preframe is that text measurement and rendering are *separate concerns*.
+The **key insight** behind inkset is that text measurement and rendering are *separate concerns*.
 
 Traditional renderers measure text by inserting it into the DOM and reading \`getBoundingClientRect()\`. This triggers synchronous layout reflow.
 
-Preframe uses **pretext** to measure text via Canvas, then positions blocks with absolute coordinates. On resize, only the layout math re-runs.
+Inkset uses **pretext** to measure text via Canvas, then positions blocks with absolute coordinates. On resize, only the layout math re-runs.
 
 \`\`\`javascript
 // This is the hot path — pure arithmetic
@@ -390,7 +390,7 @@ export default function PlaygroundPage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-            preframe
+            inkset
           </h1>
           <span style={{ fontSize: 12, opacity: 0.5 }}>playground</span>
         </div>
@@ -542,7 +542,7 @@ export default function PlaygroundPage() {
                 background: "#0f0f0f",
               }}
             >
-              <Preframe
+              <Inkset
                 content={displayContent}
                 streaming={isStreaming}
                 plugins={plugins}

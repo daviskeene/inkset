@@ -1,10 +1,10 @@
-# Preframe: Composable Text Rendering for Model Responses
+# Inkset: Composable Text Rendering for Model Responses
 
 ## Vision
 
-Preframe is a composable rendering engine for LLM output that combines **pretext**'s DOM-free text measurement with rich content rendering (markdown, math, syntax highlighting, diagrams) in a streaming-first, framework-agnostic architecture.
+Inkset is a composable rendering engine for LLM output that combines **pretext**'s DOM-free text measurement with rich content rendering (markdown, math, syntax highlighting, diagrams) in a streaming-first, framework-agnostic architecture.
 
-The core insight: every chat UI today renders model responses into a fixed-width container and hopes the browser handles the rest. Code blocks overflow on mobile. Math expressions break layouts. Long responses cause layout thrashing as the DOM reflows on every token. Pretext proved that text layout can be 300-600x faster outside the DOM — preframe extends that insight to rich content.
+The core insight: every chat UI today renders model responses into a fixed-width container and hopes the browser handles the rest. Code blocks overflow on mobile. Math expressions break layouts. Long responses cause layout thrashing as the DOM reflows on every token. Pretext proved that text layout can be 300-600x faster outside the DOM — inkset extends that insight to rich content.
 
 **v1 scope (post-CEO review):** v1 is a React component for streaming LLM output with pretext-powered responsive layout. Not a universal content platform. Prove the thesis, expand later. Framework-agnostic extraction is a v2 goal.
 
@@ -105,7 +105,7 @@ No tool combines:
 - Plugin interface:
 
 ```typescript
-interface PreframePlugin {
+interface InksetPlugin {
   name: string;
   // Which AST node types this plugin handles
   handles: string[];
@@ -120,11 +120,11 @@ interface PreframePlugin {
 ```
 
 - **Built-in plugins (separate packages)**:
-  - `@preframe/code` — Shiki-based syntax highlighting with streaming support (shiki-stream)
-  - `@preframe/math` — KaTeX rendering, supports `$`, `$$`, `\(`, `\[` delimiters with normalization
-  - `@preframe/mermaid` — Mermaid diagram rendering with strict security
-  - `@preframe/table` — Responsive table rendering with horizontal scroll
-  - `@preframe/cjk` — CJK text handling and line breaking rules
+  - `@inkset/code` — Shiki-based syntax highlighting with streaming support (shiki-stream)
+  - `@inkset/math` — KaTeX rendering, supports `$`, `$$`, `\(`, `\[` delimiters with normalization
+  - `@inkset/mermaid` — Mermaid diagram rendering with strict security
+  - `@inkset/table` — Responsive table rendering with horizontal scroll
+  - `@inkset/cjk` — CJK text handling and line breaking rules
 
 #### 4. Measure Layer
 - Calls `pretext.prepare()` for each text segment in the enriched AST
@@ -152,10 +152,10 @@ interface PreframePlugin {
 - **Canvas renderer**: for performance-critical scenarios (thousands of blocks)
 - **SSR renderer**: generates static HTML with computed heights for initial page load
 - **Framework adapters**:
-  - `@preframe/react` — React component with hooks (`usePreframe`, `useStreamingPreframe`)
-  - `@preframe/vue` — Vue composable
-  - `@preframe/svelte` — Svelte action
-  - `@preframe/vanilla` — Vanilla JS imperative API
+  - `@inkset/react` — React component with hooks (`useInkset`, `useStreamingInkset`)
+  - `@inkset/vue` — Vue composable
+  - `@inkset/svelte` — Svelte action
+  - `@inkset/vanilla` — Vanilla JS imperative API
 
 ### Streaming Pipeline
 
@@ -198,18 +198,18 @@ Following Streamdown's proven approach but with pretext-aware enhancements:
 5. destroy()   — called when a block is removed (cleanup resources)
 ```
 
-### Math Plugin (`@preframe/math`)
+### Math Plugin (`@inkset/math`)
 
 **The dollar sign problem**: LLMs inconsistently use `$`, `$$`, `\(`, `\[` for math delimiters. Models mix math and currency (`$50`) in the same response. No regex perfectly disambiguates.
 
-**Preframe's approach**:
+**Inkset's approach**:
 1. **Delimiter normalization** in the Ingest layer: convert `\(` → `$`, `\[` → `$$` before parsing
 2. **Heuristic disambiguation**: `$` followed by digits and no closing `$` within the same line → treat as currency, not math
 3. **KaTeX rendering** with error boundaries: invalid LaTeX renders as raw text with a subtle error indicator, not a red error box
 4. **Streaming math**: incomplete `$$...` blocks show a skeleton placeholder until the closing delimiter arrives
 5. **Measurement**: KaTeX renders to an off-screen element, then the bounding box is measured and reported to the layout engine. Cached by expression text.
 
-### Code Plugin (`@preframe/code`)
+### Code Plugin (`@inkset/code`)
 
 **Approach**: Shiki with `shiki-stream` for incremental highlighting.
 
@@ -225,7 +225,7 @@ Following Streamdown's proven approach but with pretext-aware enhancements:
 Following Streamdown's pattern, custom renderers let consumers handle arbitrary code fence languages:
 
 ```typescript
-const vegaPlugin: PreframePlugin = {
+const vegaPlugin: InksetPlugin = {
   name: 'vega-lite',
   handles: ['code:vega', 'code:vega-lite'],
   transform(node) {
@@ -259,7 +259,7 @@ This is the bare minimum. It doesn't solve:
 - Tables that are unreadable at narrow widths
 - Mixed content (text + code + math) where each block has different ideal widths
 
-### What Preframe Enables
+### What Inkset Enables
 
 **Adaptive text balancing**: Use pretext's `walkLineRanges()` + `measureLineStats()` to find the tightest width that keeps the same line count. Text blocks automatically balance without CSS `text-wrap: balance` (which has limited browser support and no JS API).
 
@@ -283,7 +283,7 @@ This is the bare minimum. It doesn't solve:
 ## Package Structure
 
 ```
-preframe/
+inkset/
 ├── packages/
 │   ├── core/              # Parser, plugin system, layout engine
 │   │   ├── src/
@@ -297,14 +297,14 @@ preframe/
 │   │   │   ├── stream.ts          # Streaming orchestrator
 │   │   │   └── types.ts           # Shared type definitions
 │   │   └── package.json
-│   ├── code/               # @preframe/code — Shiki syntax highlighting
-│   ├── math/               # @preframe/math — KaTeX math rendering
-│   ├── mermaid/            # @preframe/mermaid — diagram rendering
-│   ├── table/              # @preframe/table — responsive tables
-│   ├── cjk/                # @preframe/cjk — CJK text handling
-│   ├── react/              # @preframe/react — React adapter
-│   ├── vue/                # @preframe/vue — Vue adapter
-│   └── svelte/             # @preframe/svelte — Svelte adapter
+│   ├── code/               # @inkset/code — Shiki syntax highlighting
+│   ├── math/               # @inkset/math — KaTeX math rendering
+│   ├── mermaid/            # @inkset/mermaid — diagram rendering
+│   ├── table/              # @inkset/table — responsive tables
+│   ├── cjk/                # @inkset/cjk — CJK text handling
+│   ├── react/              # @inkset/react — React adapter
+│   ├── vue/                # @inkset/vue — Vue adapter
+│   └── svelte/             # @inkset/svelte — Svelte adapter
 ├── apps/
 │   ├── docs/               # Documentation site
 │   ├── playground/         # Interactive demo / playground
@@ -318,7 +318,7 @@ preframe/
 
 ## Differentiation from Streamdown
 
-| Dimension | Streamdown | Preframe |
+| Dimension | Streamdown | Inkset |
 |-----------|------------|----------|
 | **Layout engine** | None (browser CSS) | Pretext — DOM-free measurement and reflow |
 | **Resize performance** | Full DOM reflow | ~0.0002ms arithmetic per block |
@@ -344,15 +344,15 @@ preframe/
 - Pretext integration: measure layer with global LRU cache
 - Layout layer with vertical block stacking (absolute positioning)
 - DOM render target
-- **@preframe/react** — `<Preframe>` component, `usePreframe()` hooks
+- **@inkset/react** — `<Inkset>` component, `useInkset()` hooks
 - Security foundations (rehype-sanitize, plugin boundary safety)
 - Accessibility foundations (reading order, focus management, ARIA)
 - Progressive enhancement architecture
 
 ### Phase 2: Essential Plugins + Playground (Weeks 3-5)
-- `@preframe/code` — Shiki + shiki-stream highlighting
-- `@preframe/math` — KaTeX with delimiter normalization
-- `@preframe/table` — Responsive tables
+- `@inkset/code` — Shiki + shiki-stream highlighting
+- `@inkset/math` — KaTeX with delimiter normalization
+- `@inkset/table` — Responsive tables
 - Streaming orchestrator: block-level memoization
 - Smart Content-Aware Copy (plugin-specific clipboard hooks)
 - **Interactive Playground** — thesis validation, resize demo, metrics
@@ -366,8 +366,8 @@ preframe/
 
 ### Phase 4: Polish + Ecosystem (Weeks 7-10)
 - Streaming performance dashboard (DevTools overlay)
-- `@preframe/mermaid` — diagram rendering
-- `@preframe/cjk` — CJK text handling
+- `@inkset/mermaid` — diagram rendering
+- `@inkset/cjk` — CJK text handling
 - Documentation site
 - Find-in-page support for absolute-positioned content
 - Full accessibility audit
@@ -384,7 +384,7 @@ preframe/
 
 4. **Plugin measurement for non-text content.** KaTeX and Mermaid render to DOM/SVG, which means we need DOM for their measurement. This partially defeats the "DOM-free measurement" story. Mitigation: cache measurements aggressively, measure off-screen, and only re-measure when content changes.
 
-5. **Ecosystem adoption.** Streamdown has 22M npm downloads and Vercel's backing. Preframe needs a compelling demo and clear DX win to attract adoption. The responsive layout story is the wedge — show something no other tool can do.
+5. **Ecosystem adoption.** Streamdown has 22M npm downloads and Vercel's backing. Inkset needs a compelling demo and clear DX win to attract adoption. The responsive layout story is the wedge — show something no other tool can do.
 
 ---
 
@@ -394,16 +394,16 @@ preframe/
 2. **Bundle size**: Core < 15KB gzipped. Each plugin < 10KB gzipped (excluding heavy dependencies like Shiki/KaTeX).
 3. **Streaming**: Handle 200+ tokens/sec with no visible jitter, no layout thrashing, no dropped frames.
 4. **Responsive**: Text reflows smoothly on window resize with no DOM measurement. Code blocks adapt to container width. Math expressions scale on mobile.
-5. **Developer experience**: `npm install @preframe/core @preframe/react @preframe/code @preframe/math` and render streaming LLM output in < 20 lines of code.
+5. **Developer experience**: `npm install @inkset/core @inkset/react @inkset/code @inkset/math` and render streaming LLM output in < 20 lines of code.
 6. **Framework-agnostic**: Same core works with React, Vue, Svelte, and vanilla JS.
 
 ---
 
 ## Resolved Questions (CEO Review, 2026-04-15)
 
-1. **Parser:** Use marked.lexer() for block splitting, then full unified/remark pipeline (remark-parse + remark-gfm + remark-rehype) per block. Preframe innovates at measurement/layout, not parsing.
+1. **Parser:** Use marked.lexer() for block splitting, then full unified/remark pipeline (remark-parse + remark-gfm + remark-rehype) per block. Inkset innovates at measurement/layout, not parsing.
 2. **Unmeasurable content:** Placeholder with lazy measurement. Allocate default height, render off-screen, measure actual dimensions, update layout. Accept one layout shift per unmeasurable block.
-3. **React API:** Ship `<Preframe>` component (Streamdown-like) AND `usePreframe()` / `usePreframeLayout()` hooks for advanced use cases.
+3. **React API:** Ship `<Inkset>` component (Streamdown-like) AND `useInkset()` / `useInksetLayout()` hooks for advanced use cases.
 4. **Cache strategy:** Global LRU (500 entries) for pretext prepare() handles.
 5. **Rendering model:** Full absolute positioning. Build custom text selection and find-in-page support.
 6. **Phase sequencing:** React in Phase 1 (not Phase 3). Playground in Phase 2. Security/accessibility foundations in Phase 1.
@@ -411,7 +411,7 @@ preframe/
 
 ## Open Questions
 
-1. What's the right boundary between preframe and pretext? Should preframe contribute upstream or maintain shims? Defer until v1 reveals needs.
+1. What's the right boundary between inkset and pretext? Should inkset contribute upstream or maintain shims? Defer until v1 reveals needs.
 
 ---
 
@@ -420,7 +420,7 @@ preframe/
 **Direct competitors**: Streamdown (Vercel), llm-ui, streaming-markdown
 **Adjacent tools**: react-markdown, marked, markdown-it, remark/rehype ecosystem
 **Layout innovation**: Pretext (Cheng Lou / Midjourney)
-**Preframe's moat**: The intersection of pretext-powered layout + rich content plugins + streaming + framework-agnostic architecture. Nobody else is building this.
+**Inkset's moat**: The intersection of pretext-powered layout + rich content plugins + streaming + framework-agnostic architecture. Nobody else is building this.
 
 ---
 

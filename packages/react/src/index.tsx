@@ -1,4 +1,4 @@
-// React bindings for preframe: the <Preframe> component, usePreframe hook, and block renderer.
+// React bindings for inkset: the <Inkset> component, useInkset hook, and block renderer.
 import React, {
   useEffect,
   useLayoutEffect,
@@ -12,11 +12,11 @@ import {
   StreamingPipeline,
   PluginRegistry,
   type PipelineState,
-  type PreframeOptions,
+  type InksetOptions,
   type LayoutBlock,
   type EnrichedNode,
-  type PreframePlugin,
-} from "@preframe/core";
+  type InksetPlugin,
+} from "@inkset/core";
 import { createCopyHandler } from "./copy";
 
 const DEFAULT_BLOCK_MARGIN = 16;
@@ -24,88 +24,88 @@ const DEFAULT_FONT_SIZE = 16;
 const DEFAULT_LINE_HEIGHT = 24;
 const DEFAULT_LINE_HEIGHT_RATIO = 1.5;
 
-const PRE_FRAME_STYLES = `
-  .preframe-root {
+const INKSET_STYLES = `
+  .inkset-root {
     color: #e8e8eb;
-    font-family: var(--preframe-font-family, system-ui, sans-serif);
-    font-size: var(--preframe-base-font-size, 16px);
-    line-height: var(--preframe-base-line-height-ratio, 1.5);
+    font-family: var(--inkset-font-family, system-ui, sans-serif);
+    font-size: var(--inkset-base-font-size, 16px);
+    line-height: var(--inkset-base-line-height-ratio, 1.5);
   }
 
-  .preframe-root > [data-block-id] {
+  .inkset-root > [data-block-id] {
     left: 0;
     top: 0;
   }
 
-  .preframe-root h1,
-  .preframe-root h2,
-  .preframe-root h3,
-  .preframe-root h4,
-  .preframe-root h5,
-  .preframe-root h6,
-  .preframe-root p,
-  .preframe-root pre,
-  .preframe-root blockquote,
-  .preframe-root ul,
-  .preframe-root ol,
-  .preframe-root table {
+  .inkset-root h1,
+  .inkset-root h2,
+  .inkset-root h3,
+  .inkset-root h4,
+  .inkset-root h5,
+  .inkset-root h6,
+  .inkset-root p,
+  .inkset-root pre,
+  .inkset-root blockquote,
+  .inkset-root ul,
+  .inkset-root ol,
+  .inkset-root table {
     margin: 0;
   }
 
-  .preframe-root h1 {
+  .inkset-root h1 {
     font-size: 3em;
     line-height: 1.05;
     letter-spacing: -0.04em;
     font-weight: 800;
   }
 
-  .preframe-root h2 {
+  .inkset-root h2 {
     font-size: 2.15em;
     line-height: 1.08;
     letter-spacing: -0.035em;
     font-weight: 780;
   }
 
-  .preframe-root h3 {
+  .inkset-root h3 {
     font-size: 1.3em;
     line-height: 1.15;
     letter-spacing: -0.02em;
     font-weight: 720;
   }
 
-  .preframe-root h4,
-  .preframe-root h5,
-  .preframe-root h6 {
+  .inkset-root h4,
+  .inkset-root h5,
+  .inkset-root h6 {
     font-size: 1em;
     line-height: 1.2;
     font-weight: 680;
   }
 
-  .preframe-root p,
-  .preframe-root li,
-  .preframe-root blockquote {
+  .inkset-root p,
+  .inkset-root li,
+  .inkset-root blockquote {
     font-size: 1em;
-    line-height: var(--preframe-base-line-height-ratio, 1.5);
+    line-height: var(--inkset-base-line-height-ratio, 1.5);
   }
 
-  .preframe-root ul,
-  .preframe-root ol {
+  .inkset-root ul,
+  .inkset-root ol {
     padding-left: 1.4em;
   }
 
-  .preframe-root blockquote {
+  .inkset-root blockquote {
     padding-left: 1em;
     border-left: 3px solid rgba(255, 255, 255, 0.18);
     color: rgba(232, 232, 235, 0.78);
   }
 
-  .preframe-root hr {
+  .inkset-root hr {
     margin: 0;
     border: 0;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-  .preframe-root code:not(pre code) {
+  .inkset-root code:not(pre code) {
     padding: 0.15em 0.35em;
     border-radius: 0.35em;
     background: rgba(255, 255, 255, 0.08);
@@ -113,18 +113,18 @@ const PRE_FRAME_STYLES = `
     font-size: 0.92em;
   }
 
-  .preframe-root .preframe-default-block {
+  .inkset-root .inkset-default-block {
     width: 100%;
   }
 
-  .preframe-root .preframe-code-block,
-  .preframe-root .preframe-table-block,
-  .preframe-root .preframe-math {
+  .inkset-root .inkset-code-block,
+  .inkset-root .inkset-table-block,
+  .inkset-root .inkset-math {
     width: 100%;
   }
 
-  .preframe-root .preframe-code-content pre,
-  .preframe-root .preframe-code-content .shiki {
+  .inkset-root .inkset-code-content pre,
+  .inkset-root .inkset-code-content .shiki {
     margin: 0;
     padding: 12px 16px;
     overflow-x: auto;
@@ -134,27 +134,27 @@ const PRE_FRAME_STYLES = `
     line-height: 1.5;
   }
 
-  .preframe-root .preframe-code-content code {
+  .inkset-root .inkset-code-content code {
     background: transparent;
     padding: 0;
     border-radius: 0;
   }
 
-  .preframe-root .preframe-table-scroll table {
+  .inkset-root .inkset-table-scroll table {
     width: max-content;
     min-width: 100%;
     border-collapse: collapse;
   }
 
-  .preframe-root .preframe-table-scroll th,
-  .preframe-root .preframe-table-scroll td {
+  .inkset-root .inkset-table-scroll th,
+  .inkset-root .inkset-table-scroll td {
     padding: 10px 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     text-align: left;
     white-space: nowrap;
   }
 
-  .preframe-root .preframe-table-scroll th {
+  .inkset-root .inkset-table-scroll th {
     color: rgba(232, 232, 235, 0.72);
     font-size: 12px;
     font-weight: 700;
@@ -210,14 +210,14 @@ const getLayoutHeight = (layout: readonly LayoutBlock[]): number => {
   return lastBlock.y + lastBlock.height;
 };
 
-// ── usePreframe hook ───────────────────────────────────────────────
+// ── useInkset hook ───────────────────────────────────────────────
 
-export interface UsePreframeOptions extends PreframeOptions {
+export interface UseInksetOptions extends InksetOptions {
   streaming?: boolean;
   width?: number;
 }
 
-export type UsePreframeResult = {
+export type UseInksetResult = {
   state: PipelineState | null;
   registry: PluginRegistry;
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -226,7 +226,7 @@ export type UsePreframeResult = {
   setContent: (content: string) => Promise<void>;
 };
 
-export const usePreframe = (options?: UsePreframeOptions): UsePreframeResult => {
+export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
   const containerRef = useRef<HTMLDivElement>(null);
   const pipelineRef = useRef<StreamingPipeline | null>(null);
   const registryRef = useRef<PluginRegistry>(new PluginRegistry());
@@ -418,7 +418,7 @@ const BlockRenderer = memo(
 
 // ── Default block renderer ────────────────────────────────────────
 
-type MathInlinePlugin = PreframePlugin & {
+type MathInlinePlugin = InksetPlugin & {
   rendererName?: string;
 };
 
@@ -430,7 +430,7 @@ function DefaultBlockRenderer({
   registry: PluginRegistry;
 }) {
   return (
-    <div className="preframe-default-block">
+    <div className="inkset-default-block">
       {renderAstNode(node, registry, `${node.blockId}`)}
     </div>
   );
@@ -608,12 +608,12 @@ const findInlineMathDelimiter = (text: string, fromIndex: number): number => {
 };
 
 
-// ── <Preframe> component ──────────────────────────────────────────
+// ── <Inkset> component ──────────────────────────────────────────
 
-export type PreframeProps = {
+export type InksetProps = {
   content?: string;
   streaming?: boolean;
-  plugins?: PreframePlugin[];
+  plugins?: InksetPlugin[];
   width?: number;
   /** Must match CSS font-family */
   font?: string;
@@ -625,7 +625,7 @@ export type PreframeProps = {
   children?: ReactNode;
 };
 
-export function Preframe({
+export function Inkset({
   content,
   streaming = false,
   plugins,
@@ -637,8 +637,8 @@ export function Preframe({
   className,
   style,
   children,
-}: PreframeProps) {
-  const { state, registry, containerRef, setContent, endStream } = usePreframe({
+}: InksetProps) {
+  const { state, registry, containerRef, setContent, endStream } = useInkset({
     plugins,
     width,
     font,
@@ -860,23 +860,23 @@ export function Preframe({
     position: "relative",
     overflow: "hidden",
     minHeight: containerMinHeight,
-    "--preframe-font-family": font ?? "system-ui, sans-serif",
-    "--preframe-base-font-size": `${baseFontSize}px`,
-    "--preframe-base-line-height-ratio": `${baseLineHeightRatio}`,
+    "--inkset-font-family": font ?? "system-ui, sans-serif",
+    "--inkset-base-font-size": `${baseFontSize}px`,
+    "--inkset-base-line-height-ratio": `${baseLineHeightRatio}`,
     ...style,
   };
 
   return (
     <div
       ref={containerRef}
-      className={className ? `preframe-root ${className}` : "preframe-root"}
+      className={className ? `inkset-root ${className}` : "inkset-root"}
       style={containerStyle}
       role="log"
       aria-live="polite"
       aria-atomic={false}
       aria-busy={streaming}
     >
-      <style>{PRE_FRAME_STYLES}</style>
+      <style>{INKSET_STYLES}</style>
 
       {frozenBlocks.map((block: LayoutBlock) => (
         <BlockRenderer
@@ -920,8 +920,8 @@ export function Preframe({
 }
 
 export type {
-  PreframePlugin,
-  PreframeOptions,
+  InksetPlugin,
+  InksetOptions,
   PluginComponentProps,
   PipelineState,
   PipelineMetrics,
@@ -929,4 +929,4 @@ export type {
   ASTNode,
   LayoutBlock,
   LayoutTree,
-} from "@preframe/core";
+} from "@inkset/core";

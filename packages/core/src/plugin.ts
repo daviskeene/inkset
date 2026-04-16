@@ -1,13 +1,13 @@
 // Plugin registry: manages plugin lifecycle, handler dispatch, and AST transformation.
-import type { PreframePlugin, ASTNode, EnrichedNode, PluginContext } from "./types";
+import type { InksetPlugin, ASTNode, EnrichedNode, PluginContext } from "./types";
 
 export class PluginRegistry {
-  private plugins: Map<string, PreframePlugin> = new Map();
-  private handlerIndex: Map<string, PreframePlugin[]> = new Map();
+  private plugins: Map<string, InksetPlugin> = new Map();
+  private handlerIndex: Map<string, InksetPlugin[]> = new Map();
 
-  register(plugin: PreframePlugin): void {
+  register(plugin: InksetPlugin): void {
     if (this.plugins.has(plugin.name)) {
-      console.warn(`[preframe] Plugin "${plugin.name}" already registered, replacing.`);
+      console.warn(`[inkset] Plugin "${plugin.name}" already registered, replacing.`);
     }
     this.plugins.set(plugin.name, plugin);
 
@@ -19,19 +19,19 @@ export class PluginRegistry {
     }
   }
 
-  getHandlers(nodeType: string): readonly PreframePlugin[] {
+  getHandlers(nodeType: string): readonly InksetPlugin[] {
     return this.handlerIndex.get(nodeType) ?? [];
   }
 
-  get(name: string): PreframePlugin | undefined {
+  get(name: string): InksetPlugin | undefined {
     return this.plugins.get(name);
   }
 
-  all(): readonly PreframePlugin[] {
+  all(): readonly InksetPlugin[] {
     return Array.from(this.plugins.values());
   }
 
-  widthSensitive(): readonly PreframePlugin[] {
+  widthSensitive(): readonly InksetPlugin[] {
     return this.all().filter((p) => p.widthSensitive);
   }
 
@@ -48,7 +48,7 @@ export class PluginRegistry {
         enriched.transformedBy = plugin.name;
       } catch (err) {
         console.warn(
-          `[preframe] Plugin "${plugin.name}" threw during transform for block ${node.blockId}:`,
+          `[inkset] Plugin "${plugin.name}" threw during transform for block ${node.blockId}:`,
           err,
         );
       }

@@ -3,7 +3,7 @@ import type {
   Dimensions,
   EnrichedNode,
   MeasuredBlock,
-  PreframePlugin,
+  InksetPlugin,
 } from "./types";
 import type { PluginRegistry } from "./plugin";
 import { extractText } from "./parse";
@@ -119,7 +119,7 @@ const getPretext = async (): Promise<PretextModule | null> => {
     pretextModule = (await import("@chenglou/pretext")) as PretextModule;
     return pretextModule;
   } catch (err: unknown) {
-    console.warn("[preframe] @chenglou/pretext not available. Using fallback measurement.", err);
+    console.warn("[inkset] @chenglou/pretext not available. Using fallback measurement.", err);
     return null;
   }
 };
@@ -168,7 +168,7 @@ export class MeasureLayer {
   async measureBlock(
     node: EnrichedNode,
     maxWidth: number,
-    plugin?: PreframePlugin,
+    plugin?: InksetPlugin,
   ): Promise<MeasuredBlock> {
     await this.init();
 
@@ -178,7 +178,7 @@ export class MeasureLayer {
         const dimensions = plugin.measure(node, maxWidth);
         return { blockId: node.blockId, node, dimensions };
       } catch (err) {
-        console.warn(`[preframe] Plugin measure() failed for block ${node.blockId}:`, err);
+        console.warn(`[inkset] Plugin measure() failed for block ${node.blockId}:`, err);
       }
     }
 
@@ -305,14 +305,14 @@ export class MeasureLayer {
   async relayout(
     measured: MeasuredBlock,
     newWidth: number,
-    plugin?: PreframePlugin,
+    plugin?: InksetPlugin,
   ): Promise<Dimensions> {
     if (plugin?.measure) {
       try {
         return plugin.measure(measured.node, newWidth);
       } catch (err) {
         console.warn(
-          `[preframe] Plugin measure() failed during relayout for block ${measured.blockId}:`,
+          `[inkset] Plugin measure() failed during relayout for block ${measured.blockId}:`,
           err,
         );
       }

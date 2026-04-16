@@ -3,13 +3,13 @@ import React, { useCallback, useRef, useState } from "react";
 import {
   extractText,
   nodeToHtml,
-  type PreframePlugin,
+  type InksetPlugin,
   type ASTNode,
   type EnrichedNode,
   type PluginContext,
   type Dimensions,
   type PluginComponentProps,
-} from "@preframe/core";
+} from "@inkset/core";
 
 const TABLE_HEADER_HEIGHT = 20;
 const TABLE_ROW_HEIGHT = 44;
@@ -33,9 +33,9 @@ function TableBlock({ node }: PluginComponentProps) {
   }, [csvData]);
 
   return (
-    <div className="preframe-table-block" style={{ position: "relative" }}>
+    <div className="inkset-table-block" style={{ position: "relative" }}>
       <div
-        className="preframe-table-header"
+        className="inkset-table-header"
         style={{
           display: "flex",
           justifyContent: "flex-end",
@@ -48,7 +48,7 @@ function TableBlock({ node }: PluginComponentProps) {
       >
         <button
           onClick={handleCopy}
-          className="preframe-table-copy"
+          className="inkset-table-copy"
           aria-label={copied ? "Copied" : "Copy as CSV"}
           style={{
             background: "none",
@@ -64,7 +64,7 @@ function TableBlock({ node }: PluginComponentProps) {
         </button>
       </div>
       <div
-        className="preframe-table-scroll"
+        className="inkset-table-scroll"
         style={{
           overflowX: "auto",
           WebkitOverflowScrolling: "touch",
@@ -78,7 +78,7 @@ function TableBlock({ node }: PluginComponentProps) {
 
 // ── Plugin definition ─────────────────────────────────────────────
 
-export const createTablePlugin = (): PreframePlugin => {
+export const createTablePlugin = (): InksetPlugin => {
   return {
     name: "table",
     handles: ["table"],

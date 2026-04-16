@@ -1,5 +1,5 @@
 {
-  "name": "@preframe/math",
+  "name": "@inkset/math",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,13 +12,13 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.tsx --format esm --no-dts --external react --external @preframe/core --external katex --external mathjax",
+    "build": "tsup src/index.tsx --format esm --no-dts --external react --external @inkset/core --external katex --external mathjax",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@preframe/core": "workspace:*"
+    "@inkset/core": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",

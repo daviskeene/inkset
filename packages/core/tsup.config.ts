@@ -1,4 +1,4 @@
-// Build configuration for @preframe/core.
+// Build configuration for @inkset/core.
 import { defineConfig } from "tsup";
 
 export default defineConfig({

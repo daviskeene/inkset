@@ -3,7 +3,7 @@ import type {
   EnrichedNode,
   LayoutTree,
   MeasuredBlock,
-  PreframeOptions,
+  InksetOptions,
   ASTNode,
   PluginContext,
 } from "./types";
@@ -56,7 +56,7 @@ export class StreamingPipeline {
   private containerWidth = 0;
   private pendingRelayoutWidth: number | null = null;
   private relayoutInFlight = false;
-  private options: Required<Omit<PreframeOptions, "plugins">>;
+  private options: Required<Omit<InksetOptions, "plugins">>;
 
   private pendingUpdate: ReturnType<typeof setTimeout> | number | null = null;
   private initialized = false;
@@ -72,7 +72,7 @@ export class StreamingPipeline {
 
   private listeners: Set<(state: PipelineState) => void> = new Set();
 
-  constructor(options?: PreframeOptions) {
+  constructor(options?: InksetOptions) {
     this.options = {
       font: options?.font ?? DEFAULT_FONT,
       fontSize: options?.fontSize ?? DEFAULT_FONT_SIZE,

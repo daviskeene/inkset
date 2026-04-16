@@ -1,4 +1,4 @@
-// Build configuration for @preframe/react.
+// Build configuration for @inkset/react.
 import { defineConfig } from "tsup";
 
 export default defineConfig({
@@ -7,7 +7,7 @@ export default defineConfig({
   external: ["react"],
   dts: {
     compilerOptions: {
-      // DTS generation must use compiled @preframe/core from node_modules, not source files
+      // DTS generation must use compiled @inkset/core from node_modules, not source files
       paths: {},
     },
   },

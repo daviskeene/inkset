@@ -1,9 +1,9 @@
 // Tests for the plugin registry: registration, handler dispatch, and error handling.
 import { describe, it, expect, vi } from "vitest";
 import { PluginRegistry } from "../src/plugin.js";
-import type { PreframePlugin, ASTNode, BlockType, PluginContext } from "../src/types.js";
+import type { InksetPlugin, ASTNode, BlockType, PluginContext } from "../src/types.js";
 
-const makePlugin = (name: string, handles: string[]): PreframePlugin => {
+const makePlugin = (name: string, handles: string[]): InksetPlugin => {
   return {
     name,
     handles,
@@ -84,7 +84,7 @@ describe("PluginRegistry", () => {
 
   it("handles plugin transform errors gracefully", () => {
     const registry = new PluginRegistry();
-    const broken: PreframePlugin = {
+    const broken: InksetPlugin = {
       name: "broken",
       handles: ["code"],
       transform: () => { throw new Error("plugin crash"); },
@@ -104,7 +104,7 @@ describe("PluginRegistry", () => {
   it("identifies width-sensitive plugins", () => {
     const registry = new PluginRegistry();
     const normal = makePlugin("normal", ["paragraph"]);
-    const adaptive: PreframePlugin = {
+    const adaptive: InksetPlugin = {
       ...makePlugin("adaptive", ["code"]),
       widthSensitive: true,
     };

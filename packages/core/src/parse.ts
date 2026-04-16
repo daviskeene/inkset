@@ -59,7 +59,7 @@ export const parseBlock = (block: Readonly<Block>): ASTNode => {
     return hastToASTNode(hast, block.id, block.type);
   } catch (err) {
     // Degrade gracefully: return raw text as a paragraph
-    console.warn(`[preframe] Parse error for block ${block.id}:`, err);
+    console.warn(`[inkset] Parse error for block ${block.id}:`, err);
     return {
       type: "element",
       tagName: "p",

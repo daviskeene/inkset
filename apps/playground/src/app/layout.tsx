@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Preframe Playground",
+  title: "Inkset Playground",
   description: "Interactive demo of pretext-powered streaming markdown rendering",
 };
 

@@ -1,37 +1,37 @@
-# preframe
+# inkset
 
 A streaming markdown renderer for LLM output, powered by [pretext](https://github.com/chenglou/pretext) for DOM-free text measurement and layout.
 
 Most chat UIs stream tokens into the page and let the browser figure out where things go. This works until someone resizes the window, or the response has code and math, or the stream is fast enough that layout can't keep up. Then you get jitter.
 
-Preframe measures text once with pretext, then re-layouts with arithmetic. No DOM reads in the hot path. Resize 1000 blocks in under a millisecond.
+Inkset measures text once with pretext, then re-layouts with arithmetic. No DOM reads in the hot path. Resize 1000 blocks in under a millisecond.
 
 ## Install
 
 ```bash
-npm install @preframe/core @preframe/react
+npm install @inkset/core @inkset/react
 ```
 
 Optional plugins:
 
 ```bash
-npm install @preframe/code    # Shiki syntax highlighting
-npm install @preframe/math    # KaTeX or MathJax math rendering
-npm install @preframe/table   # Responsive tables
+npm install @inkset/code    # Shiki syntax highlighting
+npm install @inkset/math    # KaTeX or MathJax math rendering
+npm install @inkset/table   # Responsive tables
 ```
 
 ## Quick start
 
 ```tsx
-import { Preframe } from "@preframe/react";
-import { createCodePlugin } from "@preframe/code";
-import { createMathPlugin } from "@preframe/math";
+import { Inkset } from "@inkset/react";
+import { createCodePlugin } from "@inkset/code";
+import { createMathPlugin } from "@inkset/math";
 
 const plugins = [createCodePlugin(), createMathPlugin()];
 
 function Chat({ message }) {
   return (
-    <Preframe
+    <Inkset
       content={message.text}
       streaming={message.isStreaming}
       plugins={plugins}
@@ -43,10 +43,10 @@ function Chat({ message }) {
 For more control, use the hook directly:
 
 ```tsx
-import { usePreframe } from "@preframe/react";
+import { useInkset } from "@inkset/react";
 
 function StreamingChat() {
-  const { containerRef, appendToken, endStream } = usePreframe({
+  const { containerRef, appendToken, endStream } = useInkset({
     plugins: [createCodePlugin(), createMathPlugin()],
   });
 
@@ -77,9 +77,9 @@ On resize, only `pretext.layout()` re-runs for each block. That's pure arithmeti
 Plugins participate in the full pipeline. They transform AST nodes, measure their own dimensions, and render as React components.
 
 ```tsx
-import { createCodePlugin } from "@preframe/code";
-import { createMathPlugin, createKaTeXRenderer, createMathJaxRenderer } from "@preframe/math";
-import { createTablePlugin } from "@preframe/table";
+import { createCodePlugin } from "@inkset/code";
+import { createMathPlugin, createKaTeXRenderer, createMathJaxRenderer } from "@inkset/math";
+import { createTablePlugin } from "@inkset/table";
 
 // KaTeX (default, fast)
 createMathPlugin();
@@ -94,7 +94,7 @@ createCodePlugin({ theme: "github-light" });
 Writing a custom plugin:
 
 ```tsx
-const myPlugin: PreframePlugin = {
+const myPlugin: InksetPlugin = {
   name: "custom-chart",
   handles: ["code"],  // handle code fence blocks
   transform(node, ctx) {
@@ -112,19 +112,19 @@ const myPlugin: PreframePlugin = {
 
 | Package | What it does |
 |---------|-------------|
-| `@preframe/core` | Pipeline engine: ingest, parse, measure, layout |
-| `@preframe/react` | `<Preframe>` component and `usePreframe()` hook |
-| `@preframe/code` | Shiki syntax highlighting with streaming support |
-| `@preframe/math` | KaTeX or MathJax rendering, delimiter normalization |
-| `@preframe/table` | Responsive tables with horizontal scroll and CSV copy |
+| `@inkset/core` | Pipeline engine: ingest, parse, measure, layout |
+| `@inkset/react` | `<Inkset>` component and `useInkset()` hook |
+| `@inkset/code` | Shiki syntax highlighting with streaming support |
+| `@inkset/math` | KaTeX or MathJax rendering, delimiter normalization |
+| `@inkset/table` | Responsive tables with horizontal scroll and CSV copy |
 
 ## Development
 
 ```bash
 pnpm install
-pnpm --filter @preframe/core test     # 55 unit tests
-pnpm --filter @preframe/core build    # Build core
-pnpm --filter @preframe/playground dev # Playground at localhost:3333
+pnpm --filter @inkset/core test     # 55 unit tests
+pnpm --filter @inkset/core build    # Build core
+pnpm --filter @inkset/playground dev # Playground at localhost:3333
 ```
 
 ## Status

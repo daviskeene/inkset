@@ -1,5 +1,5 @@
 {
-  "name": "@preframe/code",
+  "name": "@inkset/code",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,13 +12,13 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.tsx --format esm --no-dts --external react --external @preframe/core",
+    "build": "tsup src/index.tsx --format esm --no-dts --external react --external @inkset/core",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@preframe/core": "workspace:*",
+    "@inkset/core": "workspace:*",
     "shiki": "^3.0.0"
   },
   "peerDependencies": {

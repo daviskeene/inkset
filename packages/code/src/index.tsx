@@ -2,13 +2,13 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   extractText,
-  type PreframePlugin,
+  type InksetPlugin,
   type ASTNode,
   type EnrichedNode,
   type PluginContext,
   type Dimensions,
   type PluginComponentProps,
-} from "@preframe/core";
+} from "@inkset/core";
 
 const CODE_LINE_HEIGHT = 21;
 const CODE_HEADER_HEIGHT = 24;
@@ -74,7 +74,7 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
       } catch (err: unknown) {
         // Gracefully degrade to plain text when shiki can't highlight the language
         if (process.env.NODE_ENV !== "production") {
-          console.debug("[preframe/code] Highlight failed, falling back to plain text:", err);
+          console.debug("[inkset/code] Highlight failed, falling back to plain text:", err);
         }
         setHtml(null);
       }
@@ -92,9 +92,9 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
   }, [code]);
 
   return (
-    <div className="preframe-code-block" style={{ position: "relative" }}>
+    <div className="inkset-code-block" style={{ position: "relative" }}>
       <div
-        className="preframe-code-header"
+        className="inkset-code-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -106,10 +106,10 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
           opacity: 0.7,
         }}
       >
-        <span className="preframe-code-lang">{lang}</span>
+        <span className="inkset-code-lang">{lang}</span>
         <button
           onClick={handleCopy}
-          className="preframe-code-copy"
+          className="inkset-code-copy"
           aria-label={copied ? "Copied" : "Copy code"}
           style={{
             background: "none",
@@ -128,13 +128,13 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
 
       {html ? (
         <div
-          className="preframe-code-content"
+          className="inkset-code-content"
           dangerouslySetInnerHTML={{ __html: html }}
           style={{ overflow: "auto" }}
         />
       ) : (
         <pre
-          className="preframe-code-content"
+          className="inkset-code-content"
           style={{
             margin: 0,
             padding: "12px",
@@ -150,7 +150,7 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
 
       {isStreaming && (
         <div
-          className="preframe-code-streaming"
+          className="inkset-code-streaming"
           style={{
             position: "absolute",
             bottom: 4,
@@ -173,7 +173,7 @@ export type CodePluginOptions = {
   langs?: string[];
 };
 
-export const createCodePlugin = (options?: CodePluginOptions): PreframePlugin => {
+export const createCodePlugin = (options?: CodePluginOptions): InksetPlugin => {
   const theme = options?.theme ?? "github-dark";
 
   return {

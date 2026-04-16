@@ -1,4 +1,4 @@
-// Public API surface for @preframe/core.
+// Public API surface for @inkset/core.
 export type {
   ASTNode,
   Block,
@@ -10,13 +10,13 @@ export type {
   MeasuredBlock,
   PluginComponentProps,
   PluginContext,
-  PreframeOptions,
-  PreframePlugin,
+  InksetOptions,
+  InksetPlugin,
   Properties,
   StreamEvent,
 } from "./types";
 
-export { PreframeError } from "./types";
+export { InksetError } from "./types";
 export { PluginRegistry } from "./plugin";
 export { Ingest, splitBlocks, repair } from "./ingest";
 export { createBlocks, parseBlock, parseBlocks, extractText } from "./parse";

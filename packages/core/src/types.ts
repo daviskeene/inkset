@@ -1,4 +1,4 @@
-// Core type definitions for the preframe rendering pipeline.
+// Core type definitions for the inkset rendering pipeline.
 import type { ComponentType } from "react";
 
 // ── Block-level types ──────────────────────────────────────────────
@@ -80,7 +80,7 @@ export type PluginContext = {
   isStreaming: boolean;
 };
 
-export interface PreframePlugin {
+export interface InksetPlugin {
   name: string;
   /** AST node types this plugin handles (e.g., "code", "math-display") */
   handles: string[];
@@ -105,10 +105,10 @@ export type StreamEvent =
   | { type: "block:complete"; blockId: number }
   | { type: "stream:end" };
 
-// ── Preframe options ───────────────────────────────────────────────
+// ── Inkset options ───────────────────────────────────────────────
 
-export interface PreframeOptions {
-  plugins?: PreframePlugin[];
+export interface InksetOptions {
+  plugins?: InksetPlugin[];
   /** Must match CSS font-family */
   font?: string;
   fontSize?: number;
@@ -119,7 +119,7 @@ export interface PreframeOptions {
 
 // ── Error types ────────────────────────────────────────────────────
 
-export class PreframeError extends Error {
+export class InksetError extends Error {
   constructor(
     message: string,
     public readonly layer: string,
@@ -127,6 +127,6 @@ export class PreframeError extends Error {
     public readonly cause?: unknown,
   ) {
     super(message);
-    this.name = "PreframeError";
+    this.name = "InksetError";
   }
 }

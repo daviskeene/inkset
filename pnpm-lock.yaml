@@ -23,19 +23,19 @@ importers:
 
   apps/playground:
     dependencies:
-      '@preframe/code':
+      '@inkset/code':
         specifier: workspace:*
         version: link:../../packages/code
-      '@preframe/core':
+      '@inkset/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@preframe/math':
+      '@inkset/math':
         specifier: workspace:*
         version: link:../../packages/math
-      '@preframe/react':
+      '@inkset/react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@preframe/table':
+      '@inkset/table':
         specifier: workspace:*
         version: link:../../packages/table
       katex:
@@ -63,7 +63,7 @@ importers:
 
   packages/code:
     dependencies:
-      '@preframe/core':
+      '@inkset/core':
         specifier: workspace:*
         version: link:../core
       shiki:
@@ -131,7 +131,7 @@ importers:
 
   packages/math:
     dependencies:
-      '@preframe/core':
+      '@inkset/core':
         specifier: workspace:*
         version: link:../core
       mathjax:
@@ -162,7 +162,7 @@ importers:
 
   packages/react:
     dependencies:
-      '@preframe/core':
+      '@inkset/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -190,7 +190,7 @@ importers:
 
   packages/table:
     dependencies:
-      '@preframe/core':
+      '@inkset/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

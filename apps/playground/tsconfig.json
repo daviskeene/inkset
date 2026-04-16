@@ -18,19 +18,19 @@
     "jsx": "preserve",
     "incremental": true,
     "paths": {
-      "@preframe/core": [
+      "@inkset/core": [
         "../../packages/core/src/index.ts"
       ],
-      "@preframe/react": [
+      "@inkset/react": [
         "../../packages/react/src/index.tsx"
       ],
-      "@preframe/code": [
+      "@inkset/code": [
         "../../packages/code/src/index.tsx"
       ],
-      "@preframe/math": [
+      "@inkset/math": [
         "../../packages/math/src/index.tsx"
       ],
-      "@preframe/table": [
+      "@inkset/table": [
         "../../packages/table/src/index.tsx"
       ]
     },
