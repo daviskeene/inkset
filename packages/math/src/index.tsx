@@ -16,6 +16,14 @@ const MATH_LINE_HEIGHT = 44;
 const MATH_PADDING = 16;
 const MATH_MIN_HEIGHT = 60;
 
+// Lazy, singleton-cached dynamic imports so both `preload()` and the block
+// component converge on the same promise.
+let katexPromise: Promise<typeof import("katex")> | null = null;
+const loadKatex = (): Promise<typeof import("katex")> => {
+  if (!katexPromise) katexPromise = import("katex");
+  return katexPromise;
+};
+
 // ── Math renderer abstraction ─────────────────────────────────────
 
 export type MathRenderer = {
@@ -73,7 +81,7 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
     let cancelled = false;
 
     if (rendererName === "katex") {
-      import("katex").then((katex) => {
+      loadKatex().then((katex) => {
         if (cancelled) return;
         try {
           const result = katex.default.renderToString(latex, {
@@ -152,6 +160,12 @@ export const createMathPlugin = (options?: MathPluginOptions): InksetPlugin => {
     name: "math",
     handles: ["math-display"],
     rendererName: renderer.name,
+
+    async preload(): Promise<void> {
+      if (renderer.name === "katex") {
+        await loadKatex();
+      }
+    },
 
     transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
       const raw = extractText(node);

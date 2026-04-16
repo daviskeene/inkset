@@ -182,6 +182,10 @@ export const createCodePlugin = (options?: CodePluginOptions): InksetPlugin => {
     name: "code",
     handles: ["code"],
 
+    async preload(): Promise<void> {
+      await getHighlighter(theme);
+    },
+
     transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
       const code = extractCodeContent(node);
       const lang = node.lang ?? detectLanguage(node) ?? "text";

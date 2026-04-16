@@ -163,7 +163,36 @@ const INKSET_STYLES = `
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
+
+  .inkset-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+    font-size: 13px;
+    opacity: 0.55;
+  }
+  .inkset-loading-spinner {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: inkset-spin 0.8s linear infinite;
+  }
+  @keyframes inkset-spin {
+    to { transform: rotate(360deg); }
+  }
 `;
+
+function InksetDefaultLoading() {
+  return (
+    <div className="inkset-loading" role="status">
+      <span className="inkset-loading-spinner" aria-hidden />
+      <span>Loading…</span>
+    </div>
+  );
+}
 
 type ResolvedBlockHeight = {
   height: number;
@@ -476,6 +505,12 @@ function DefaultBlockRenderer({
   );
 }
 
+// Tags where whitespace-only text nodes are invalid HTML children. React's
+// hydration checker flags these (`whitespace text nodes cannot be a child of
+// <table>`). The remark pipeline preserves source newlines as text nodes, so
+// we strip them when rendering the default table structure.
+const TABLE_CONTEXT_TAGS = new Set(["table", "thead", "tbody", "tfoot", "tr"]);
+
 const renderAstNode = (
   node: EnrichedNode,
   registry: PluginRegistry,
@@ -500,7 +535,10 @@ const renderAstNode = (
   const tagName = node.tagName ?? "div";
   const nextAllowInlineMath = allowInlineMath && tagName !== "code" && tagName !== "pre";
   const props = toReactProps(node.properties, key);
-  const children = node.children?.map((child, index) =>
+  const rawChildren = TABLE_CONTEXT_TAGS.has(tagName)
+    ? node.children?.filter((child) => !isWhitespaceTextNode(child as EnrichedNode))
+    : node.children;
+  const children = rawChildren?.map((child, index) =>
     renderAstNode(
       child as EnrichedNode,
       registry,
@@ -511,6 +549,9 @@ const renderAstNode = (
 
   return React.createElement(tagName, props, ...(children ?? []));
 };
+
+const isWhitespaceTextNode = (node: EnrichedNode): boolean =>
+  node.type === "text" && typeof node.value === "string" && node.value.trim() === "";
 
 const renderTextNode = (
   node: EnrichedNode,
@@ -667,6 +708,12 @@ export type InksetProps = {
   hyphenation?: HyphenationOption;
   /** Sets CSS `text-wrap` on the root (e.g. `"pretty"` for browser K-P). */
   textWrap?: TextWrapOption;
+  /**
+   * Rendered while the pipeline is still preloading plugin dependencies
+   * (shiki, katex) and measuring the first pass. If omitted, Inkset shows
+   * a small centred spinner. Pass `null` to render nothing.
+   */
+  loadingFallback?: ReactNode;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -683,6 +730,7 @@ export function Inkset({
   blockMargin,
   hyphenation,
   textWrap,
+  loadingFallback,
   className,
   style,
   children,
@@ -920,6 +968,13 @@ export function Inkset({
     ...style,
   };
 
+  // Pipeline is still preloading plugin deps + running the first measure.
+  // Only show the fallback when we actually have content to render; empty
+  // Inkset instances stay empty.
+  const isLoading = state === null && content !== undefined && content.length > 0;
+  const fallbackNode =
+    loadingFallback === undefined ? <InksetDefaultLoading /> : loadingFallback;
+
   return (
     <div
       ref={containerRef}
@@ -928,9 +983,11 @@ export function Inkset({
       role="log"
       aria-live="polite"
       aria-atomic={false}
-      aria-busy={streaming}
+      aria-busy={streaming || isLoading}
     >
       <style>{INKSET_STYLES}</style>
+
+      {isLoading && fallbackNode}
 
       {frozenBlocks.map((block: LayoutBlock) => (
         <BlockRenderer

@@ -113,7 +113,22 @@ export class StreamingPipeline {
         })
       : Promise.resolve();
 
-    await Promise.all([this.measureLayer.init(), hyphenationPromise]);
+    // Preload heavy plugin deps (shiki, katex, etc.) before the first measure.
+    // Without this the first frame renders raw fallback text until each plugin
+    // component finishes loading its dep, producing visible flicker.
+    const pluginPreloads = this.registry.all().map((plugin) =>
+      plugin.preload
+        ? plugin.preload().catch((err: unknown) => {
+            console.warn(`[inkset] plugin "${plugin.name}" preload failed:`, err);
+          })
+        : Promise.resolve(),
+    );
+
+    await Promise.all([
+      this.measureLayer.init(),
+      hyphenationPromise,
+      ...pluginPreloads,
+    ]);
     this.initialized = true;
   }
 

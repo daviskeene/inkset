@@ -86,6 +86,12 @@ export interface InksetPlugin {
   handles: string[];
   /** If true, transform() re-runs when container width changes */
   widthSensitive?: boolean;
+  /**
+   * Optional async initialiser for heavy dependencies (e.g. shiki, katex).
+   * Awaited during pipeline init so the first render doesn't flicker between
+   * raw fallback and styled output. Plugins should make this idempotent.
+   */
+  preload?(): Promise<void>;
   transform(node: ASTNode, ctx: PluginContext): EnrichedNode;
   /** If omitted, pretext measures text content */
   measure?(node: EnrichedNode, maxWidth: number): Dimensions;
