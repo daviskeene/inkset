@@ -23,19 +23,29 @@ type Scenario = {
 const SCENARIO_LIST: Scenario[] = [
   {
     key: "mixed",
-    label: "what's inkset",
-    userPrompt: "What is Inkset and why should I use it for chat UIs?",
-    assistant: `# Inkset
+    label: "why inkset",
+    userPrompt: "What's the best way to render AI chat output in React?",
+    assistant: `# The best way to render AI in React
 
-A renderer for model output that measures text without touching the DOM.
+Your chat streams markdown. That markdown has code blocks, math, tables, and the user is reading it on a phone, a laptop, a 34" ultrawide, or a resized window they forgot to close. Every existing option makes you pick your pain.
 
-Most chat UIs stream markdown tokens into the page and let the browser figure out where things go. This works fine until someone resizes the window, or the response has code blocks and math, or the stream is fast enough that layout can't keep up. Then you get jitter.
+## What hurts today
 
-The problem is that measuring text with \`getBoundingClientRect()\` forces the browser to reflow the page. Do that on every token and you're fighting the rendering engine.
+- **Streamdown** is fast but DOM-heavy. Streaming a long response into a narrow column produces visible jitter. Code highlighting is optional. Math isn't built in.
+- **react-markdown** is mature but means wiring remark + rehype + KaTeX + shiki yourself and fighting plugin ordering for every edge case.
+- **Tailwind \`prose\`** bolted onto either: customizing anything past dark/light means wrestling specificity.
 
-> Inkset measures text once with pretext, then re-layouts with arithmetic. No DOM reads in the hot path.
+## What Inkset ships
 
-## How it works
+- **First-class plugins** for code, math, and tables — all streaming-aware, with shiki syntax highlighting (light + dark pair that follows the OS), KaTeX display and inline rendering, and CSV-copyable tables.
+- **A theming API that isn't a style override.** CSS variables for every knob, a typed \`theme\` prop that compiles to them, per-plugin behavior flags, \`unstyled\` for design-system takeover.
+- **Text that actually fits.** Shrinkwrap balances paragraphs to the width of their longest greedy line. Soft-hyphenation for awkward narrow columns.
+
+> Try the chips above: switch themes, toggle shrinkwrap, watch the code block invert with your OS.
+
+## Plus: resize without jitter
+
+\`getBoundingClientRect()\` forces a browser reflow on every measurement. Do that per streamed token and you're fighting the rendering engine. Inkset measures once via pretext, then re-layouts with arithmetic:
 
 \`\`\`ts
 const prepared = pretext.prepare(text, "400 15px system-ui");
@@ -45,26 +55,26 @@ const layout = pretext.layout(prepared, containerWidth, 22);
 // Resize 1000 blocks in under a millisecond.
 \`\`\`
 
-On resize, the cost drops to:
-
-$$t_{resize} \\approx t_{arithmetic} + t_{paint}$$
-
-instead of the usual:
+The cost on resize drops from:
 
 $$t_{resize} \\approx t_{reflow} + t_{measure} + t_{patch} + t_{paint}$$
 
-Try resizing this window to feel the difference.
+to:
 
-## Compared to Streamdown
+$$t_{resize} \\approx t_{arithmetic} + t_{paint}$$
 
-Streamdown turns markdown into HTML fast. Inkset is solving a different thing: keeping layout stable while content streams in and the container changes size.
+Drag the window edge mid-stream to feel it.
 
-| | Streamdown | Inkset |
-|---------|------------------------------|----------|
-| Text measurement | DOM reads | pretext (Canvas) |
-| Resize | Browser reflow | Arithmetic |
-| Streaming | Patch DOM per token | Measured layout, flow-based hot block |
-| Plugins | Post-render | Integrated (code, math, tables) |`,
+## How it stacks up
+
+| | Streamdown | react-markdown | Inkset |
+|---|---|---|---|
+| Streaming-aware | Yes | With effort | Yes |
+| Code highlighting | Plugin | Wire yourself | Built-in + light/dark pair |
+| Math | Not included | Wire yourself | Built-in (KaTeX) |
+| Resize cost | Reflow per block | Reflow per block | Arithmetic only |
+| Theming | Tailwind classes | Your CSS | CSS vars + typed theme + \`unstyled\` |
+| Text balancing | — | — | Shrinkwrap + hyphenation |`,
   },
   {
     key: "code",
