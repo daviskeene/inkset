@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
-import { Inkset } from "@inkset/react";
+import { Inkset, type InksetTheme } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
@@ -199,6 +199,82 @@ const tablePlugin = createTablePlugin();
 
 const ALL_PLUGINS = { code: codePlugin, math: mathPlugin, table: tablePlugin };
 
+// ── Themes ─────────────────────────────────────────────────────────
+
+type ThemeKey = "default" | "warm" | "highContrast" | "compact";
+
+const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme }> = {
+  default: {
+    label: "default",
+    // Undefined theme → fall through to the CSS-var defaults in :where().
+  },
+  warm: {
+    label: "warm",
+    theme: {
+      colors: {
+        text: "#f4e9d8",
+        textMuted: "rgba(244, 233, 216, 0.72)",
+        blockquoteAccent: "#e0975c",
+        blockquoteText: "rgba(244, 233, 216, 0.82)",
+        inlineCodeBg: "rgba(224, 151, 92, 0.18)",
+        inlineCodeText: "#f7c893",
+        hr: "rgba(224, 151, 92, 0.3)",
+      },
+      code: {
+        background: "#1c1512",
+      },
+      table: {
+        border: "rgba(224, 151, 92, 0.2)",
+        headerText: "#e0975c",
+      },
+    },
+  },
+  highContrast: {
+    label: "hi-contrast",
+    theme: {
+      colors: {
+        text: "#ffffff",
+        textMuted: "#d0d0d0",
+        blockquoteAccent: "#ffffff",
+        blockquoteText: "#ffffff",
+        inlineCodeBg: "rgba(255, 255, 255, 0.2)",
+        hr: "rgba(255, 255, 255, 0.4)",
+      },
+      typography: {
+        headingWeights: { h1: 900, h2: 900, h3: 800, h4: 800 },
+        headingTracking: { h1: "-0.02em", h2: "-0.015em", h3: "-0.01em", h4: "0" },
+      },
+      code: {
+        background: "#000000",
+      },
+    },
+  },
+  compact: {
+    label: "compact",
+    theme: {
+      typography: {
+        fontSize: 14,
+        lineHeight: 1.45,
+        headingSizes: { h1: "1.8em", h2: "1.4em", h3: "1.15em", h4: "1em" },
+        headingLineHeights: { h1: 1.2, h2: 1.2, h3: 1.25, h4: 1.3 },
+      },
+      spacing: {
+        listIndent: "1.2em",
+        blockquotePaddingLeft: "0.75em",
+      },
+      code: {
+        blockPadding: "10px 12px",
+        blockRadius: "8px",
+        blockFontSize: "13px",
+        headerPadding: "2px 10px",
+      },
+      table: {
+        cellPadding: "6px 10px",
+      },
+    },
+  },
+};
+
 // ── Playground page ────────────────────────────────────────────────
 
 export default function PlaygroundPage() {
@@ -210,6 +286,7 @@ export default function PlaygroundPage() {
     table: true,
   });
   const [hyphenationEnabled, setHyphenationEnabled] = useState(false);
+  const [themeKey, setThemeKey] = useState<ThemeKey>("default");
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState("");
@@ -346,6 +423,29 @@ export default function PlaygroundPage() {
         </div>
 
         <div style={{ display: "flex", gap: 14, alignItems: "center", fontSize: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ opacity: 0.4, marginRight: 4 }}>theme</span>
+            {(Object.keys(THEMES) as ThemeKey[]).map((key) => (
+              <button
+                key={key}
+                onClick={() => setThemeKey(key)}
+                style={{
+                  padding: "3px 9px",
+                  fontSize: 11.5,
+                  border: themeKey === key ? "1px solid #3a3a3a" : "1px solid #1f1f1f",
+                  borderRadius: 999,
+                  background: themeKey === key ? "#181818" : "transparent",
+                  color: themeKey === key ? "#ededed" : "#999",
+                  cursor: "pointer",
+                }}
+              >
+                {THEMES[key].label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ width: 1, height: 18, background: "#222" }} />
+
           <label
             style={{
               display: "flex",
@@ -495,6 +595,7 @@ export default function PlaygroundPage() {
                 plugins={plugins}
                 width={assistantWidth}
                 hyphenation={hyphenationEnabled}
+                theme={THEMES[themeKey].theme}
                 onRegenerate={regenerate}
               />
             </div>
@@ -508,6 +609,7 @@ export default function PlaygroundPage() {
             onFocusChange={setInputHasFocus}
             plugins={plugins}
             hyphenation={hyphenationEnabled}
+            theme={THEMES[themeKey].theme}
             width={Math.max(0, Math.min(chatAreaWidth - CHAT_SIDE_PADDING * 2, CHAT_MAX_WIDTH) - 2)}
           />
         </main>
@@ -603,6 +705,7 @@ type AssistantMessageProps = {
   plugins: ReturnType<typeof createCodePlugin>[];
   width: number;
   hyphenation: boolean;
+  theme: InksetTheme | undefined;
   onRegenerate: () => void;
 };
 
@@ -612,6 +715,7 @@ function AssistantMessage({
   plugins,
   width,
   hyphenation,
+  theme,
   onRegenerate,
 }: AssistantMessageProps) {
   const [copied, setCopied] = useState(false);
@@ -643,6 +747,7 @@ function AssistantMessage({
           lineHeight={22}
           blockMargin={12}
           hyphenation={hyphenation}
+          theme={theme}
         />
       </div>
 
@@ -690,6 +795,7 @@ function ChatInput({
   onFocusChange,
   plugins,
   hyphenation,
+  theme,
   width,
 }: {
   value: string;
@@ -698,6 +804,7 @@ function ChatInput({
   onFocusChange: (v: boolean) => void;
   plugins: ReturnType<typeof createCodePlugin>[];
   hyphenation: boolean;
+  theme: InksetTheme | undefined;
   width: number;
 }) {
   const [justSent, setJustSent] = useState(false);
@@ -764,6 +871,7 @@ function ChatInput({
               lineHeight={20}
               blockMargin={8}
               hyphenation={hyphenation}
+              theme={theme}
             />
           </div>
         )}

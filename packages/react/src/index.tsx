@@ -20,6 +20,7 @@ import {
   type TextWrapOption,
 } from "@inkset/core";
 import { createCopyHandler } from "./copy";
+import { themeToCssVars, type InksetTheme } from "./theme";
 
 const DEFAULT_BLOCK_MARGIN = 16;
 const DEFAULT_FONT_SIZE = 16;
@@ -838,6 +839,12 @@ export type InksetProps = {
   /** Sets CSS `text-wrap` on the root (e.g. `"pretty"` for browser K-P). */
   textWrap?: TextWrapOption;
   /**
+   * Structured theme overrides. Compiles to `--inkset-*` CSS variables on
+   * the root. The `style` prop still has final say, so consumers can escape-
+   * hatch any specific property after the theme is applied.
+   */
+  theme?: InksetTheme;
+  /**
    * Rendered while the pipeline is still preloading plugin dependencies
    * (shiki, katex) and measuring the first pass. If omitted, Inkset shows
    * a small centred spinner. Pass `null` to render nothing.
@@ -859,6 +866,7 @@ export function Inkset({
   blockMargin,
   hyphenation,
   textWrap,
+  theme,
   loadingFallback,
   className,
   style,
@@ -1083,6 +1091,10 @@ export function Inkset({
     ? baseLineHeight / baseFontSize
     : DEFAULT_LINE_HEIGHT_RATIO;
 
+  // Precedence (low → high): CSS defaults in INKSET_STYLES → font/fontSize/
+  // lineHeight props → `theme` prop → `style` prop. Keeping theme *before*
+  // style means consumers can still escape-hatch any single property without
+  // building a whole theme variant.
   const containerStyle: React.CSSProperties & Record<`--${string}`, string | number> = {
     position: "relative",
     overflow: "hidden",
@@ -1090,6 +1102,7 @@ export function Inkset({
     "--inkset-font-family": font ?? "system-ui, sans-serif",
     "--inkset-base-font-size": `${baseFontSize}px`,
     "--inkset-base-line-height-ratio": `${baseLineHeightRatio}`,
+    ...themeToCssVars(theme),
     hyphens: hyphenation ? "manual" : undefined,
     WebkitHyphens: hyphenation ? "manual" : undefined,
     overflowWrap: hyphenation ? "break-word" : undefined,
@@ -1172,3 +1185,6 @@ export type {
   LayoutBlock,
   LayoutTree,
 } from "@inkset/core";
+
+export { themeToCssVars } from "./theme";
+export type { InksetTheme, HeadingTuple, InksetCssVars } from "./theme";
