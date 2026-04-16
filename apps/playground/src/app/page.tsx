@@ -25,7 +25,7 @@ const SCENARIO_LIST: Scenario[] = [
     key: "mixed",
     label: "why inkset",
     userPrompt: "What's the best way to render AI chat output in React?",
-    assistant: `# The best way to render AI in React
+    assistant: `# Tl;dr — Inkset is the best way to render AI output in React
 
 Your chat streams markdown. That markdown has code blocks, math, tables, and the user is reading it on a phone, a laptop, a 34" ultrawide, or a resized window they forgot to close. Every existing option makes you pick your pain.
 
