@@ -979,6 +979,14 @@ export type InksetProps = {
    */
   theme?: InksetTheme;
   /**
+   * Skip the built-in `<style>` block that ships Inkset's default CSS.
+   * Block positioning is applied inline, so layout stays correct — you
+   * just inherit nothing visually. Use this when integrating into a
+   * design system (Tailwind, vanilla-extract, etc.) that resets or fully
+   * owns the typography cascade.
+   */
+  unstyled?: boolean;
+  /**
    * Rendered while the pipeline is still preloading plugin dependencies
    * (shiki, katex) and measuring the first pass. If omitted, Inkset shows
    * a small centred spinner. Pass `null` to render nothing.
@@ -1004,6 +1012,7 @@ export function Inkset({
   headingWeights,
   headingLineHeights,
   theme,
+  unstyled,
   loadingFallback,
   className,
   style,
@@ -1270,7 +1279,7 @@ export function Inkset({
       aria-atomic={false}
       aria-busy={streaming || isLoading}
     >
-      <style>{INKSET_STYLES}</style>
+      {!unstyled && <style>{INKSET_STYLES}</style>}
 
       {isLoading && fallbackNode}
 
