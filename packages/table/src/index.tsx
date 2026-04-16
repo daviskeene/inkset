@@ -34,42 +34,16 @@ function TableBlock({ node }: PluginComponentProps) {
 
   return (
     <div className="inkset-table-block" style={{ position: "relative" }}>
-      <div
-        className="inkset-table-header"
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          padding: "2px 8px",
-          fontSize: "11px",
-          lineHeight: "14px",
-          fontFamily: "system-ui, sans-serif",
-          opacity: 0.6,
-        }}
-      >
+      <div className="inkset-table-header">
         <button
           onClick={handleCopy}
           className="inkset-table-copy"
           aria-label={copied ? "Copied" : "Copy as CSV"}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "2px 6px",
-            fontSize: "11px",
-            lineHeight: "14px",
-            fontFamily: "system-ui, sans-serif",
-          }}
         >
           {copied ? "Copied!" : "Copy CSV"}
         </button>
       </div>
-      <div
-        className="inkset-table-scroll"
-        style={{
-          overflowX: "auto",
-          WebkitOverflowScrolling: "touch",
-        }}
-      >
+      <div className="inkset-table-scroll">
         <div dangerouslySetInnerHTML={{ __html: tableHtml }} />
       </div>
     </div>

@@ -118,28 +118,22 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
     return () => { cancelled = true; };
   }, [displayMode, isStreaming, latex, rendererName]);
 
-  const style: React.CSSProperties = displayMode
-    ? { textAlign: "center", padding: "8px 0", overflow: "auto", lineHeight: 1.2 }
-    : { display: "inline" };
   const Tag = displayMode ? "div" : "span";
 
   return (
     <Tag
       className={`inkset-math ${displayMode ? "inkset-math-display" : "inkset-math-inline"}`}
-      style={style}
       data-latex={latex}
       aria-label={`Math: ${latex}`}
     >
       {html ? (
         <span dangerouslySetInnerHTML={{ __html: html }} />
       ) : error && !isStreaming ? (
-        <span className="inkset-math-error" title={error} style={{ color: "#f87171", fontFamily: "ui-monospace, monospace", fontSize: "13px", lineHeight: 1.4 }}>
+        <span className="inkset-math-error" title={error}>
           {latex}
         </span>
       ) : (
-        <span className="inkset-math-raw" style={{ fontFamily: "ui-monospace, monospace", fontSize: "14px", lineHeight: 1.4, opacity: 0.6 }}>
-          {latex}
-        </span>
+        <span className="inkset-math-raw">{latex}</span>
       )}
     </Tag>
   );

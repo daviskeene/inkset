@@ -26,142 +26,271 @@ const DEFAULT_FONT_SIZE = 16;
 const DEFAULT_LINE_HEIGHT = 24;
 const DEFAULT_LINE_HEIGHT_RATIO = 1.5;
 
+// Inkset ships a single stylesheet with two layers:
+//
+//   1. A defaults block (`:where(.inkset-root)`) that declares every knob as a
+//      CSS custom property with its current baked-in value. Zero specificity
+//      via :where() — any consumer class, style, or descendant var override
+//      wins without !important.
+//
+//   2. The rules themselves, also wrapped in :where() so consumers can
+//      override any selector at normal (higher) specificity.
+//
+// All colors/sizes/spacing below reference --inkset-* vars. Consumers theme
+// Inkset by setting these vars (on .inkset-root, via style={}, or via a
+// global stylesheet), not by selector-warring with !important.
 const INKSET_STYLES = `
-  .inkset-root {
-    color: #e8e8eb;
-    font-family: var(--inkset-font-family, system-ui, sans-serif);
-    font-size: var(--inkset-base-font-size, 16px);
-    line-height: var(--inkset-base-line-height-ratio, 1.5);
+  :where(.inkset-root) {
+    /* Colors */
+    --inkset-color-text: #e8e8eb;
+    --inkset-color-text-muted: rgba(232, 232, 235, 0.78);
+    --inkset-color-hr: rgba(255, 255, 255, 0.1);
+    --inkset-blockquote-accent: rgba(255, 255, 255, 0.18);
+    --inkset-blockquote-text: rgba(232, 232, 235, 0.78);
+    --inkset-inline-code-bg: rgba(255, 255, 255, 0.08);
+    --inkset-inline-code-text: inherit;
+    --inkset-code-block-bg: #24292e;
+    --inkset-table-border: rgba(255, 255, 255, 0.08);
+    --inkset-table-header-text: rgba(232, 232, 235, 0.72);
+    --inkset-math-error: #f87171;
+
+    /* Typography */
+    --inkset-font-family: system-ui, sans-serif;
+    --inkset-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --inkset-base-font-size: 16px;
+    --inkset-base-line-height-ratio: 1.5;
+    --inkset-heading-1-size: 3em;
+    --inkset-heading-1-line-height: 1.05;
+    --inkset-heading-1-weight: 800;
+    --inkset-heading-1-tracking: -0.04em;
+    --inkset-heading-2-size: 2.15em;
+    --inkset-heading-2-line-height: 1.08;
+    --inkset-heading-2-weight: 780;
+    --inkset-heading-2-tracking: -0.035em;
+    --inkset-heading-3-size: 1.3em;
+    --inkset-heading-3-line-height: 1.15;
+    --inkset-heading-3-weight: 720;
+    --inkset-heading-3-tracking: -0.02em;
+    --inkset-heading-4-size: 1em;
+    --inkset-heading-4-line-height: 1.2;
+    --inkset-heading-4-weight: 680;
+    --inkset-inline-code-size: 0.92em;
+
+    /* Spacing */
+    --inkset-list-indent: 1.4em;
+    --inkset-blockquote-padding-left: 1em;
+    --inkset-blockquote-border-width: 3px;
+    --inkset-inline-code-padding: 0.15em 0.35em;
+    --inkset-inline-code-radius: 0.35em;
+    --inkset-code-block-padding: 12px 16px;
+    --inkset-code-block-radius: 14px;
+    --inkset-code-block-font-size: 14px;
+    --inkset-code-block-line-height: 1.5;
+    --inkset-code-header-padding: 4px 12px;
+    --inkset-code-header-font-size: 12px;
+    --inkset-code-header-opacity: 0.7;
+    --inkset-code-copy-padding: 2px 6px;
+    --inkset-code-copy-opacity: 0.8;
+    --inkset-table-cell-padding: 10px 12px;
+    --inkset-table-header-font-size: 12px;
+    --inkset-table-header-weight: 700;
+    --inkset-table-header-tracking: 0.05em;
+    --inkset-table-header-padding: 2px 8px;
+    --inkset-math-display-padding: 8px 0;
+    --inkset-math-display-line-height: 1.2;
+    --inkset-math-raw-font-size: 14px;
+    --inkset-math-raw-opacity: 0.6;
+    --inkset-math-error-font-size: 13px;
   }
 
-  .inkset-root > [data-block-id] {
+  :where(.inkset-root) {
+    color: var(--inkset-color-text);
+    font-family: var(--inkset-font-family);
+    font-size: var(--inkset-base-font-size);
+    line-height: var(--inkset-base-line-height-ratio);
+  }
+
+  :where(.inkset-root) > [data-block-id] {
     left: 0;
     top: 0;
   }
 
-  .inkset-root h1,
-  .inkset-root h2,
-  .inkset-root h3,
-  .inkset-root h4,
-  .inkset-root h5,
-  .inkset-root h6,
-  .inkset-root p,
-  .inkset-root pre,
-  .inkset-root blockquote,
-  .inkset-root ul,
-  .inkset-root ol,
-  .inkset-root table {
+  :where(.inkset-root h1, .inkset-root h2, .inkset-root h3, .inkset-root h4, .inkset-root h5, .inkset-root h6, .inkset-root p, .inkset-root pre, .inkset-root blockquote, .inkset-root ul, .inkset-root ol, .inkset-root table) {
     margin: 0;
   }
 
-  .inkset-root h1 {
-    font-size: 3em;
-    line-height: 1.05;
-    letter-spacing: -0.04em;
-    font-weight: 800;
+  :where(.inkset-root h1) {
+    font-size: var(--inkset-heading-1-size);
+    line-height: var(--inkset-heading-1-line-height);
+    letter-spacing: var(--inkset-heading-1-tracking);
+    font-weight: var(--inkset-heading-1-weight);
   }
 
-  .inkset-root h2 {
-    font-size: 2.15em;
-    line-height: 1.08;
-    letter-spacing: -0.035em;
-    font-weight: 780;
+  :where(.inkset-root h2) {
+    font-size: var(--inkset-heading-2-size);
+    line-height: var(--inkset-heading-2-line-height);
+    letter-spacing: var(--inkset-heading-2-tracking);
+    font-weight: var(--inkset-heading-2-weight);
   }
 
-  .inkset-root h3 {
-    font-size: 1.3em;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-    font-weight: 720;
+  :where(.inkset-root h3) {
+    font-size: var(--inkset-heading-3-size);
+    line-height: var(--inkset-heading-3-line-height);
+    letter-spacing: var(--inkset-heading-3-tracking);
+    font-weight: var(--inkset-heading-3-weight);
   }
 
-  .inkset-root h4,
-  .inkset-root h5,
-  .inkset-root h6 {
+  :where(.inkset-root h4, .inkset-root h5, .inkset-root h6) {
+    font-size: var(--inkset-heading-4-size);
+    line-height: var(--inkset-heading-4-line-height);
+    font-weight: var(--inkset-heading-4-weight);
+  }
+
+  :where(.inkset-root p, .inkset-root li, .inkset-root blockquote) {
     font-size: 1em;
-    line-height: 1.2;
-    font-weight: 680;
+    line-height: var(--inkset-base-line-height-ratio);
   }
 
-  .inkset-root p,
-  .inkset-root li,
-  .inkset-root blockquote {
-    font-size: 1em;
-    line-height: var(--inkset-base-line-height-ratio, 1.5);
+  :where(.inkset-root ul, .inkset-root ol) {
+    padding-left: var(--inkset-list-indent);
   }
 
-  .inkset-root ul,
-  .inkset-root ol {
-    padding-left: 1.4em;
+  :where(.inkset-root blockquote) {
+    padding-left: var(--inkset-blockquote-padding-left);
+    border-left: var(--inkset-blockquote-border-width) solid var(--inkset-blockquote-accent);
+    color: var(--inkset-blockquote-text);
   }
 
-  .inkset-root blockquote {
-    padding-left: 1em;
-    border-left: 3px solid rgba(255, 255, 255, 0.18);
-    color: rgba(232, 232, 235, 0.78);
-  }
-
-  .inkset-root hr {
+  :where(.inkset-root hr) {
     margin: 0;
     border: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--inkset-color-hr);
   }
 
-  .inkset-root code:not(pre code) {
-    padding: 0.15em 0.35em;
-    border-radius: 0.35em;
-    background: rgba(255, 255, 255, 0.08);
-    font-family: ui-monospace, monospace;
-    font-size: 0.92em;
+  :where(.inkset-root code:not(pre code)) {
+    padding: var(--inkset-inline-code-padding);
+    border-radius: var(--inkset-inline-code-radius);
+    background: var(--inkset-inline-code-bg);
+    color: var(--inkset-inline-code-text);
+    font-family: var(--inkset-font-family-mono);
+    font-size: var(--inkset-inline-code-size);
   }
 
-  .inkset-root .inkset-default-block {
+  :where(.inkset-root .inkset-default-block) {
     width: 100%;
   }
 
-  .inkset-root .inkset-code-block,
-  .inkset-root .inkset-table-block,
-  .inkset-root .inkset-math {
+  :where(.inkset-root .inkset-code-block, .inkset-root .inkset-table-block, .inkset-root .inkset-math) {
     width: 100%;
   }
 
-  .inkset-root .inkset-code-content pre,
-  .inkset-root .inkset-code-content .shiki {
+  :where(.inkset-root .inkset-code-header) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--inkset-code-header-padding);
+    font-size: var(--inkset-code-header-font-size);
+    line-height: 16px;
+    font-family: var(--inkset-font-family);
+    opacity: var(--inkset-code-header-opacity);
+  }
+
+  :where(.inkset-root .inkset-code-copy, .inkset-root .inkset-table-copy) {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--inkset-code-copy-padding);
+    font-size: var(--inkset-code-header-font-size);
+    line-height: 16px;
+    font-family: inherit;
+    color: inherit;
+    opacity: var(--inkset-code-copy-opacity);
+  }
+
+  :where(.inkset-root .inkset-code-content pre, .inkset-root .inkset-code-content .shiki) {
     margin: 0;
-    padding: 12px 16px;
+    padding: var(--inkset-code-block-padding);
     overflow-x: auto;
-    border-radius: 14px;
-    background: #24292e !important;
-    font-size: 14px;
-    line-height: 1.5;
+    border-radius: var(--inkset-code-block-radius);
+    background: var(--inkset-code-block-bg);
+    font-family: var(--inkset-font-family-mono);
+    font-size: var(--inkset-code-block-font-size);
+    line-height: var(--inkset-code-block-line-height);
   }
 
-  .inkset-root .inkset-code-content code {
+  :where(.inkset-root .inkset-code-content code) {
     background: transparent;
     padding: 0;
     border-radius: 0;
   }
 
-  .inkset-root .inkset-table-scroll table {
+  :where(.inkset-root .inkset-code-streaming) {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    font-size: 10px;
+    opacity: 0.5;
+  }
+
+  :where(.inkset-root .inkset-table-header) {
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--inkset-table-header-padding);
+    font-size: 11px;
+    line-height: 14px;
+    font-family: var(--inkset-font-family);
+    opacity: 0.6;
+  }
+
+  :where(.inkset-root .inkset-table-scroll) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  :where(.inkset-root .inkset-table-scroll table) {
     width: max-content;
     min-width: 100%;
     border-collapse: collapse;
   }
 
-  .inkset-root .inkset-table-scroll th,
-  .inkset-root .inkset-table-scroll td {
-    padding: 10px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  :where(.inkset-root .inkset-table-scroll th, .inkset-root .inkset-table-scroll td) {
+    padding: var(--inkset-table-cell-padding);
+    border-bottom: 1px solid var(--inkset-table-border);
     text-align: left;
     white-space: nowrap;
   }
 
-  .inkset-root .inkset-table-scroll th {
-    color: rgba(232, 232, 235, 0.72);
-    font-size: 12px;
-    font-weight: 700;
+  :where(.inkset-root .inkset-table-scroll th) {
+    color: var(--inkset-table-header-text);
+    font-size: var(--inkset-table-header-font-size);
+    font-weight: var(--inkset-table-header-weight);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: var(--inkset-table-header-tracking);
+  }
+
+  :where(.inkset-root .inkset-math-display) {
+    text-align: center;
+    padding: var(--inkset-math-display-padding);
+    overflow: auto;
+    line-height: var(--inkset-math-display-line-height);
+  }
+
+  :where(.inkset-root .inkset-math-inline) {
+    display: inline;
+  }
+
+  :where(.inkset-root .inkset-math-error) {
+    color: var(--inkset-math-error);
+    font-family: var(--inkset-font-family-mono);
+    font-size: var(--inkset-math-error-font-size);
+    line-height: 1.4;
+  }
+
+  :where(.inkset-root .inkset-math-raw) {
+    font-family: var(--inkset-font-family-mono);
+    font-size: var(--inkset-math-raw-font-size);
+    line-height: 1.4;
+    opacity: var(--inkset-math-raw-opacity);
   }
 
   .inkset-loading {

@@ -95,34 +95,12 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
 
   return (
     <div className="inkset-code-block" style={{ position: "relative" }}>
-      <div
-        className="inkset-code-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "4px 12px",
-          fontSize: "12px",
-          lineHeight: "16px",
-          fontFamily: "system-ui, sans-serif",
-          opacity: 0.7,
-        }}
-      >
+      <div className="inkset-code-header">
         <span className="inkset-code-lang">{lang}</span>
         <button
           onClick={handleCopy}
           className="inkset-code-copy"
           aria-label={copied ? "Copied" : "Copy code"}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "2px 6px",
-            fontSize: "12px",
-            lineHeight: "16px",
-            fontFamily: "system-ui, sans-serif",
-            opacity: 0.8,
-          }}
         >
           {copied ? "Copied!" : "Copy"}
         </button>
@@ -132,38 +110,14 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
         <div
           className="inkset-code-content"
           dangerouslySetInnerHTML={{ __html: html }}
-          style={{ overflow: "auto" }}
         />
       ) : (
-        <pre
-          className="inkset-code-content"
-          style={{
-            margin: 0,
-            padding: "12px",
-            overflow: "auto",
-            fontFamily: "ui-monospace, monospace",
-            fontSize: "14px",
-            lineHeight: "1.5",
-          }}
-        >
+        <pre className="inkset-code-content">
           <code>{code}</code>
         </pre>
       )}
 
-      {isStreaming && (
-        <div
-          className="inkset-code-streaming"
-          style={{
-            position: "absolute",
-            bottom: 4,
-            right: 8,
-            fontSize: "10px",
-            opacity: 0.5,
-          }}
-        >
-          ...
-        </div>
-      )}
+      {isStreaming && <div className="inkset-code-streaming">...</div>}
     </div>
   );
 }
