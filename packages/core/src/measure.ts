@@ -267,10 +267,27 @@ export class MeasureLayer {
 
       case "list": {
         const items = text.split("\n").filter((l) => l.trim());
-        const itemHeight = this.options.lineHeight + LIST_ITEM_PADDING;
+        if (items.length === 0) {
+          return { width: maxWidth, height: this.options.lineHeight };
+        }
+        // Items wrap inside (maxWidth - list-indent), so measure each at that
+        // inner width and sum the real heights. Using items.length × lineHeight
+        // undercounts badly when bullets span 2+ lines.
+        const listIndent = this.options.fontSize * 1.4;
+        const innerWidth = Math.max(1, maxWidth - listIndent);
+        let total = 0;
+        for (const item of items) {
+          const d = await this.measureTextWithTypography(
+            item,
+            innerWidth,
+            baseTypography,
+          );
+          total += d.height;
+        }
+        total += items.length * LIST_ITEM_PADDING;
         return {
           width: maxWidth,
-          height: Math.max(items.length * itemHeight, this.options.lineHeight),
+          height: Math.max(total, this.options.lineHeight),
         };
       }
 
