@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
 import { Inkset, type InksetTheme } from "@inkset/react";
+import type { InksetPlugin } from "@inkset/core";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
@@ -20,10 +21,14 @@ const READING_MONO_FAMILY = `${mono.style.fontFamily}, ui-monospace, SFMono-Regu
 
 // ── Typography scale (1.2 ratio, base 13) ──────────────────────────
 // 11 · 13 · 15 · 18
-// Small-caps labels use 11. Controls/buttons use 13. Body/input/bubble use 15.
-// Brand uses 18.
+// Controls/buttons use 13. Body/input/bubble use 15. Brand uses 18.
+//
+// Small-caps labels render at 13 because small-caps glyphs only reach ~70%
+// of cap-height, so a 13px label reads closer to 9px visually — still
+// smaller than the 13px regular-case controls beside it, so hierarchy
+// holds without the labels becoming unreadable.
 const SMALL_CAPS_LABEL = {
-  fontSize: 11,
+  fontSize: 13,
   letterSpacing: "0.03em",
   fontVariantCaps: "all-small-caps" as const,
   fontFeatureSettings: '"c2sc", "smcp"',
@@ -380,9 +385,18 @@ const paletteToCssVars = (p: PagePalette): Record<string, string> => ({
 
 // Shared typography defaults applied to every theme so the rendered column
 // always reads as a book: serif for body, editorial mono for inline code.
+// Libre Franklin's Black/Extra-Bold cuts have tight side-bearings already,
+// so we soften the Inkset default heading tracking (-0.04em on h1) to keep
+// adjacent glyphs from colliding at large sizes.
 const BASE_TYPOGRAPHY = {
   fontFamily: READING_FONT_FAMILY,
   fontFamilyMono: READING_MONO_FAMILY,
+  headingTracking: {
+    h1: "-0.01em",
+    h2: "-0.005em",
+    h3: "0",
+    h4: "0",
+  },
 };
 
 const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: PagePalette }> = {
@@ -432,7 +446,9 @@ const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: Pag
       typography: {
         ...BASE_TYPOGRAPHY,
         headingWeights: { h1: 900, h2: 900, h3: 800, h4: 800 },
-        headingTracking: { h1: "-0.02em", h2: "-0.015em", h3: "-0.01em", h4: "0" },
+        // 900-weight Libre Franklin needs even more breathing room than the
+        // base 800-weight defaults above.
+        headingTracking: { h1: "0", h2: "0", h3: "0", h4: "0" },
       },
       code: {
         background: "#000000",
@@ -491,11 +507,12 @@ export default function PlaygroundPage() {
 
   const [inputValue, setInputValue] = useState("");
   const [inputHasFocus, setInputHasFocus] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Recompute the plugin bundle when the theme changes so the code plugin's
   // shiki theme stays in sync. Other plugins are theme-independent.
   const plugins = React.useMemo(() => {
-    const byName: Record<string, ReturnType<typeof createCodePlugin>> = {
+    const byName: Record<string, InksetPlugin> = {
       code: CODE_PLUGINS_BY_THEME[themeKey] ?? CODE_PLUGINS_BY_THEME.default,
       math: mathPlugin,
       table: tablePlugin,
@@ -600,13 +617,14 @@ export default function PlaygroundPage() {
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100vh",
+        height: "100dvh",
         background: "var(--pg-bg)",
         color: "var(--pg-text-primary)",
         ...paletteToCssVars(activePalette),
       }}
     >
       <header
+        className="pg-header"
         style={{
           padding: "12px 20px",
           borderBottom: "1px solid var(--pg-border-subtle)",
@@ -615,6 +633,7 @@ export default function PlaygroundPage() {
           justifyContent: "space-between",
           flexShrink: 0,
           background: "var(--pg-bg)",
+          gap: 10,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -629,9 +648,12 @@ export default function PlaygroundPage() {
           >
             inkset
           </h1>
-          <span style={{ ...SMALL_CAPS_LABEL, opacity: 0.55 }}>playground</span>
+          <span className="pg-playground-label" style={{ ...SMALL_CAPS_LABEL, opacity: 0.55 }}>
+            playground
+          </span>
           <Link
             href="/justification-comparison"
+            className="pg-justification-link"
             style={{
               fontSize: 13,
               color: "var(--pg-text-muted)",
@@ -646,7 +668,31 @@ export default function PlaygroundPage() {
           </Link>
         </div>
 
-        <div style={{ display: "flex", gap: 14, alignItems: "center", fontSize: 13 }}>
+        <button
+          className="pg-menu-btn"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            border: "1px solid var(--pg-border-default)",
+            background: "transparent",
+            color: "var(--pg-text-primary)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <MenuIcon />
+        </button>
+
+        <div
+          className="pg-desktop-controls"
+          style={{ display: "flex", gap: 14, alignItems: "center", fontSize: 13 }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ ...SMALL_CAPS_LABEL, opacity: 0.5, marginRight: 4 }}>theme</span>
             {(Object.keys(THEMES) as ThemeKey[]).map((key) => (
@@ -751,6 +797,7 @@ export default function PlaygroundPage() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* ── Left sidebar: raw markdown the assistant "replied with" ── */}
         <aside
+          className="pg-aside"
           style={{
             width: MARKDOWN_PANEL_WIDTH,
             flexShrink: 0,
@@ -811,6 +858,7 @@ export default function PlaygroundPage() {
         >
           {/* Scrollable transcript */}
           <div
+            className="pg-chat-scroll"
             style={{
               flex: 1,
               overflowY: "auto",
@@ -872,6 +920,33 @@ export default function PlaygroundPage() {
           />
         </main>
       </div>
+
+      {menuOpen && (
+        <MobileMenu
+          onClose={() => setMenuOpen(false)}
+          activeScenario={activeKey}
+          onSelectScenario={(key) => {
+            switchScenario(key);
+            setMenuOpen(false);
+          }}
+          scenarios={SCENARIO_LIST}
+          themeKey={themeKey}
+          onThemeChange={setThemeKey}
+          enabledPlugins={enabledPlugins}
+          onTogglePlugin={(name) =>
+            setEnabledPlugins((prev) => ({
+              ...prev,
+              [name]: !prev[name as keyof typeof prev],
+            }))
+          }
+          hyphenationEnabled={hyphenationEnabled}
+          onToggleHyphenation={() => setHyphenationEnabled((v) => !v)}
+          shrinkwrapMode={shrinkwrapMode}
+          onToggleShrinkwrap={() =>
+            setShrinkwrapMode((m) => (m === "off" ? "headings" : m === "headings" ? "on" : "off"))
+          }
+        />
+      )}
     </div>
   );
 }
@@ -891,6 +966,7 @@ function ScenarioStrip({
 }) {
   return (
     <div
+      className="pg-scenario-strip"
       style={{
         display: "flex",
         gap: 6,
@@ -1011,6 +1087,7 @@ function AssistantMessage({
           hyphenation={hyphenation}
           shrinkwrap={shrinkwrap}
           theme={theme}
+          loadingFallback={<ThinkingFallback />}
         />
       </div>
 
@@ -1094,6 +1171,7 @@ function ChatInput({
 
   return (
     <div
+      className="pg-chat-input-wrap"
       style={{
         borderTop: "1px solid var(--pg-border-subtle)",
         padding: `14px ${CHAT_SIDE_PADDING}px 20px`,
@@ -1316,5 +1394,277 @@ function SendIcon() {
       <path d="M12 19V5" />
       <path d="M5 12l7-7 7 7" />
     </svg>
+  );
+}
+
+function ThinkingFallback() {
+  return (
+    <div
+      role="status"
+      aria-label="Thinking"
+      style={{ padding: "12px 0", fontSize: 15, lineHeight: 1.4 }}
+    >
+      <span className="pg-shimmer">Thinking…</span>
+    </div>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="6" y1="18" x2="18" y2="6" />
+    </svg>
+  );
+}
+
+// ── Mobile menu ────────────────────────────────────────────────────
+
+type MobileMenuProps = {
+  onClose: () => void;
+  activeScenario: string;
+  onSelectScenario: (key: string) => void;
+  scenarios: Scenario[];
+  themeKey: ThemeKey;
+  onThemeChange: (key: ThemeKey) => void;
+  enabledPlugins: Record<string, boolean>;
+  onTogglePlugin: (name: string) => void;
+  hyphenationEnabled: boolean;
+  onToggleHyphenation: () => void;
+  shrinkwrapMode: "off" | "headings" | "on";
+  onToggleShrinkwrap: () => void;
+};
+
+function MobileMenu({
+  onClose,
+  activeScenario,
+  onSelectScenario,
+  scenarios,
+  themeKey,
+  onThemeChange,
+  enabledPlugins,
+  onTogglePlugin,
+  hyphenationEnabled,
+  onToggleHyphenation,
+  shrinkwrapMode,
+  onToggleShrinkwrap,
+}: MobileMenuProps) {
+  return (
+    <div
+      className="pg-mobile-menu"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.55)",
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+        zIndex: 50,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--pg-bg)",
+          borderBottom: "1px solid var(--pg-border-subtle)",
+          padding: "14px 16px 20px",
+          maxHeight: "85dvh",
+          overflowY: "auto",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 16,
+          }}
+        >
+          <span style={{ ...SMALL_CAPS_LABEL, opacity: 0.55 }}>menu</span>
+          <button
+            onClick={onClose}
+            aria-label="Close menu"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "1px solid var(--pg-border-default)",
+              background: "transparent",
+              color: "var(--pg-text-primary)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        <Section label="examples">
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {scenarios.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => onSelectScenario(s.key)}
+                style={{
+                  padding: "10px 14px",
+                  fontSize: 15,
+                  textAlign: "left",
+                  border:
+                    activeScenario === s.key
+                      ? "1px solid var(--pg-border-strong)"
+                      : "1px solid var(--pg-border-default)",
+                  borderRadius: 10,
+                  background:
+                    activeScenario === s.key ? "var(--pg-chip-active-bg)" : "transparent",
+                  color:
+                    activeScenario === s.key
+                      ? "var(--pg-chip-active-text)"
+                      : "var(--pg-text-primary)",
+                  cursor: "pointer",
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="theme">
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {(Object.keys(THEMES) as ThemeKey[]).map((key) => (
+              <button
+                key={key}
+                onClick={() => onThemeChange(key)}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: 13,
+                  border:
+                    themeKey === key
+                      ? "1px solid var(--pg-border-strong)"
+                      : "1px solid var(--pg-border-default)",
+                  borderRadius: 999,
+                  background: themeKey === key ? "var(--pg-chip-active-bg)" : "transparent",
+                  color:
+                    themeKey === key ? "var(--pg-chip-active-text)" : "var(--pg-text-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                {THEMES[key].label}
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="plugins">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 15 }}>
+            {Object.entries(enabledPlugins).map(([name, enabled]) => (
+              <label
+                key={name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  cursor: "pointer",
+                  opacity: enabled ? 1 : 0.55,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={() => onTogglePlugin(name)}
+                  style={{ accentColor: "#888", width: 18, height: 18 }}
+                />
+                {name}
+              </label>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="layout">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 15 }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                cursor: "pointer",
+                opacity: hyphenationEnabled ? 1 : 0.55,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={hyphenationEnabled}
+                onChange={onToggleHyphenation}
+                style={{ accentColor: "#888", width: 18, height: 18 }}
+              />
+              hyphens
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                cursor: "pointer",
+                opacity: shrinkwrapMode !== "off" ? 1 : 0.55,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={shrinkwrapMode !== "off"}
+                onChange={onToggleShrinkwrap}
+                style={{ accentColor: "#888", width: 18, height: 18 }}
+              />
+              shrinkwrap
+              {shrinkwrapMode !== "off" && (
+                <span style={{ opacity: 0.6, fontSize: 13, marginLeft: 4 }}>
+                  ({shrinkwrapMode})
+                </span>
+              )}
+            </label>
+          </div>
+        </Section>
+
+        <div style={{ marginTop: 20, borderTop: "1px solid var(--pg-border-subtle)", paddingTop: 16 }}>
+          <Link
+            href="/justification-comparison"
+            onClick={onClose}
+            style={{
+              display: "inline-block",
+              fontSize: 14,
+              color: "var(--pg-text-muted)",
+              textDecoration: "none",
+              padding: "8px 14px",
+              border: "1px solid var(--pg-border-default)",
+              borderRadius: 999,
+            }}
+          >
+            justification comparison →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ ...SMALL_CAPS_LABEL, opacity: 0.5, marginBottom: 8 }}>{label}</div>
+      {children}
+    </div>
   );
 }
