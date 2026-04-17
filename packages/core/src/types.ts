@@ -96,6 +96,19 @@ export interface InksetPlugin {
   key?: string;
   /** AST node types this plugin handles (e.g., "code", "math-display") */
   handles: string[];
+  /**
+   * Optional gate that decides whether this plugin should claim a given
+   * node. Lets multiple plugins register for the same block type and
+   * dispatch on finer criteria like language: a diagram plugin can take
+   * `lang === "mermaid"` while the code plugin handles everything else.
+   *
+   * Dispatch semantics: if any registered plugin's `canHandle` returns
+   * true, that plugin runs *exclusively* for this node — unguarded
+   * plugins are skipped. Among multiple canHandle-enabled plugins that
+   * match, first-registered wins. When no canHandle-enabled plugin
+   * claims the node, unguarded plugins chain as before.
+   */
+  canHandle?(node: ASTNode): boolean;
   /** If true, transform() re-runs when container width changes */
   widthSensitive?: boolean;
   /**

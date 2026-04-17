@@ -146,6 +146,16 @@ const INKSET_STYLES = `
     --inkset-math-raw-font-size: 14px;
     --inkset-math-raw-opacity: 0.6;
     --inkset-math-error-font-size: 13px;
+    --inkset-diagram-bg: transparent;
+    --inkset-diagram-padding: 16px 14px;
+    --inkset-diagram-radius: 14px;
+    --inkset-diagram-border: rgba(255, 255, 255, 0.06);
+    --inkset-diagram-header-padding: 4px 12px;
+    --inkset-diagram-header-font-size: 12px;
+    --inkset-diagram-header-opacity: 0.6;
+    --inkset-diagram-source-bg: rgba(255, 255, 255, 0.03);
+    --inkset-diagram-source-font-size: 13px;
+    --inkset-diagram-error-color: #f87171;
   }
 
   :where(.inkset-root) {
@@ -414,6 +424,76 @@ const INKSET_STYLES = `
     font-size: var(--inkset-math-raw-font-size);
     line-height: 1.4;
     opacity: var(--inkset-math-raw-opacity);
+  }
+
+  :where(.inkset-root .inkset-diagram-block) {
+    background: var(--inkset-diagram-bg);
+    border: 1px solid var(--inkset-diagram-border);
+    border-radius: var(--inkset-diagram-radius);
+    overflow: hidden;
+  }
+
+  :where(.inkset-root .inkset-diagram-header) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--inkset-diagram-header-padding);
+    font-size: var(--inkset-diagram-header-font-size);
+    line-height: 16px;
+    font-family: var(--inkset-font-family);
+    opacity: var(--inkset-diagram-header-opacity);
+    border-bottom: 1px solid var(--inkset-diagram-border);
+  }
+
+  :where(.inkset-root .inkset-diagram-copy) {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: var(--inkset-diagram-header-font-size);
+    line-height: 16px;
+    font-family: inherit;
+    color: inherit;
+    opacity: 0.9;
+  }
+
+  :where(.inkset-root .inkset-diagram-content) {
+    padding: var(--inkset-diagram-padding);
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+  }
+
+  :where(.inkset-root .inkset-diagram-content svg) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  :where(.inkset-root .inkset-diagram-source) {
+    margin: 0;
+    padding: var(--inkset-diagram-padding);
+    background: var(--inkset-diagram-source-bg);
+    font-family: var(--inkset-font-family-mono);
+    font-size: var(--inkset-diagram-source-font-size);
+    line-height: 1.5;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  :where(.inkset-root .inkset-diagram-error) {
+    padding: var(--inkset-diagram-padding);
+  }
+
+  :where(.inkset-root .inkset-diagram-error-label) {
+    color: var(--inkset-diagram-error-color);
+    font-family: var(--inkset-font-family-mono);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  :where(.inkset-root .inkset-diagram-error .inkset-diagram-source) {
+    padding: 8px 10px;
+    border-radius: 8px;
   }
 
   .inkset-loading {

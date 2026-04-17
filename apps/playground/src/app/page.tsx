@@ -6,10 +6,28 @@ import { Inkset, type InksetTheme } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
+import { createDiagramPlugin } from "@inkset/diagram";
+import { reading, mono } from "./fonts";
 
 const MARKDOWN_PANEL_WIDTH = 340;
 const CHAT_MAX_WIDTH = 760;
 const CHAT_SIDE_PADDING = 24;
+
+// Reading-column font family as a literal stack (must match CSS so pretext
+// measures with the same face the browser paints).
+const READING_FONT_FAMILY = `${reading.style.fontFamily}, "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif`;
+const READING_MONO_FAMILY = `${mono.style.fontFamily}, ui-monospace, SFMono-Regular, Menlo, monospace`;
+
+// ── Typography scale (1.2 ratio, base 13) ──────────────────────────
+// 11 · 13 · 15 · 18
+// Small-caps labels use 11. Controls/buttons use 13. Body/input/bubble use 15.
+// Brand uses 18.
+const SMALL_CAPS_LABEL = {
+  fontSize: 11,
+  letterSpacing: "0.03em",
+  fontVariantCaps: "all-small-caps" as const,
+  fontFeatureSettings: '"c2sc", "smcp"',
+};
 
 // ── Scenarios ──────────────────────────────────────────────────────
 
@@ -37,7 +55,7 @@ Your chat streams markdown. That markdown has code blocks, math, tables, and the
 
 ## What Inkset ships
 
-- **First-class plugins** for code, math, and tables — all streaming-aware, with shiki syntax highlighting (light + dark pair that follows the OS), KaTeX display and inline rendering, and CSV-copyable tables.
+- **First-class plugins** for code, math, tables, and diagrams — all streaming-aware, with shiki syntax highlighting (light + dark pair that follows the OS), KaTeX display and inline rendering, CSV-copyable tables, and Mermaid flowcharts/sequence/state/ER diagrams dynamic-imported so they don't bloat the bundle.
 - **A theming API that isn't a style override.** CSS variables for every knob, a typed \`theme\` prop that compiles to them, per-plugin behavior flags, \`unstyled\` for design-system takeover.
 - **Text that actually fits.** Shrinkwrap balances paragraphs to the width of their longest greedy line. Soft-hyphenation for awkward narrow columns.
 
@@ -140,6 +158,46 @@ function merge(a: number[], b: number[]): number[] {
 Stable, O(n log n) guaranteed, O(n) extra space. What most language standard libraries use internally for object arrays.`,
   },
   {
+    key: "diagram",
+    label: "draw me a diagram",
+    userPrompt: "Sketch the lifecycle of a streaming chat request from user input through response.",
+    assistant: `Sure — here's the round-trip for a typical chat completion, from keystroke to rendered response:
+
+\`\`\`mermaid
+sequenceDiagram
+  participant U as User
+  participant C as Chat UI
+  participant A as API
+  participant M as Model
+  U->>C: types prompt
+  C->>A: POST /messages (stream: true)
+  A->>M: forward prompt
+  M-->>A: token stream
+  A-->>C: SSE chunks
+  C-->>U: render as tokens arrive
+  M->>A: [DONE]
+  A->>C: close stream
+  C->>U: finalize block
+\`\`\`
+
+The UI renders each chunk the moment it arrives. Inkset measures the block once via pretext, then lays out with arithmetic, so the mid-stream reflow cost stays near zero.
+
+And here's a rougher state view of what the UI is actually tracking per message:
+
+\`\`\`mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Streaming: user submits
+  Streaming --> Streaming: token arrives
+  Streaming --> Settled: stream closes
+  Streaming --> Error: network/parse failure
+  Error --> Idle: retry
+  Settled --> Idle: new turn
+\`\`\`
+
+Every \` \`\`\`mermaid \` fence gets promoted to a real SVG diagram. The mermaid library is dynamic-imported on the first diagram seen, so your base bundle stays lean if your app never emits one.`,
+  },
+  {
     key: "math",
     label: "give me math",
     userPrompt: "Walk me through the linear algebra fundamentals I'd need for ML.",
@@ -211,6 +269,15 @@ const CODE_PLUGINS_BY_THEME: Record<string, ReturnType<typeof createCodePlugin>>
   light: createCodePlugin({ theme: "github-light" }),
   highContrast: createCodePlugin({ theme: "github-dark" }),
   compact: createCodePlugin({ theme: "github-dark" }),
+};
+// Mermaid's own theme names — "dark"/"neutral" for dark page, "default"/"neutral"
+// for light. Re-instantiated per theme key so the plugin `key` changes and
+// the pipeline re-renders existing diagrams on theme switch.
+const DIAGRAM_PLUGINS_BY_THEME: Record<string, ReturnType<typeof createDiagramPlugin>> = {
+  default: createDiagramPlugin({ theme: "dark" }),
+  light: createDiagramPlugin({ theme: "default" }),
+  highContrast: createDiagramPlugin({ theme: "dark" }),
+  compact: createDiagramPlugin({ theme: "dark" }),
 };
 const mathPlugin = createMathPlugin();
 const tablePlugin = createTablePlugin();
@@ -311,11 +378,20 @@ const paletteToCssVars = (p: PagePalette): Record<string, string> => ({
   "--pg-sidebar-code-text": p.sidebarCodeText,
 });
 
-const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme; palette: PagePalette }> = {
+// Shared typography defaults applied to every theme so the rendered column
+// always reads as a book: serif for body, editorial mono for inline code.
+const BASE_TYPOGRAPHY = {
+  fontFamily: READING_FONT_FAMILY,
+  fontFamilyMono: READING_MONO_FAMILY,
+};
+
+const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: PagePalette }> = {
   default: {
     label: "default",
     palette: DARK_PALETTE,
-    // Undefined theme → fall through to the CSS-var defaults in :where().
+    theme: {
+      typography: { ...BASE_TYPOGRAPHY },
+    },
   },
   light: {
     label: "light",
@@ -330,6 +406,7 @@ const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme; palette: Pa
         inlineCodeText: "#1a1a1a",
         hr: "rgba(0, 0, 0, 0.1)",
       },
+      typography: { ...BASE_TYPOGRAPHY },
       code: {
         background: "#f6f8fa",
         headerBorderColor: "rgba(0, 0, 0, 0.08)",
@@ -353,6 +430,7 @@ const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme; palette: Pa
         hr: "rgba(255, 255, 255, 0.4)",
       },
       typography: {
+        ...BASE_TYPOGRAPHY,
         headingWeights: { h1: 900, h2: 900, h3: 800, h4: 800 },
         headingTracking: { h1: "-0.02em", h2: "-0.015em", h3: "-0.01em", h4: "0" },
       },
@@ -366,6 +444,7 @@ const THEMES: Record<ThemeKey, { label: string; theme?: InksetTheme; palette: Pa
     palette: DARK_PALETTE,
     theme: {
       typography: {
+        ...BASE_TYPOGRAPHY,
         fontSize: 14,
         lineHeight: 1.45,
         headingSizes: { h1: "1.8em", h2: "1.4em", h3: "1.15em", h4: "1em" },
@@ -397,6 +476,7 @@ export default function PlaygroundPage() {
     code: true,
     math: true,
     table: true,
+    diagram: true,
   });
   const [hyphenationEnabled, setHyphenationEnabled] = useState(false);
   const [shrinkwrapMode, setShrinkwrapMode] = useState<"off" | "headings" | "on">("off");
@@ -419,6 +499,7 @@ export default function PlaygroundPage() {
       code: CODE_PLUGINS_BY_THEME[themeKey] ?? CODE_PLUGINS_BY_THEME.default,
       math: mathPlugin,
       table: tablePlugin,
+      diagram: DIAGRAM_PLUGINS_BY_THEME[themeKey] ?? DIAGRAM_PLUGINS_BY_THEME.default,
     };
     return Object.entries(enabledPlugins)
       .filter(([, enabled]) => enabled)
@@ -537,14 +618,22 @@ export default function PlaygroundPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: -0.2 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 18,
+              fontWeight: 600,
+              letterSpacing: "-0.015em",
+              fontFeatureSettings: '"ss01"',
+            }}
+          >
             inkset
           </h1>
-          <span style={{ fontSize: 12, opacity: 0.45 }}>playground</span>
+          <span style={{ ...SMALL_CAPS_LABEL, opacity: 0.55 }}>playground</span>
           <Link
             href="/justification-comparison"
             style={{
-              fontSize: 11.5,
+              fontSize: 13,
               color: "var(--pg-text-muted)",
               textDecoration: "none",
               padding: "3px 9px",
@@ -557,16 +646,16 @@ export default function PlaygroundPage() {
           </Link>
         </div>
 
-        <div style={{ display: "flex", gap: 14, alignItems: "center", fontSize: 12 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", fontSize: 13 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ opacity: 0.4, marginRight: 4 }}>theme</span>
+            <span style={{ ...SMALL_CAPS_LABEL, opacity: 0.5, marginRight: 4 }}>theme</span>
             {(Object.keys(THEMES) as ThemeKey[]).map((key) => (
               <button
                 key={key}
                 onClick={() => setThemeKey(key)}
                 style={{
                   padding: "3px 9px",
-                  fontSize: 11.5,
+                  fontSize: 13,
                   border:
                     themeKey === key
                       ? "1px solid var(--pg-border-strong)"
@@ -623,7 +712,9 @@ export default function PlaygroundPage() {
             />
             shrinkwrap
             {shrinkwrapMode !== "off" && (
-              <span style={{ opacity: 0.6, fontSize: 11 }}>({shrinkwrapMode})</span>
+              <span style={{ opacity: 0.6, fontSize: 11 }}>
+                ({shrinkwrapMode})
+              </span>
             )}
           </label>
 
@@ -672,10 +763,8 @@ export default function PlaygroundPage() {
           <div
             style={{
               padding: "10px 14px",
-              fontSize: 11,
-              letterSpacing: 0.4,
-              opacity: 0.5,
-              textTransform: "uppercase",
+              ...SMALL_CAPS_LABEL,
+              opacity: 0.55,
               borderBottom: "1px solid var(--pg-border-subtle)",
               display: "flex",
               justifyContent: "space-between",
@@ -696,10 +785,10 @@ export default function PlaygroundPage() {
             style={{
               flex: 1,
               padding: 14,
-              fontFamily:
-                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-              fontSize: 12.5,
-              lineHeight: 1.55,
+              fontFamily: READING_MONO_FAMILY,
+              fontSize: 13,
+              lineHeight: 1.6,
+              fontFeatureSettings: '"calt", "ss02"',
               background: "var(--pg-bg)",
               color: "var(--pg-sidebar-code-text)",
               border: "none",
@@ -812,10 +901,8 @@ function ScenarioStrip({
     >
       <span
         style={{
-          fontSize: 11,
-          opacity: 0.4,
-          letterSpacing: 0.4,
-          textTransform: "uppercase",
+          ...SMALL_CAPS_LABEL,
+          opacity: 0.5,
           alignSelf: "center",
           marginRight: 4,
         }}
@@ -828,7 +915,7 @@ function ScenarioStrip({
           onClick={() => onSelect(s.key)}
           style={{
             padding: "4px 10px",
-            fontSize: 12,
+            fontSize: 13,
             border:
               active === s.key
                 ? "1px solid var(--pg-border-strong)"
@@ -858,7 +945,7 @@ function UserBubble({ text }: { text: string }) {
           borderRadius: 18,
           background: "var(--pg-user-bubble-bg)",
           color: "var(--pg-user-bubble-text)",
-          fontSize: 14.5,
+          fontSize: 15,
           lineHeight: 1.5,
           boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset",
         }}
@@ -917,8 +1004,9 @@ function AssistantMessage({
           streaming={streaming}
           plugins={plugins}
           width={width}
+          font={READING_FONT_FAMILY}
           fontSize={15}
-          lineHeight={22}
+          lineHeight={24}
           blockMargin={12}
           hyphenation={hyphenation}
           shrinkwrap={shrinkwrap}
@@ -1029,10 +1117,8 @@ function ChatInput({
           >
             <div
               style={{
-                fontSize: 10,
-                letterSpacing: 0.4,
-                textTransform: "uppercase",
-                opacity: 0.35,
+                ...SMALL_CAPS_LABEL,
+                opacity: 0.4,
                 marginBottom: 6,
               }}
             >
@@ -1042,8 +1128,9 @@ function ChatInput({
               content={value}
               plugins={plugins}
               width={Math.max(0, width - 28)}
-              fontSize={14}
-              lineHeight={20}
+              font={READING_FONT_FAMILY}
+              fontSize={15}
+              lineHeight={22}
               blockMargin={8}
               hyphenation={hyphenation}
               theme={theme}
@@ -1091,7 +1178,7 @@ function ChatInput({
               border: "none",
               outline: "none",
               color: "var(--pg-text-primary)",
-              fontSize: 14.5,
+              fontSize: 15,
               lineHeight: 1.45,
               fontFamily: "inherit",
               // border-box so assigning scrollHeight back to `height` converges
@@ -1130,8 +1217,8 @@ function ChatInput({
         <div
           style={{
             marginTop: 8,
-            fontSize: 11,
-            opacity: 0.35,
+            fontSize: 13,
+            opacity: 0.4,
             textAlign: "center",
           }}
         >

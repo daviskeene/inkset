@@ -87,6 +87,18 @@ export type InksetTheme = {
     rawFontSize?: string;
     rawOpacity?: number;
   };
+  diagram?: {
+    background?: string;
+    padding?: string;
+    radius?: string;
+    borderColor?: string;
+    headerPadding?: string;
+    headerFontSize?: string;
+    headerOpacity?: number;
+    sourceBg?: string;
+    sourceFontSize?: string;
+    errorColor?: string;
+  };
 };
 
 /** Type-safe record of `--inkset-*` CSS variables the root can accept. */
@@ -180,6 +192,21 @@ export const themeToCssVars = (theme: InksetTheme | undefined): InksetCssVars =>
     set("--inkset-table-cell-padding", table.cellPadding);
     set("--inkset-table-zebra-bg", table.zebraBg);
     set("--inkset-table-row-hover-bg", table.rowHoverBg);
+  }
+
+  // ── Diagram ─────────────────────────────────────────────────
+  const diagram = theme.diagram;
+  if (diagram) {
+    set("--inkset-diagram-bg", diagram.background);
+    set("--inkset-diagram-padding", diagram.padding);
+    set("--inkset-diagram-radius", diagram.radius);
+    set("--inkset-diagram-border", diagram.borderColor);
+    set("--inkset-diagram-header-padding", diagram.headerPadding);
+    set("--inkset-diagram-header-font-size", diagram.headerFontSize);
+    set("--inkset-diagram-header-opacity", diagram.headerOpacity);
+    set("--inkset-diagram-source-bg", diagram.sourceBg);
+    set("--inkset-diagram-source-font-size", diagram.sourceFontSize);
+    set("--inkset-diagram-error-color", diagram.errorColor);
   }
 
   // ── Math ────────────────────────────────────────────────────

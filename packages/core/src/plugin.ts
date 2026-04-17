@@ -41,8 +41,31 @@ export class PluginRegistry {
       return node as EnrichedNode;
     }
 
+    // Exclusive dispatch: if any canHandle-enabled plugin claims this node
+    // (e.g. a diagram plugin matching `lang === "mermaid"`), it runs alone.
+    // Prevents the diagram output from being stomped by an unguarded code
+    // plugin that would otherwise also transform the same block type.
+    const specific = handlers.find((p) => p.canHandle && p.canHandle(node));
+    if (specific) {
+      try {
+        const enriched = specific.transform(node as EnrichedNode, ctx);
+        enriched.transformedBy = specific.name;
+        return enriched;
+      } catch (err) {
+        console.warn(
+          `[inkset] Plugin "${specific.name}" threw during transform for block ${node.blockId}:`,
+          err,
+        );
+        return node as EnrichedNode;
+      }
+    }
+
+    // No lang-scoped claim → chain unguarded plugins in registration order.
+    // Preserves the pre-canHandle chaining behavior for back-compat with
+    // collaborative plugins (e.g. linkify + highlight on the same block).
     let enriched: EnrichedNode = node as EnrichedNode;
     for (const plugin of handlers) {
+      if (plugin.canHandle) continue;
       try {
         enriched = plugin.transform(enriched, ctx);
         enriched.transformedBy = plugin.name;

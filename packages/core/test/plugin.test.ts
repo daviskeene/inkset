@@ -124,4 +124,65 @@ describe("PluginRegistry", () => {
     expect(registry.all()).toHaveLength(0);
     expect(registry.getHandlers("code")).toEqual([]);
   });
+
+  describe("canHandle dispatch", () => {
+    const makeCodeNode = (lang: string): ASTNode => ({
+      ...makeNode("code"),
+      lang,
+    });
+
+    it("a canHandle match runs exclusively, skipping unguarded plugins for the same type", () => {
+      const registry = new PluginRegistry();
+      const code = makePlugin("code", ["code"]);
+      const diagram: InksetPlugin = {
+        name: "diagram",
+        handles: ["code"],
+        canHandle: (node) => node.lang === "mermaid",
+        transform: (node) => ({ ...node, transformedBy: "diagram", pluginData: { by: "diagram" } }),
+        component: () => null,
+      };
+
+      registry.register(code);
+      registry.register(diagram);
+
+      const result = registry.transform(makeCodeNode("mermaid"), ctx);
+      expect(result.transformedBy).toBe("diagram");
+      expect(result.pluginData).toEqual({ by: "diagram" });
+    });
+
+    it("unguarded plugin runs when canHandle declines", () => {
+      const registry = new PluginRegistry();
+      const code = makePlugin("code", ["code"]);
+      const diagram: InksetPlugin = {
+        name: "diagram",
+        handles: ["code"],
+        canHandle: (node) => node.lang === "mermaid",
+        transform: (node) => ({ ...node, transformedBy: "diagram", pluginData: { by: "diagram" } }),
+        component: () => null,
+      };
+
+      registry.register(code);
+      registry.register(diagram);
+
+      const result = registry.transform(makeCodeNode("typescript"), ctx);
+      expect(result.transformedBy).toBe("code");
+      expect(result.pluginData).toEqual({ by: "code" });
+    });
+
+    it("registration order does not affect specific-vs-generic priority", () => {
+      const registry = new PluginRegistry();
+      const diagram: InksetPlugin = {
+        name: "diagram",
+        handles: ["code"],
+        canHandle: (node) => node.lang === "mermaid",
+        transform: (node) => ({ ...node, transformedBy: "diagram", pluginData: { by: "diagram" } }),
+        component: () => null,
+      };
+      registry.register(diagram);
+      registry.register(makePlugin("code", ["code"]));
+
+      const result = registry.transform(makeCodeNode("mermaid"), ctx);
+      expect(result.transformedBy).toBe("diagram");
+    });
+  });
 });
