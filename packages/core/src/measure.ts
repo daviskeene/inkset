@@ -136,6 +136,13 @@ const getPretext = async (): Promise<PretextModule | null> => {
   }
 };
 
+// Kick off the pretext dynamic-import the moment this module is evaluated,
+// so the chunk is fetching (and usually resolved) before <Inkset> mounts
+// and init() awaits it. Guarded for SSR — server bundles skip the fetch.
+if (typeof window !== "undefined") {
+  void getPretext();
+}
+
 // ── Measure layer ──────────────────────────────────────────────────
 
 export type MeasureOptions = {

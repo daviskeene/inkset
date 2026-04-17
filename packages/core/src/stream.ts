@@ -135,23 +135,39 @@ export class StreamingPipeline {
         })
       : Promise.resolve();
 
-    // Preload heavy plugin deps (shiki, katex, etc.) before the first measure.
-    // Without this the first frame renders raw fallback text until each plugin
-    // component finishes loading its dep, producing visible flicker.
-    const pluginPreloads = this.registry.all().map((plugin) =>
-      plugin.preload
-        ? plugin.preload().catch((err: unknown) => {
-            console.warn(`[inkset] plugin "${plugin.name}" preload failed:`, err);
-          })
-        : Promise.resolve(),
-    );
+    // Fire plugin preloads in the background. Blocking the first render on
+    // shiki (~1–2 MB) + katex + mermaid (~650 KB) added hundreds of ms to
+    // initial paint. Plugin components already degrade to raw source while
+    // their dep loads and upgrade in place once it resolves, so the trade
+    // is a brief pop-in on code/math/diagram blocks in exchange for snappy
+    // paragraph/heading/list rendering. Consumers who need no-flicker can
+    // call `warmPlugins()` explicitly before rendering.
+    void this.warmPlugins();
 
-    await Promise.all([
-      this.measureLayer.init(),
-      hyphenationPromise,
-      ...pluginPreloads,
-    ]);
+    // Only pretext + fonts + hyphenator block first render. These are small
+    // and typically already cached by the time init() runs (see the eager
+    // pretext import in measure.ts).
+    await Promise.all([this.measureLayer.init(), hyphenationPromise]);
     this.initialized = true;
+  }
+
+  /**
+   * Await every registered plugin's `preload()`. Useful when a consumer
+   * wants a fully-upgraded first paint (no raw → highlighted pop-in for
+   * code/math/diagram) at the cost of a slower initial render. Background-
+   * fired during `init()` already, so calling this afterwards reuses the
+   * in-flight promises.
+   */
+  async warmPlugins(): Promise<void> {
+    await Promise.all(
+      this.registry.all().map((plugin) =>
+        plugin.preload
+          ? plugin.preload().catch((err: unknown) => {
+              console.warn(`[inkset] plugin "${plugin.name}" preload failed:`, err);
+            })
+          : Promise.resolve(),
+      ),
+    );
   }
 
   private async loadHyphenator(): Promise<void> {
