@@ -48,56 +48,30 @@ const SCENARIO_LIST: Scenario[] = [
     key: "mixed",
     label: "why inkset",
     userPrompt: "What's the best way to render AI chat output in React?",
-    assistant: `# Tl;dr — Inkset is the best way to render AI output in React
+    assistant: `# Tl;dr — Why Inkset
 
-Your chat streams markdown. That markdown has code blocks, math, tables, and the user is reading it on a phone, a laptop, a 34" ultrawide, or a resized window they forgot to close. Every existing option makes you pick your pain.
+If you've worked on AI chat interfaces in React, you've probably run into the same thing I have: there isn't one clear standard for rendering model output. There are a few competing approaches, and they all get awkward once you care about streaming, code blocks, math, diagrams, and responsive layout at the same time.
 
-## What hurts today
+Some tools are great at basic markdown. Some are flexible, but only after wiring together half a rendering stack yourself. Some feel fine until the window resizes mid-stream and the whole interface starts reflowing. Inkset comes from running into those issues repeatedly and wanting a cleaner foundation.
 
-- **Streamdown** is fast but DOM-heavy. Streaming a long response into a narrow column produces visible jitter. Code highlighting is optional. Math isn't built in.
-- **react-markdown** is mature but means wiring remark + rehype + KaTeX + shiki yourself and fighting plugin ordering for every edge case.
-- **Tailwind \`prose\`** bolted onto either: customizing anything past dark/light means wrestling specificity.
+## Why pretext matters
 
-## What Inkset ships
-
-- **First-class plugins** for code, math, tables, and diagrams — all streaming-aware, with shiki syntax highlighting (light + dark pair that follows the OS), KaTeX display and inline rendering, CSV-copyable tables, and Mermaid flowcharts/sequence/state/ER diagrams dynamic-imported so they don't bloat the bundle.
-- **A theming API that isn't a style override.** CSS variables for every knob, a typed \`theme\` prop that compiles to them, per-plugin behavior flags, \`unstyled\` for design-system takeover.
-- **Text that actually fits.** Shrinkwrap balances paragraphs to the width of their longest greedy line. Soft-hyphenation for awkward narrow columns.
-
-> Try the chips above: switch themes, toggle shrinkwrap, watch the code block invert with your OS.
-
-## Plus: resize without jitter
-
-\`getBoundingClientRect()\` forces a browser reflow on every measurement. Do that per streamed token and you're fighting the rendering engine. Inkset measures once via pretext, then re-layouts with arithmetic:
+Inkset leans on **pretext** for text measurement and layout. That gives us a useful split: measure once, then re-layout with arithmetic instead of repeated DOM reads.
 
 \`\`\`ts
 const prepared = pretext.prepare(text, "400 15px system-ui");
 const layout = pretext.layout(prepared, containerWidth, 22);
-
-// Width changes are just math now.
-// Resize 1000 blocks in under a millisecond.
 \`\`\`
 
-The cost on resize drops from:
+That unlocks real performance wins for streaming UIs, where content is arriving continuously and the layout still needs to feel stable. It also creates a solid base for composable plugins, so code, math, tables, and diagrams can participate in the same rendering pipeline instead of feeling bolted on.
 
-$$t_{resize} \\approx t_{reflow} + t_{measure} + t_{patch} + t_{paint}$$
+## What Inkset is trying to be
 
-to:
+I want Inkset to be the best way to display AI-generated output in React. Not just markdown, but the full shape of a response: text, code, diagrams, math, whatever the model produces.
 
-$$t_{resize} \\approx t_{arithmetic} + t_{paint}$$
+Speed is a big part of that, but it isn't the whole job. If the output jitters, falls apart on resize, or looks like a pile of plugins taped together, it doesn't matter how fast the renderer is.
 
-Drag the window edge mid-stream to feel it.
-
-## How it stacks up
-
-| | Streamdown | react-markdown | Inkset |
-|---|---|---|---|
-| Streaming-aware | Yes | With effort | Yes |
-| Code highlighting | Plugin | Wire yourself | Built-in + light/dark pair |
-| Math | Not included | Wire yourself | Built-in (KaTeX) |
-| Resize cost | Reflow per block | Reflow per block | Arithmetic only |
-| Theming | Tailwind classes | Your CSS | CSS vars + typed theme + \`unstyled\` |
-| Text balancing | — | — | Shrinkwrap + hyphenation |`,
+Use the controls above to switch themes, toggle shrinkwrap, and resize the layout mid-stream. That's the standard Inkset is chasing: output that stays readable, stable, and polished when it's actually dropped into a real product.`,
   },
   {
     key: "code",
@@ -652,8 +626,8 @@ export default function PlaygroundPage() {
             playground
           </span>
           <Link
-            href="/justification-comparison"
-            className="pg-justification-link"
+            href="/compare"
+            className="pg-compare-link"
             style={{
               fontSize: 13,
               color: "var(--pg-text-muted)",
@@ -664,7 +638,7 @@ export default function PlaygroundPage() {
               marginLeft: 4,
             }}
           >
-            justification →
+            compare →
           </Link>
         </div>
 
@@ -1640,7 +1614,7 @@ function MobileMenu({
 
         <div style={{ marginTop: 20, borderTop: "1px solid var(--pg-border-subtle)", paddingTop: 16 }}>
           <Link
-            href="/justification-comparison"
+            href="/compare"
             onClick={onClose}
             style={{
               display: "inline-block",
@@ -1652,7 +1626,7 @@ function MobileMenu({
               borderRadius: 999,
             }}
           >
-            justification comparison →
+            side-by-side comparison →
           </Link>
         </div>
       </div>

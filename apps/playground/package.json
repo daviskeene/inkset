@@ -14,11 +14,19 @@
     "@inkset/math": "workspace:*",
     "@inkset/react": "workspace:*",
     "@inkset/table": "workspace:*",
+    "@streamdown/math": "^1.0.2",
+    "@streamdown/mermaid": "^1.0.2",
     "katex": "^0.16.0",
     "mermaid": "^11.12.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.0",
+    "remark-math": "^6.0.0",
+    "streamdown": "^2.5.0"
   },
   "devDependencies": {
     "@types/node": "25.6.0",
