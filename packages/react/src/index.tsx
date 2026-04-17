@@ -138,7 +138,7 @@ const INKSET_STYLES = `
     --inkset-table-cell-padding: 10px 12px;
     --inkset-table-header-font-size: 12px;
     --inkset-table-header-weight: 700;
-    --inkset-table-header-tracking: 0.05em;
+    --inkset-table-header-tracking: 0;
     --inkset-table-header-padding: 2px 8px;
     --inkset-math-display-padding: 8px 0;
     --inkset-math-display-line-height: 1.2;
@@ -381,7 +381,6 @@ const INKSET_STYLES = `
     color: var(--inkset-table-header-text);
     font-size: var(--inkset-table-header-font-size);
     font-weight: var(--inkset-table-header-weight);
-    text-transform: uppercase;
     letter-spacing: var(--inkset-table-header-tracking);
   }
 
@@ -776,7 +775,15 @@ const BlockRenderer = memo(
         `${contentMaxWidth}px`;
     }
 
-    // Capture real DOM height so frozen absolute layout inherits it seamlessly
+    // Capture real DOM height so frozen absolute layout inherits it seamlessly.
+    //
+    // We read the inner child's height, not the outer wrapper's. The wrapper
+    // carries `minHeight: <estimate>` as an inline style, so its
+    // getBoundingClientRect floors at the estimate — if a plugin's measure()
+    // over-reserves (common for content-sized output like mermaid SVGs), the
+    // observer reports the inflated height back and the block gets stuck
+    // at the estimate forever. Reading firstElementChild's bbh gives the
+    // true content height so the layout can shrink the block to fit.
     useLayoutEffect(() => {
       if (!observeHeight) return;
 
@@ -784,7 +791,10 @@ const BlockRenderer = memo(
       if (!element) return;
 
       const reportHeight = (priority: "sync" | "deferred") => {
-        const nextHeight = Math.ceil(element.getBoundingClientRect().height);
+        const inner = element.firstElementChild as HTMLElement | null;
+        const nextHeight = inner
+          ? Math.ceil(inner.getBoundingClientRect().height)
+          : Math.ceil(element.getBoundingClientRect().height);
         if (nextHeight > 0) {
           onHeightChange(block.blockId, node, width, nextHeight, priority);
         }
@@ -801,7 +811,12 @@ const BlockRenderer = memo(
         reportHeight("deferred");
       });
 
+      // Observe the inner child too so content-driven size changes (e.g.
+      // mermaid injecting an SVG asynchronously) are picked up without
+      // relying on the outer wrapper's bbh changing.
       observer.observe(element);
+      const inner = element.firstElementChild;
+      if (inner) observer.observe(inner);
       return () => observer.disconnect();
     }, [block.blockId, height, node, observeHeight, onHeightChange, positioning, width]);
 
