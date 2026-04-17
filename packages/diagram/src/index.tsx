@@ -32,35 +32,38 @@ const estimateDiagramContentHeight = (source: string): number => {
   const matches = (re: RegExp) => (source.match(re) ?? []).length;
 
   if (firstLine.startsWith("sequencediagram")) {
+    // ~25px header band per participant + ~25px per message row.
     const participants = Math.max(2, matches(/^\s*participant\s+/gm));
     const messages = matches(/--?>>?|--?x|--?\)/g);
-    return 100 + participants * 30 + messages * 30;
+    return 80 + participants * 25 + messages * 28;
   }
   if (
     firstLine.startsWith("statediagram") ||
     firstLine.startsWith("flowchart") ||
     firstLine.startsWith("graph")
   ) {
+    // State/flow diagrams lay out in 2D — per-arrow cost is smaller than
+    // the naive "one row per arrow" because mermaid fans them out
+    // horizontally where possible.
     const arrows = Math.max(3, matches(/-->/g));
-    return 180 + arrows * 55;
+    return 140 + arrows * 35;
   }
   if (firstLine.startsWith("classdiagram")) {
     const classes = Math.max(2, matches(/^\s*class\s+/gm));
-    return 180 + classes * 90;
+    return 160 + classes * 80;
   }
   if (firstLine.startsWith("erdiagram")) {
     const entities = Math.max(2, matches(/\{[^}]*\}/g));
-    return 180 + entities * 110;
+    return 160 + entities * 100;
   }
   if (firstLine.startsWith("gantt")) {
     const tasks = matches(/^\s*[^\n]+:\s*/gm);
-    return 160 + tasks * 28;
+    return 140 + tasks * 26;
   }
 
-  // Unrecognized type: fall back to a line-count heuristic with generous
-  // per-line factor so wrapped text doesn't undermeasure.
+  // Unrecognized type: fall back to a line-count heuristic.
   const lines = source.split("\n").filter((l) => l.trim()).length;
-  return 120 + lines * 48;
+  return 100 + lines * 42;
 };
 
 // ── Mermaid lazy loader ───────────────────────────────────────────
