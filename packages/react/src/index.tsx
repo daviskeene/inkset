@@ -775,15 +775,7 @@ const BlockRenderer = memo(
         `${contentMaxWidth}px`;
     }
 
-    // Capture real DOM height so frozen absolute layout inherits it seamlessly.
-    //
-    // We read the inner child's height, not the outer wrapper's. The wrapper
-    // carries `minHeight: <estimate>` as an inline style, so its
-    // getBoundingClientRect floors at the estimate — if a plugin's measure()
-    // over-reserves (common for content-sized output like mermaid SVGs), the
-    // observer reports the inflated height back and the block gets stuck
-    // at the estimate forever. Reading firstElementChild's bbh gives the
-    // true content height so the layout can shrink the block to fit.
+    // Capture real DOM height so frozen absolute layout inherits it seamlessly
     useLayoutEffect(() => {
       if (!observeHeight) return;
 
@@ -791,10 +783,7 @@ const BlockRenderer = memo(
       if (!element) return;
 
       const reportHeight = (priority: "sync" | "deferred") => {
-        const inner = element.firstElementChild as HTMLElement | null;
-        const nextHeight = inner
-          ? Math.ceil(inner.getBoundingClientRect().height)
-          : Math.ceil(element.getBoundingClientRect().height);
+        const nextHeight = Math.ceil(element.getBoundingClientRect().height);
         if (nextHeight > 0) {
           onHeightChange(block.blockId, node, width, nextHeight, priority);
         }
@@ -811,12 +800,7 @@ const BlockRenderer = memo(
         reportHeight("deferred");
       });
 
-      // Observe the inner child too so content-driven size changes (e.g.
-      // mermaid injecting an SVG asynchronously) are picked up without
-      // relying on the outer wrapper's bbh changing.
       observer.observe(element);
-      const inner = element.firstElementChild;
-      if (inner) observer.observe(inner);
       return () => observer.disconnect();
     }, [block.blockId, height, node, observeHeight, onHeightChange, positioning, width]);
 
