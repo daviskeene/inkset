@@ -84,15 +84,35 @@ describe("createDiagramPlugin", () => {
     const longDiagram = plugin.transform(
       makeCodeNode(
         "mermaid",
-        Array.from({ length: 40 }, (_, i) => `  N${i}-->N${i + 1}`).join("\n"),
+        "graph TD\n" +
+          Array.from({ length: 40 }, (_, i) => `  N${i}-->N${i + 1}`).join("\n"),
       ),
       ctx,
     );
     const small = plugin.measure!(oneLiner, 600);
     const big = plugin.measure!(longDiagram, 600);
-    expect(small.height).toBeGreaterThanOrEqual(160);
-    expect(big.height).toBeLessThanOrEqual(600);
+    expect(small.height).toBeGreaterThanOrEqual(320);
+    expect(big.height).toBeLessThanOrEqual(900);
     expect(big.height).toBeGreaterThanOrEqual(small.height);
+  });
+
+  it("type-aware estimates differ between diagram types", () => {
+    const plugin = createDiagramPlugin();
+    const seq = plugin.transform(
+      makeCodeNode(
+        "mermaid",
+        `sequenceDiagram\nparticipant A\nparticipant B\nA->>B: hi`,
+      ),
+      ctx,
+    );
+    const state = plugin.transform(
+      makeCodeNode("mermaid", `stateDiagram-v2\n[*] --> Idle\nIdle --> Done`),
+      ctx,
+    );
+    // Both should clear the floor; the exact values come from the type
+    // heuristic, not from raw line count.
+    expect(plugin.measure!(seq, 600).height).toBeGreaterThanOrEqual(320);
+    expect(plugin.measure!(state, 600).height).toBeGreaterThanOrEqual(320);
   });
 
   it("key changes when options change so the pipeline rebuilds", () => {

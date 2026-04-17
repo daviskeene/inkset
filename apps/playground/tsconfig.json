@@ -32,6 +32,9 @@
       ],
       "@inkset/table": [
         "../../packages/table/src/index.tsx"
+      ],
+      "@inkset/diagram": [
+        "../../packages/diagram/src/index.tsx"
       ]
     },
     "plugins": [

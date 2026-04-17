@@ -17,20 +17,61 @@ import {
 // Height estimate used before the real SVG measures itself. The layout
 // engine's observed-height feedback loop corrects the layout after paint;
 // getting the estimate close just reduces visible layout shift.
-const DIAGRAM_LINE_HEIGHT = 36;
 const DIAGRAM_HEADER_HEIGHT = 24;
 const DIAGRAM_PADDING = 32;
-const DIAGRAM_MIN_HEIGHT = 160;
-const DIAGRAM_MAX_ESTIMATE = 600;
+const DIAGRAM_MIN_HEIGHT = 320;
+const DIAGRAM_MAX_ESTIMATE = 900;
 const COPY_FEEDBACK_DURATION_MS = 2000;
+
+// Diagram-type-aware height estimate. Returns the expected *content* height
+// (before header + padding) for a given mermaid source. The real SVG is
+// measured via ResizeObserver after paint, but a close upfront estimate
+// avoids the layout-shift/overlap flicker on first render.
+const estimateDiagramContentHeight = (source: string): number => {
+  const firstLine = source.trim().split("\n")[0].trim().toLowerCase();
+  const matches = (re: RegExp) => (source.match(re) ?? []).length;
+
+  if (firstLine.startsWith("sequencediagram")) {
+    const participants = Math.max(2, matches(/^\s*participant\s+/gm));
+    const messages = matches(/--?>>?|--?x|--?\)/g);
+    return 100 + participants * 30 + messages * 30;
+  }
+  if (
+    firstLine.startsWith("statediagram") ||
+    firstLine.startsWith("flowchart") ||
+    firstLine.startsWith("graph")
+  ) {
+    const arrows = Math.max(3, matches(/-->/g));
+    return 180 + arrows * 55;
+  }
+  if (firstLine.startsWith("classdiagram")) {
+    const classes = Math.max(2, matches(/^\s*class\s+/gm));
+    return 180 + classes * 90;
+  }
+  if (firstLine.startsWith("erdiagram")) {
+    const entities = Math.max(2, matches(/\{[^}]*\}/g));
+    return 180 + entities * 110;
+  }
+  if (firstLine.startsWith("gantt")) {
+    const tasks = matches(/^\s*[^\n]+:\s*/gm);
+    return 160 + tasks * 28;
+  }
+
+  // Unrecognized type: fall back to a line-count heuristic with generous
+  // per-line factor so wrapped text doesn't undermeasure.
+  const lines = source.split("\n").filter((l) => l.trim()).length;
+  return 120 + lines * 48;
+};
 
 // ── Mermaid lazy loader ───────────────────────────────────────────
 
+// Structural subset of mermaid's exported shape — lets us call the two
+// methods we need without pulling in mermaid's full types, and stays
+// loose enough that both `mermaid@10` and `mermaid@11` satisfy it.
 type MermaidModule = {
   default: {
     initialize: (config: Record<string, unknown>) => void;
     render: (id: string, text: string) => Promise<{ svg: string; bindFunctions?: (el: Element) => void }>;
-    parse?: (text: string) => Promise<boolean>;
   };
 };
 
@@ -278,11 +319,15 @@ export const createDiagramPlugin = (options?: DiagramPluginOptions): InksetPlugi
 
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
       const source = (node.pluginData?.source as string) ?? "";
-      const lines = source.split("\n").filter((l) => l.trim()).length;
       const headerSpace = (node.pluginData?.showHeader as boolean) === false
         ? 0
         : DIAGRAM_HEADER_HEIGHT;
-      const estimated = lines * DIAGRAM_LINE_HEIGHT + headerSpace + DIAGRAM_PADDING;
+      // Type-aware content estimate + chrome. The ResizeObserver feedback
+      // in the React layer corrects to real SVG height after paint; this
+      // estimate just aims to keep the initial paint close enough that
+      // the layout shift doesn't overlap the next block.
+      const estimated =
+        estimateDiagramContentHeight(source) + headerSpace + DIAGRAM_PADDING;
       return {
         width: maxWidth,
         height: Math.max(DIAGRAM_MIN_HEIGHT, Math.min(DIAGRAM_MAX_ESTIMATE, estimated)),
