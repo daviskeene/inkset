@@ -23,7 +23,7 @@
     "pack:dry-run": "npm_config_cache=.npm-cache pnpm -r exec npm pack --json --dry-run",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "changeset publish --provenance",
+    "release": "changeset publish",
     "clean": "turbo clean"
   },
   "devDependencies": {

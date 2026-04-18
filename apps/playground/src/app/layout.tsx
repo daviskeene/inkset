@@ -8,13 +8,50 @@ import { RootChrome } from "../components/root-chrome";
 // KaTeX webfonts arrived.
 import "katex/dist/katex.min.css";
 
+const SITE_URL = "https://inkset.dev";
+const SITE_NAME = "Inkset";
+const SITE_TAGLINE = "a rendering library for AI chat UIs in React";
+const SITE_DESCRIPTION =
+  "Inkset is a streaming-first markdown renderer for React: pretext-powered layout, stable during token-by-token streams, plugin-driven for code, math, tables, and diagrams.";
+
 export const metadata: Metadata = {
-  title: "Inkset Playground",
-  description: "Interactive demo of pretext-powered streaming markdown rendering",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
   icons: {
     icon: "/inkset-mark.svg",
     shortcut: "/inkset-mark.svg",
     apple: "/inkset-mark.svg",
+  },
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+    },
   },
 };
 
