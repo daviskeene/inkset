@@ -9,13 +9,14 @@ export type { TokenGate, CreateTokenGateOptions } from "./gate";
 
 export { wrapBlockDelta, splitByWord, splitByChar } from "./wrap";
 export type { WrapOptions, WrapResult } from "./wrap";
-export { registerShader, hasShader, listRegisteredShaders, loadShaderPreset } from "./shader";
+export { createShaderRegistry, defaultShaderRegistry, resolveShaderSource } from "./shader";
 
 export type {
   ChunkingMode,
   ThrottleOptions,
-  AnimateOptions,
-  AnimationPreset,
+  TimelineOptions,
+  CssRevealOptions,
+  CssRevealPreset,
   StaggerOrder,
   ShaderOptions,
   ShaderToken,
@@ -23,7 +24,9 @@ export type {
   ShaderInstance,
   ShaderPreset,
   ShaderLoader,
+  ShaderSource,
   ShaderConfig,
+  ShaderRegistry,
   RevealProp,
   RevealComponent,
   RevealComponentProps,

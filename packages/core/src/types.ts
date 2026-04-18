@@ -144,9 +144,7 @@ export type StreamEvent =
 
 // ── Inkset options ───────────────────────────────────────────────
 
-export type HyphenationOption =
-  | boolean
-  | { lang: "en-us" };
+export type HyphenationOption = boolean | { lang: "en-us" };
 
 /**
  * CSS `text-wrap` values. `"pretty"` asks the browser for its best
@@ -170,10 +168,7 @@ export type TextWrapOption = "wrap" | "balance" | "pretty" | "stable";
  * - `true`: apply to everything text-shaped (headings, paragraphs,
  *   blockquotes, list items).
  */
-export type ShrinkwrapOption =
-  | boolean
-  | "headings"
-  | "paragraphs";
+export type ShrinkwrapOption = boolean | "headings" | "paragraphs";
 
 /**
  * Heading metric tuples indexed h1..h4 (h5 and h6 inherit h4). Kept as fixed-

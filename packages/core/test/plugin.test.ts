@@ -87,7 +87,9 @@ describe("PluginRegistry", () => {
     const broken: InksetPlugin = {
       name: "broken",
       handles: ["code"],
-      transform: () => { throw new Error("plugin crash"); },
+      transform: () => {
+        throw new Error("plugin crash");
+      },
       component: () => null,
     };
     registry.register(broken);

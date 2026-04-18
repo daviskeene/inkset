@@ -34,7 +34,9 @@ describe("Inkset reveal session", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
 
     originalResizeObserver = globalThis.ResizeObserver;
     globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
@@ -86,21 +88,15 @@ describe("Inkset reveal session", () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
     globalThis.ResizeObserver = originalResizeObserver as typeof ResizeObserver;
-    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+      .IS_REACT_ACT_ENVIRONMENT;
   });
 
   it("drops reveal mode once a throttled stream has fully drained", async () => {
     const content = "Alpha beta gamma delta";
 
     await act(async () => {
-      root.render(
-        <Inkset
-          content={content}
-          streaming
-          width={320}
-          reveal={{}}
-        />,
-      );
+      root.render(<Inkset content={content} streaming width={320} reveal={{}} />);
     });
     await flushMicrotasks();
 
@@ -121,14 +117,16 @@ describe("Inkset reveal session", () => {
     await flushMicrotasks();
 
     await act(async () => {
-      root.render(
-        <Inkset
-          content={content}
-          streaming={false}
-          width={320}
-          reveal={{}}
-        />,
-      );
+      root.render(<Inkset content={content} streaming={false} width={320} reveal={{}} />);
+    });
+    await flushMicrotasks();
+
+    // Drain + post-drain hold (timeline.durationMs + maxSpanMs). Use the
+    // async advance so microtasks drain between timer ticks — without it the
+    // gate's .finally that schedules the hold timer queues after the sync
+    // advance completes and the hold never fires within the window.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
     });
     await flushMicrotasks();
 
@@ -140,5 +138,86 @@ describe("Inkset reveal session", () => {
     expect(container.querySelector("[data-inkset-reveal-token]")).toBeNull();
     expect(container.querySelector(".inkset-aria-mirror")).toBeNull();
     expect(getRoot().getAttribute("aria-hidden")).toBeNull();
+  });
+
+  it("wraps tail tokens when a throttled + animated stream drains", async () => {
+    // Regression: without the post-drain hold, the last setDisplayedContent
+    // and setRevealDrainActive(false) batched into one render where session
+    // was already false, the wrap pass skipped, and the tail tokens landed
+    // as plain text with no blur-in animation.
+    const partial = "Alpha beta";
+    const full = "Alpha beta gamma delta";
+    const reveal = {
+      throttle: { delayInMs: 10, chunking: "word" as const },
+      timeline: { durationMs: 120, stagger: 10 },
+      css: { preset: "blurIn" as const },
+    };
+
+    await act(async () => {
+      root.render(<Inkset content={partial} streaming width={320} reveal={reveal} />);
+    });
+    await flushMicrotasks();
+    await act(async () => {
+      vi.advanceTimersByTime(120);
+    });
+    await flushMicrotasks();
+
+    // Switch to settled state with the tail appended. The gate drains the
+    // delta through the pipeline.
+    await act(async () => {
+      root.render(<Inkset content={full} streaming={false} width={320} reveal={reveal} />);
+    });
+    await flushMicrotasks();
+
+    // Advance through the gate's drain cadence so all chunks emit. Async
+    // variant drains microtasks (notably the flush().finally that schedules
+    // the post-drain hold) between timer ticks.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    await flushMicrotasks();
+
+    // The wrap is delta-aware: only the tokens produced during the current
+    // tick carry data-inkset-reveal-token. Previously-wrapped tokens revert
+    // to plain text on subsequent ticks after their animation fires. So the
+    // LAST emitted token ("delta") is what survives at the end of drain —
+    // which is exactly the one the bug used to drop. Before the fix, the
+    // final emit and setRevealDrainActive(false) batched into one render
+    // where the session had already closed, the wrap pass skipped, and
+    // "delta" rendered as plain text with no blur-in.
+    const tokenTexts = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-inkset-reveal-token]"),
+    ).map((el) => el.textContent ?? "");
+    expect(tokenTexts).toContain("delta");
+
+    // Root must still advertise reveal mode inside the hold window so the
+    // CSS keyframes can play out.
+    const rootEl = container.querySelector<HTMLElement>(".inkset-root");
+    expect(rootEl?.hasAttribute("data-inkset-reveal")).toBe(true);
+  });
+
+  it("remounts reveal spans for successive words in one long text run", async () => {
+    const reveal = {
+      throttle: false as const,
+      timeline: { durationMs: 120, stagger: 10 },
+      css: { preset: "blurIn" as const },
+    };
+
+    await act(async () => {
+      root.render(<Inkset content="Alpha " streaming width={320} reveal={reveal} />);
+    });
+    await flushMicrotasks();
+
+    const firstSpan = container.querySelector<HTMLElement>("[data-inkset-reveal-token]");
+    expect(firstSpan?.textContent).toBe("Alpha");
+
+    await act(async () => {
+      root.render(<Inkset content="Alpha beta " streaming width={320} reveal={reveal} />);
+    });
+    await flushMicrotasks();
+
+    const secondSpan = container.querySelector<HTMLElement>("[data-inkset-reveal-token]");
+    expect(secondSpan?.textContent).toBe("beta");
+    expect(secondSpan).not.toBe(firstSpan);
   });
 });

@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -15,27 +11,15 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "@inkset/core": [
-        "../../packages/core/src/index.ts"
-      ],
-      "@inkset/react": [
-        "../../packages/react/src/index.tsx"
-      ],
-      "@inkset/code": [
-        "../../packages/code/src/index.tsx"
-      ],
-      "@inkset/math": [
-        "../../packages/math/src/index.tsx"
-      ],
-      "@inkset/table": [
-        "../../packages/table/src/index.tsx"
-      ],
-      "@inkset/diagram": [
-        "../../packages/diagram/src/index.tsx"
-      ]
+      "@inkset/core": ["../../packages/core/src/index.ts"],
+      "@inkset/react": ["../../packages/react/src/index.tsx"],
+      "@inkset/code": ["../../packages/code/src/index.tsx"],
+      "@inkset/math": ["../../packages/math/src/index.tsx"],
+      "@inkset/table": ["../../packages/table/src/index.tsx"],
+      "@inkset/diagram": ["../../packages/diagram/src/index.tsx"]
     },
     "plugins": [
       {
@@ -47,9 +31,8 @@
     "**/*.ts",
     "**/*.tsx",
     "next-env.d.ts",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }

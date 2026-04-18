@@ -12,16 +12,18 @@ import React, {
 import { SiteNav } from "../../components/site-nav";
 import { Footer } from "../../components/footer";
 import { Chip, CHIP_GROUP_STYLE, CHIP_SECTION_LABEL_STYLE } from "../../components/chip";
+import { useThemeKey } from "../../lib/theme-context";
+import { type ThemeKey } from "../../lib/themes";
 
 // ── Inkset column ──────────────────────────────────────────────────
-import { Inkset } from "@inkset/react";
+import { Inkset, type InksetTheme } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
 import { createDiagramPlugin } from "@inkset/diagram";
 
 // ── Streamdown column ──────────────────────────────────────────────
-import { Streamdown } from "streamdown";
+import { Streamdown, type ThemeInput } from "streamdown";
 import { math as streamdownMath } from "@streamdown/math";
 import { mermaid as streamdownMermaid } from "@streamdown/mermaid";
 import { createCodePlugin as createStreamdownCodePlugin } from "@streamdown/code";
@@ -138,20 +140,56 @@ The tradeoff: mermaid adds ~650 KB gzipped. You should pay that weight only when
 
 // ── Plugins, instantiated once ─────────────────────────────────────
 
-const INKSET_CODE = createCodePlugin({ theme: "github-dark" });
+// Per-theme-key plugin bundles — shiki / mermaid themes must match the page
+// palette or the comparison column looks broken (dark-on-light or vice versa).
+const INKSET_CODE_BY_THEME: Record<ThemeKey, ReturnType<typeof createCodePlugin>> = {
+  dark: createCodePlugin({ theme: "github-dark" }),
+  light: createCodePlugin({ theme: "github-light" }),
+  sepia: createCodePlugin({ theme: "github-light" }),
+  dusk: createCodePlugin({ theme: "github-dark" }),
+};
+const INKSET_DIAGRAM_BY_THEME: Record<ThemeKey, ReturnType<typeof createDiagramPlugin>> = {
+  dark: createDiagramPlugin({ theme: "dark" }),
+  light: createDiagramPlugin({ theme: "default" }),
+  sepia: createDiagramPlugin({ theme: "neutral" }),
+  dusk: createDiagramPlugin({ theme: "dark" }),
+};
 const INKSET_MATH = createMathPlugin();
 const INKSET_TABLE = createTablePlugin();
-const INKSET_DIAGRAM = createDiagramPlugin({ theme: "dark" });
-const INKSET_PLUGINS = [INKSET_CODE, INKSET_MATH, INKSET_TABLE, INKSET_DIAGRAM];
 
-const STREAMDOWN_CODE = createStreamdownCodePlugin({
-  themes: ["github-dark", "github-dark"],
-});
-const STREAMDOWN_PLUGINS = {
-  code: STREAMDOWN_CODE,
-  math: streamdownMath,
-  mermaid: streamdownMermaid,
+// Inkset theme wired to the page's palette CSS vars so body text, code chrome
+// and table borders track the selected theme automatically.
+const INKSET_THEME: InksetTheme = {
+  colors: {
+    text: "var(--pg-text-primary)",
+    textMuted: "var(--pg-text-muted)",
+    blockquoteAccent: "var(--pg-border-default)",
+    blockquoteText: "var(--pg-text-muted)",
+    inlineCodeBg: "var(--pg-surface-raised)",
+    inlineCodeText: "var(--pg-text-primary)",
+    hr: "var(--pg-divider)",
+  },
+  code: {
+    headerBorderColor: "var(--pg-border-subtle)",
+  },
+  table: {
+    border: "var(--pg-border-subtle)",
+    headerText: "var(--pg-text-muted)",
+  },
 };
+
+const STREAMDOWN_CODE_BY_THEME: Record<ThemeKey, ReturnType<typeof createStreamdownCodePlugin>> = {
+  dark: createStreamdownCodePlugin({ themes: ["github-dark", "github-dark"] }),
+  light: createStreamdownCodePlugin({ themes: ["github-light", "github-light"] }),
+  sepia: createStreamdownCodePlugin({ themes: ["github-light", "github-light"] }),
+  dusk: createStreamdownCodePlugin({ themes: ["github-dark", "github-dark"] }),
+};
+const SHIKI_THEME_PAIR_BY_KEY = {
+  dark: ["github-dark", "github-dark"],
+  light: ["github-light", "github-light"],
+  sepia: ["github-light", "github-light"],
+  dusk: ["github-dark", "github-dark"],
+} as const satisfies Record<ThemeKey, readonly [string, string]>;
 
 // Approximate gzipped bundle sizes for the metrics strip. Measured at
 // the pinned versions below; not exact but good enough to tell the story.
@@ -183,6 +221,27 @@ const INITIAL_METRICS: Metrics = {
 };
 
 const ComparePage = () => {
+  const { themeKey } = useThemeKey();
+  const inksetPlugins = React.useMemo(
+    () => [
+      INKSET_CODE_BY_THEME[themeKey] ?? INKSET_CODE_BY_THEME.dark,
+      INKSET_MATH,
+      INKSET_TABLE,
+      INKSET_DIAGRAM_BY_THEME[themeKey] ?? INKSET_DIAGRAM_BY_THEME.dark,
+    ],
+    [themeKey],
+  );
+  const streamdownPlugins = React.useMemo(
+    () => ({
+      code: STREAMDOWN_CODE_BY_THEME[themeKey] ?? STREAMDOWN_CODE_BY_THEME.dark,
+      math: streamdownMath,
+      mermaid: streamdownMermaid,
+    }),
+    [themeKey],
+  );
+  const shikiThemePair: [ThemeInput, ThemeInput] = [
+    ...(SHIKI_THEME_PAIR_BY_KEY[themeKey] ?? SHIKI_THEME_PAIR_BY_KEY.dark),
+  ];
   const [scenarioKey, setScenarioKey] = useState<string>("rich");
   const [streaming, setStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState("");
@@ -224,9 +283,8 @@ const ComparePage = () => {
   void metricsTick; // consumed: tick forces a re-read of refs above
 
   const activeScenario = SCENARIOS.find((s) => s.key === scenarioKey) ?? SCENARIOS[0];
-  const content = streaming || streamedContent.length > 0
-    ? streamedContent
-    : activeScenario.markdown;
+  const content =
+    streaming || streamedContent.length > 0 ? streamedContent : activeScenario.markdown;
 
   // Flush metrics only while recording. 4Hz feels live without storming
   // renders on an idle page.
@@ -314,10 +372,7 @@ const ComparePage = () => {
     () => makeProfiler(reactMarkdownMetricsRef),
     [makeProfiler],
   );
-  const onInksetRender = React.useMemo(
-    () => makeProfiler(inksetMetricsRef),
-    [makeProfiler],
-  );
+  const onInksetRender = React.useMemo(() => makeProfiler(inksetMetricsRef), [makeProfiler]);
 
   return (
     <div
@@ -359,7 +414,10 @@ const ComparePage = () => {
           ))}
         </div>
 
-        <div className="pg-compare-divider" style={{ width: 1, height: 16, background: "var(--pg-divider)" }} />
+        <div
+          className="pg-compare-divider"
+          style={{ width: 1, height: 16, background: "var(--pg-divider)" }}
+        />
 
         <div style={{ ...CHIP_GROUP_STYLE, gap: 10 }}>
           <span style={CHIP_SECTION_LABEL_STYLE}>Width</span>
@@ -385,7 +443,10 @@ const ComparePage = () => {
           </span>
         </div>
 
-        <div className="pg-compare-divider" style={{ width: 1, height: 16, background: "var(--pg-divider)" }} />
+        <div
+          className="pg-compare-divider"
+          style={{ width: 1, height: 16, background: "var(--pg-divider)" }}
+        />
 
         <div style={CHIP_GROUP_STYLE}>
           <Chip
@@ -398,7 +459,10 @@ const ComparePage = () => {
           <Chip label="Reset" variant="quiet" onClick={onReset} />
         </div>
 
-        <div className="pg-compare-divider" style={{ width: 1, height: 16, background: "var(--pg-divider)" }} />
+        <div
+          className="pg-compare-divider"
+          style={{ width: 1, height: 16, background: "var(--pg-divider)" }}
+        />
 
         <Chip
           label={recording ? "Recording metrics" : "Measure"}
@@ -407,9 +471,7 @@ const ComparePage = () => {
           onClick={onToggleRecording}
           leadingDot
           title={
-            recording
-              ? "Metrics update 4×/sec while on"
-              : "Enable to see live render-time + count"
+            recording ? "Metrics update 4×/sec while on" : "Enable to see live render-time + count"
           }
         />
       </div>
@@ -436,7 +498,8 @@ const ComparePage = () => {
               <Inkset
                 content={content}
                 streaming={streaming}
-                plugins={INKSET_PLUGINS}
+                plugins={inksetPlugins}
+                theme={INKSET_THEME}
                 width={effectiveWidth}
                 fontSize={14}
                 lineHeight={21}
@@ -479,9 +542,9 @@ const ComparePage = () => {
           <Profiler id="streamdown" onRender={onStreamdownRender}>
             <div className="sd-column" style={{ width: effectiveWidth, maxWidth: "100%" }}>
               <Streamdown
-                plugins={STREAMDOWN_PLUGINS}
+                plugins={streamdownPlugins}
                 mode={streaming ? "streaming" : "static"}
-                shikiTheme={["github-dark", "github-dark"]}
+                shikiTheme={shikiThemePair}
                 controls={false}
                 animated={false}
               >
@@ -630,11 +693,11 @@ const MetricCell = ({ label, value }: { label: string; value: string }) => {
 const GlobalStyles = () => {
   return (
     <style jsx global>{`
-      /* Minimal dark-prose for react-markdown so the comparison isn't
-         dominated by it having no stylesheet. Matches inkset's visual
-         rhythm approximately without copying every knob. */
+      /* Minimal prose for react-markdown so the comparison isn't dominated
+         by it having no stylesheet. Colors come from the page's palette
+         CSS vars (set by RootChrome) so light/dark/sepia/dusk all work. */
       .rm-prose {
-        color: #ededed;
+        color: var(--pg-text-primary);
         font-size: 14px;
         line-height: 1.55;
       }
@@ -669,14 +732,14 @@ const GlobalStyles = () => {
         margin-bottom: 0.3em;
       }
       .rm-prose code:not(pre code) {
-        background: rgba(255, 255, 255, 0.08);
+        background: var(--pg-surface-raised);
         padding: 0.15em 0.35em;
         border-radius: 0.35em;
         font-size: 0.92em;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
       .rm-prose pre {
-        background: #24292e;
+        background: var(--pg-surface-raised);
         border-radius: 10px;
         padding: 12px 14px;
         overflow-x: auto;
@@ -695,7 +758,7 @@ const GlobalStyles = () => {
       }
       .rm-prose th,
       .rm-prose td {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid var(--pg-border-subtle);
         padding: 8px 10px;
         text-align: left;
       }
@@ -703,17 +766,17 @@ const GlobalStyles = () => {
         font-size: 11px;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: rgba(232, 232, 235, 0.72);
+        color: var(--pg-text-muted);
       }
       .rm-prose blockquote {
         padding-left: 1em;
-        border-left: 3px solid rgba(255, 255, 255, 0.18);
-        color: rgba(232, 232, 235, 0.78);
+        border-left: 3px solid var(--pg-border-default);
+        color: var(--pg-text-muted);
         margin: 0 0 0.9em;
       }
       .rm-prose hr {
         border: 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: 1px solid var(--pg-divider);
       }
       .rm-prose .katex-display {
         margin: 0.5em 0;
@@ -724,7 +787,7 @@ const GlobalStyles = () => {
          the same rhythm as the other two. We scope via .sd-column so we
          don't touch anything else on the page. */
       .sd-column {
-        color: #ededed;
+        color: var(--pg-text-primary);
         font-size: 14px;
         line-height: 1.55;
       }
@@ -769,7 +832,7 @@ const GlobalStyles = () => {
          is "what do you get out of the box", not "what if I rebuild
          their CSS". */
       .sd-column code:not(pre code) {
-        background: rgba(255, 255, 255, 0.08);
+        background: var(--pg-surface-raised);
         padding: 0.15em 0.35em;
         border-radius: 0.35em;
         font-size: 0.92em;
@@ -783,7 +846,7 @@ const GlobalStyles = () => {
       }
       .sd-column th,
       .sd-column td {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid var(--pg-border-subtle);
         padding: 8px 10px;
         text-align: left;
       }
@@ -791,18 +854,18 @@ const GlobalStyles = () => {
         font-size: 11px;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: rgba(232, 232, 235, 0.72);
+        color: var(--pg-text-muted);
         font-weight: 700;
       }
       .sd-column blockquote {
         padding-left: 1em;
-        border-left: 3px solid rgba(255, 255, 255, 0.18);
-        color: rgba(232, 232, 235, 0.78);
+        border-left: 3px solid var(--pg-border-default);
+        color: var(--pg-text-muted);
         margin: 0 0 0.9em;
       }
       .sd-column hr {
         border: 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: 1px solid var(--pg-divider);
       }
       .sd-column .katex-display {
         margin: 0.5em 0;

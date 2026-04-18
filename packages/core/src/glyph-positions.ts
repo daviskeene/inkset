@@ -90,11 +90,7 @@ export const buildGlyphLookup = (
   let layoutResult: ReturnType<GlyphPretextModule["layoutWithLines"]>;
   try {
     prepared = pretext.prepareWithSegments(options.text, options.font);
-    layoutResult = pretext.layoutWithLines(
-      prepared,
-      options.maxWidth,
-      options.lineHeight,
-    );
+    layoutResult = pretext.layoutWithLines(prepared, options.maxWidth, options.lineHeight);
   } catch {
     return null;
   }
@@ -112,10 +108,7 @@ export const buildGlyphLookup = (
     segmentCharStart[i + 1] = segmentCharStart[i] + segments[i].length;
   }
 
-  const cursorToChar = (cursor: {
-    segmentIndex: number;
-    graphemeIndex: number;
-  }): number => {
+  const cursorToChar = (cursor: { segmentIndex: number; graphemeIndex: number }): number => {
     const base = segmentCharStart[cursor.segmentIndex] ?? 0;
     return base + cursor.graphemeIndex;
   };
@@ -176,10 +169,7 @@ export const buildGlyphLookup = (
     // measure only its fragment on the *first* line (the one it anchors to
     // visually). The delay animation plays there; remaining characters on
     // the next line are considered part of the same token.
-    const tokenEndLocal = Math.min(
-      charEnd - line.charStart,
-      line.charEnd - line.charStart,
-    );
+    const tokenEndLocal = Math.min(charEnd - line.charStart, line.charEnd - line.charStart);
     const prefixText = line.lineText.slice(0, prefixEnd);
     const tokenText = line.lineText.slice(prefixEnd, tokenEndLocal);
 

@@ -87,7 +87,10 @@ export const splitBlocks = (document: string): string[] => {
         if (!inCodeFence) {
           inCodeFence = true;
           fenceChar = fenceMatch[1][0];
-        } else if (trimmed.startsWith(fenceChar.repeat(3)) && trimmed.trim().length <= fenceMatch[1].length + 1) {
+        } else if (
+          trimmed.startsWith(fenceChar.repeat(3)) &&
+          trimmed.trim().length <= fenceMatch[1].length + 1
+        ) {
           inCodeFence = false;
           fenceChar = "";
         }
@@ -186,7 +189,7 @@ const repairMathBlocks = (text: string): string => {
 };
 
 const repairInlineFormatting = (text: string): string => {
-  let result = text;
+  const result = text;
 
   const lastNewline = result.lastIndexOf("\n");
   const lastLine = lastNewline >= 0 ? result.slice(lastNewline + 1) : result;

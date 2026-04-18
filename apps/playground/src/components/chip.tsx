@@ -89,9 +89,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
         />
       ) : null}
       <span>{label}</span>
-      {detail ? (
-        <span style={{ opacity: 0.55, fontSize: 11, marginLeft: 2 }}>{detail}</span>
-      ) : null}
+      {detail ? <span style={{ opacity: 0.55, fontSize: 11, marginLeft: 2 }}>{detail}</span> : null}
     </button>
   );
 });

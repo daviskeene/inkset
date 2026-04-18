@@ -14,17 +14,18 @@ The core insight: every chat UI today renders model responses into a fixed-width
 
 ### What exists today
 
-| Tool | Does well | Doesn't do |
-|------|-----------|------------|
-| **Pretext** | DOM-free text measurement, variable-width reflow, obstacle-aware layout, shrinkwrap | Rich content (markdown, code, math). Plain text only. |
-| **Streamdown** | Streaming markdown, composable plugins, incomplete syntax repair | Responsive reflow. React-only. Tailwind-dependent. No layout control. |
-| **react-markdown** | Mature plugin ecosystem (remark/rehype) | Streaming. Performance. Layout. |
-| **llm-ui** | Frame-rate-matched rendering, custom blocks | No layout engine. React-only. |
-| **streaming-markdown** | Incremental DOM append, tiny bundle | No plugins. No math. No layout. Vanilla JS only. |
+| Tool                   | Does well                                                                           | Doesn't do                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Pretext**            | DOM-free text measurement, variable-width reflow, obstacle-aware layout, shrinkwrap | Rich content (markdown, code, math). Plain text only.                 |
+| **Streamdown**         | Streaming markdown, composable plugins, incomplete syntax repair                    | Responsive reflow. React-only. Tailwind-dependent. No layout control. |
+| **react-markdown**     | Mature plugin ecosystem (remark/rehype)                                             | Streaming. Performance. Layout.                                       |
+| **llm-ui**             | Frame-rate-matched rendering, custom blocks                                         | No layout engine. React-only.                                         |
+| **streaming-markdown** | Incremental DOM append, tiny bundle                                                 | No plugins. No math. No layout. Vanilla JS only.                      |
 
 ### The gap
 
 No tool combines:
+
 1. **Pretext-powered layout** — text measurement and reflow without DOM thrashing
 2. **Rich content rendering** — markdown, LaTeX math, syntax highlighting, diagrams
 3. **Streaming-first architecture** — handles incomplete syntax, incremental updates, block-level memoization
@@ -86,13 +87,15 @@ No tool combines:
 ### Layer Details
 
 #### 1. Ingest Layer
+
 - Accumulates streaming tokens into a growing document string
 - Detects block boundaries (paragraph breaks, code fence open/close, heading markers)
 - Runs incomplete syntax repair: auto-closes unterminated `**bold**`, `` `code` ``, `[links]()`, `$$math$$`, code fences
 - Emits block-level change events: `block:append`, `block:complete`, `block:new`
-- **Key insight from Streamdown**: repair at the string level *before* parsing, not after
+- **Key insight from Streamdown**: repair at the string level _before_ parsing, not after
 
 #### 2. Parse Layer
+
 - Tokenizes markdown into block-level AST nodes
 - **Incremental**: maintains a block index. When new tokens arrive, only the last (incomplete) block is re-parsed. Completed blocks are frozen.
 - Supports GFM extensions: tables, task lists, strikethrough, footnotes, autolinks
@@ -100,6 +103,7 @@ No tool combines:
 - **Parser choice**: use `marked.lexer()` for block tokenization (fast, proven), then a custom inline parser that is incremental-aware
 
 #### 3. Transform Layer (Plugin System)
+
 - Each plugin registers for specific AST node types and transforms them
 - Plugins run in dependency-ordered sequence
 - Plugin interface:
@@ -127,6 +131,7 @@ interface InksetPlugin {
   - `@inkset/cjk` — CJK text handling and line breaking rules
 
 #### 4. Measure Layer
+
 - Calls `pretext.prepare()` for each text segment in the enriched AST
 - Caches prepared handles keyed by `(text, font, options)` — never re-prepares unchanged text
 - For non-text content (code blocks, math, diagrams), plugins provide their own measurement
@@ -134,6 +139,7 @@ interface InksetPlugin {
 - **Critical optimization**: prepare() is expensive (~2ms per text block). Only run it for new/changed blocks. Cache aggressively.
 
 #### 5. Layout Layer
+
 - Calls `pretext.layout(prepared, containerWidth, lineHeight)` for each measured block
 - Computes vertical positions: each block's y-offset = previous block's y-offset + height + margin
 - Supports variable-width layouts via `layoutNextLine()`:
@@ -144,6 +150,7 @@ interface InksetPlugin {
 - Outputs a `LayoutTree`: flat array of positioned blocks with `{ x, y, width, height, content }` for each
 
 #### 6. Render Layer
+
 - Consumes `LayoutTree` and renders to a target
 - **DOM renderer** (default): positions blocks with `transform: translate()` — no reflow, no layout thrashing
   - Uses `position: absolute` on each block within a relative container
@@ -203,6 +210,7 @@ Following Streamdown's proven approach but with pretext-aware enhancements:
 **The dollar sign problem**: LLMs inconsistently use `$`, `$$`, `\(`, `\[` for math delimiters. Models mix math and currency (`$50`) in the same response. No regex perfectly disambiguates.
 
 **Inkset's approach**:
+
 1. **Delimiter normalization** in the Ingest layer: convert `\(` → `$`, `\[` → `$$` before parsing
 2. **Heuristic disambiguation**: `$` followed by digits and no closing `$` within the same line → treat as currency, not math
 3. **KaTeX rendering** with error boundaries: invalid LaTeX renders as raw text with a subtle error indicator, not a red error box
@@ -215,7 +223,7 @@ Following Streamdown's proven approach but with pretext-aware enhancements:
 
 1. **Language detection**: from code fence language tag (` ```python `). If absent, use highlight.js's `highlightAuto()` after the first 3 lines arrive.
 2. **Streaming highlighting**: pipe tokens through `CodeToTokenTransformStream`. Handle recalls for retroactive correction.
-3. **Measurement**: code blocks have fixed-width characters. Measure the longest line with pretext, add padding. Height = line count * line height.
+3. **Measurement**: code blocks have fixed-width characters. Measure the longest line with pretext, add padding. Height = line count \* line height.
 4. **Responsive code blocks**: if the code block width exceeds container width, enable horizontal scroll. Never break code lines.
 5. **Copy button**: extract raw text content, not highlighted HTML. Visual feedback on copy.
 6. **Line numbers**: optional, off by default. Computed from the token stream.
@@ -226,8 +234,8 @@ Following Streamdown's pattern, custom renderers let consumers handle arbitrary 
 
 ```typescript
 const vegaPlugin: InksetPlugin = {
-  name: 'vega-lite',
-  handles: ['code:vega', 'code:vega-lite'],
+  name: "vega-lite",
+  handles: ["code:vega", "code:vega-lite"],
   transform(node) {
     return { ...node, spec: JSON.parse(node.content) };
   },
@@ -236,7 +244,7 @@ const vegaPlugin: InksetPlugin = {
   },
   render(node, target) {
     vegaEmbed(target.element, node.spec);
-  }
+  },
 };
 ```
 
@@ -247,12 +255,18 @@ const vegaPlugin: InksetPlugin = {
 ### Why This Matters
 
 Every chat UI today does this:
+
 ```css
-.message { max-width: 48rem; }
-pre { overflow-x: auto; }
+.message {
+  max-width: 48rem;
+}
+pre {
+  overflow-x: auto;
+}
 ```
 
 This is the bare minimum. It doesn't solve:
+
 - Text that could be better balanced across lines
 - Code blocks that are 2 characters wider than the container, forcing a scrollbar
 - Math expressions that overflow on mobile
@@ -264,11 +278,13 @@ This is the bare minimum. It doesn't solve:
 **Adaptive text balancing**: Use pretext's `walkLineRanges()` + `measureLineStats()` to find the tightest width that keeps the same line count. Text blocks automatically balance without CSS `text-wrap: balance` (which has limited browser support and no JS API).
 
 **Width-aware code blocks**: Measure the longest code line with pretext. If it fits within the container, render inline. If not, offer options:
+
 - Horizontal scroll (current standard)
 - Soft-wrap with indentation markers (configurable)
 - Collapsed view with expand-on-click
 
 **Obstacle-aware text flow**: Using pretext's `layoutNextLine()`, text can flow around:
+
 - Inline images and figures
 - Floating tool-use result cards
 - Citation panels
@@ -318,26 +334,27 @@ inkset/
 
 ## Differentiation from Streamdown
 
-| Dimension | Streamdown | Inkset |
-|-----------|------------|----------|
-| **Layout engine** | None (browser CSS) | Pretext — DOM-free measurement and reflow |
-| **Resize performance** | Full DOM reflow | ~0.0002ms arithmetic per block |
-| **Framework** | React only | Framework-agnostic core + adapters |
-| **Styling** | Tailwind + shadcn required | Unstyled, CSS custom properties |
-| **Text balancing** | None | Automatic via pretext shrinkwrap |
-| **Variable-width layout** | None | Per-line width control, obstacle reflow |
-| **Virtual scrolling** | Requires height estimation | Pixel-accurate heights from pretext |
-| **Code block overflow** | `overflow-x: auto` | Width-aware: inline, scroll, or wrap |
-| **SSR** | React SSR | Pretext SSR (when available) + static HTML |
-| **Plugin interface** | Separate npm packages, React context | Universal plugins with measure/render hooks |
-| **Streaming repair** | remend (string-level) | Similar approach, ingest layer |
-| **Bundle** | Heavy (mermaid in core) | Tree-shakeable, import only what you use |
+| Dimension                 | Streamdown                           | Inkset                                      |
+| ------------------------- | ------------------------------------ | ------------------------------------------- |
+| **Layout engine**         | None (browser CSS)                   | Pretext — DOM-free measurement and reflow   |
+| **Resize performance**    | Full DOM reflow                      | ~0.0002ms arithmetic per block              |
+| **Framework**             | React only                           | Framework-agnostic core + adapters          |
+| **Styling**               | Tailwind + shadcn required           | Unstyled, CSS custom properties             |
+| **Text balancing**        | None                                 | Automatic via pretext shrinkwrap            |
+| **Variable-width layout** | None                                 | Per-line width control, obstacle reflow     |
+| **Virtual scrolling**     | Requires height estimation           | Pixel-accurate heights from pretext         |
+| **Code block overflow**   | `overflow-x: auto`                   | Width-aware: inline, scroll, or wrap        |
+| **SSR**                   | React SSR                            | Pretext SSR (when available) + static HTML  |
+| **Plugin interface**      | Separate npm packages, React context | Universal plugins with measure/render hooks |
+| **Streaming repair**      | remend (string-level)                | Similar approach, ingest layer              |
+| **Bundle**                | Heavy (mermaid in core)              | Tree-shakeable, import only what you use    |
 
 ---
 
 ## Implementation Phases (Revised post-CEO review)
 
 ### Phase 1: Core Pipeline + React Adapter (Weeks 1-3)
+
 - Ingest layer with streaming token accumulation and syntax repair
 - Parse layer: marked.lexer() for block splitting, unified/remark per block
 - Plugin system with transform/measure/render lifecycle
@@ -350,6 +367,7 @@ inkset/
 - Progressive enhancement architecture
 
 ### Phase 2: Essential Plugins + Playground (Weeks 3-5)
+
 - `@inkset/code` — Shiki + shiki-stream highlighting
 - `@inkset/math` — KaTeX with delimiter normalization
 - `@inkset/table` — Responsive tables
@@ -359,12 +377,14 @@ inkset/
 - Custom text selection support (across absolute-positioned blocks)
 
 ### Phase 3: Responsive Layout (Weeks 5-7)
+
 - Width-aware code blocks (adaptive scroll/wrap/inline)
 - Content-aware responsive math (inline/display/scale)
 - Virtual scrolling with pixel-accurate heights
 - Text balancing via pretext shrinkwrap
 
 ### Phase 4: Polish + Ecosystem (Weeks 7-10)
+
 - Streaming performance dashboard (DevTools overlay)
 - `@inkset/mermaid` — diagram rendering
 - `@inkset/cjk` — CJK text handling
@@ -426,11 +446,11 @@ inkset/
 
 ## GSTACK REVIEW REPORT
 
-| Review | Trigger | Why | Runs | Status | Findings |
-|--------|---------|-----|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | CLEAR | 8 proposals, 6 accepted, 2 deferred. v1 narrowed. 5 cross-model tensions resolved. |
-| Codex Review | `/codex review` | Independent 2nd opinion | 1 | issues_found | 20+ issues. Key: narrow scope, React first, security/a11y Phase 1. |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR | 4 issues resolved: plugin render model, font loading, width-sensitive flag, incremental lexing. 0 critical gaps. |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | -- | -- |
+| Review        | Trigger               | Why                             | Runs | Status       | Findings                                                                                                         |
+| ------------- | --------------------- | ------------------------------- | ---- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| CEO Review    | `/plan-ceo-review`    | Scope & strategy                | 1    | CLEAR        | 8 proposals, 6 accepted, 2 deferred. v1 narrowed. 5 cross-model tensions resolved.                               |
+| Codex Review  | `/codex review`       | Independent 2nd opinion         | 1    | issues_found | 20+ issues. Key: narrow scope, React first, security/a11y Phase 1.                                               |
+| Eng Review    | `/plan-eng-review`    | Architecture & tests (required) | 1    | CLEAR        | 4 issues resolved: plugin render model, font loading, width-sensitive flag, incremental lexing. 0 critical gaps. |
+| Design Review | `/plan-design-review` | UI/UX gaps                      | 0    | --           | --                                                                                                               |
 
 **VERDICT:** CEO + ENG CLEARED. Ready to implement.

@@ -165,9 +165,7 @@ describe("buildGlyphLookup", () => {
     const pretext = makeStubPretext({
       fullText: "hello",
       segments: ["hello"],
-      lines: [
-        { text: "hello", startSeg: 0, startGrapheme: 0, endSeg: 0, endGrapheme: 5 },
-      ],
+      lines: [{ text: "hello", startSeg: 0, startGrapheme: 0, endSeg: 0, endGrapheme: 5 }],
     });
     const lookup = buildGlyphLookup(pretext, {
       text: "hello",
@@ -183,9 +181,7 @@ describe("buildGlyphLookup", () => {
     const pretext = makeStubPretext({
       fullText: "hello",
       segments: ["hello"],
-      lines: [
-        { text: "hello", startSeg: 0, startGrapheme: 0, endSeg: 0, endGrapheme: 5 },
-      ],
+      lines: [{ text: "hello", startSeg: 0, startGrapheme: 0, endSeg: 0, endGrapheme: 5 }],
     });
     const lookup = buildGlyphLookup(pretext, {
       text: "hello",

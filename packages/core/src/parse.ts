@@ -77,10 +77,7 @@ export type ParseResult = {
 };
 
 /** Only re-parses hot or uncached blocks; frozen blocks reuse cached AST nodes. */
-export const parseBlocks = (
-  blocks: readonly Block[],
-  cache: Map<number, ASTNode>,
-): ParseResult => {
+export const parseBlocks = (blocks: readonly Block[], cache: Map<number, ASTNode>): ParseResult => {
   const nodes: ASTNode[] = [];
   const parsedBlockIds = new Set<number>();
 
@@ -108,11 +105,7 @@ type HastNode = {
   value?: string;
 };
 
-const hastToASTNode = (
-  hast: HastNode,
-  blockId: number,
-  blockType: BlockType,
-): ASTNode => {
+const hastToASTNode = (hast: HastNode, blockId: number, blockType: BlockType): ASTNode => {
   const node: ASTNode = {
     type: hast.type,
     blockId,
@@ -124,9 +117,7 @@ const hastToASTNode = (
   if (hast.value !== undefined) node.value = hast.value;
 
   if (hast.children) {
-    node.children = hast.children.map((child) =>
-      hastToASTNode(child, blockId, blockType),
-    );
+    node.children = hast.children.map((child) => hastToASTNode(child, blockId, blockType));
   }
 
   return node;

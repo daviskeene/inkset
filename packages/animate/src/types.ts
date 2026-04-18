@@ -10,7 +10,7 @@ export interface ThrottleOptions {
   chunking?: ChunkingMode;
 }
 
-export type AnimationPreset = "fadeIn" | "blurIn" | "slideUp";
+export type CssRevealPreset = "fadeIn" | "blurIn" | "slideUp";
 export type ShaderOptions = Record<string, unknown>;
 
 export interface ShaderToken {
@@ -58,12 +58,20 @@ export interface ShaderPreset {
 }
 
 export type ShaderLoader = () => Promise<ShaderPreset>;
+export type ShaderSource = string | ShaderLoader | ShaderPreset;
 export type ShaderConfig =
-  | string
+  | ShaderSource
   | {
-      preset: string;
+      source: ShaderSource;
       options?: ShaderOptions;
     };
+
+export interface ShaderRegistry {
+  register(name: string, loader: ShaderLoader): void;
+  has(name: string): boolean;
+  list(): string[];
+  load(name: string): Promise<ShaderPreset | null>;
+}
 
 /**
  * Order in which new tokens within a single tick animate in.
@@ -78,13 +86,9 @@ export type ShaderConfig =
  */
 export type StaggerOrder = "layout" | "arrival";
 
-export interface AnimateOptions {
-  /** Built-in preset name or a custom `@keyframes` name. Default "fadeIn". */
-  preset?: AnimationPreset | string;
-  /** Animation duration in ms. Default 320. */
-  duration?: number;
-  /** CSS timing function. Default "cubic-bezier(.2,.8,.2,1)". */
-  easing?: string;
+export interface TimelineOptions {
+  /** Reveal lifetime in ms. Default 320. */
+  durationMs?: number;
   /** Per-token stagger step in ms. Default 30. */
   stagger?: number;
   /** Split unit. Default "word". */
@@ -93,13 +97,20 @@ export interface AnimateOptions {
    * Ordering policy for the stagger. Default `"layout"`. `"arrival"` restores
    * the pre-Phase-3 behaviour (delay follows token arrival index).
    */
-  staggerOrder?: StaggerOrder;
+  order?: StaggerOrder;
   /**
    * Cap on the total stagger span across all new tokens in one tick (ms).
    * Default 400. Prevents big bursts (40+ tokens) from feeling like lag.
    * Set to 0 to disable the clamp and let stagger × N span unbounded.
    */
-  maxStaggerSpanMs?: number;
+  maxSpanMs?: number;
+}
+
+export interface CssRevealOptions {
+  /** Built-in preset name or a custom `@keyframes` name. Default "fadeIn". */
+  preset?: CssRevealPreset | string;
+  /** CSS timing function. Default "cubic-bezier(.2,.8,.2,1)". */
+  easing?: string;
 }
 
 /**
@@ -127,7 +138,7 @@ export interface RevealComponentProps {
   height: number;
   /** Animation-delay the default renderer would have applied, in ms. */
   delayMs: number;
-  /** Animation duration, in ms (forwarded from AnimateOptions.duration). */
+  /** Reveal duration, in ms (forwarded from TimelineOptions.durationMs). */
   durationMs: number;
   /** Pipeline tick that produced this token. Combine with `tokenIndex` for stable keys. */
   tickId: number;
@@ -144,8 +155,13 @@ export type RevealComponent = ComponentType<RevealComponentProps>;
 export interface RevealProp {
   /** Token pacing. `false` disables; omitted defaults to `{ delayInMs: 30, chunking: "word" }`. */
   throttle?: ThrottleOptions | false;
-  /** Per-token visual reveal. `false` disables; omitted defaults to built-in fadeIn. */
-  animate?: AnimateOptions | false;
+  /**
+   * Token sequencing metadata shared by the built-in CSS renderer, custom
+   * RevealComponents, and shader overlays. `false` disables reveal tokenization.
+   */
+  timeline?: TimelineOptions | false;
+  /** Built-in CSS token renderer. `false` disables the default DOM animation layer. */
+  css?: CssRevealOptions | false;
   /**
    * Replaces the default `<span data-inkset-reveal-token>` for each token.
    * Consumer receives {@link RevealComponentProps} and is fully in charge of

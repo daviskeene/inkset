@@ -30,13 +30,7 @@ import { createMathPlugin } from "@inkset/math";
 const plugins = [createCodePlugin(), createMathPlugin()];
 
 function Chat({ message }) {
-  return (
-    <Inkset
-      content={message.text}
-      streaming={message.isStreaming}
-      plugins={plugins}
-    />
-  );
+  return <Inkset content={message.text} streaming={message.isStreaming} plugins={plugins} />;
 }
 ```
 
@@ -96,7 +90,7 @@ Writing a custom plugin:
 ```tsx
 const myPlugin: InksetPlugin = {
   name: "custom-chart",
-  handles: ["code"],  // handle code fence blocks
+  handles: ["code"], // handle code fence blocks
   transform(node, ctx) {
     if (node.lang !== "chart") return node;
     return { ...node, transformedBy: "custom-chart", pluginData: { spec: node.value } };
@@ -110,12 +104,12 @@ const myPlugin: InksetPlugin = {
 
 ## Packages
 
-| Package | What it does |
-|---------|-------------|
-| `@inkset/core` | Pipeline engine: ingest, parse, measure, layout |
-| `@inkset/react` | `<Inkset>` component and `useInkset()` hook |
-| `@inkset/code` | Shiki syntax highlighting with streaming support |
-| `@inkset/math` | KaTeX or MathJax rendering, delimiter normalization |
+| Package         | What it does                                          |
+| --------------- | ----------------------------------------------------- |
+| `@inkset/core`  | Pipeline engine: ingest, parse, measure, layout       |
+| `@inkset/react` | `<Inkset>` component and `useInkset()` hook           |
+| `@inkset/code`  | Shiki syntax highlighting with streaming support      |
+| `@inkset/math`  | KaTeX or MathJax rendering, delimiter normalization   |
 | `@inkset/table` | Responsive tables with horizontal scroll and CSV copy |
 
 ## Development

@@ -13,7 +13,12 @@ import { transformBlocks, retransformWidthSensitive } from "./transform";
 import { MeasureLayer } from "./measure";
 import { computeLayout, getLayoutHeight } from "./layout";
 import { PluginRegistry } from "./plugin";
-import { hyphenateBlock, loadHyphenator, type Hyphenator, type SupportedLanguage } from "./hyphenate";
+import {
+  hyphenateBlock,
+  loadHyphenator,
+  type Hyphenator,
+  type SupportedLanguage,
+} from "./hyphenate";
 import type { GlyphPositionLookup } from "./glyph-positions";
 
 const DEFAULT_FONT = "system-ui, sans-serif";
@@ -266,10 +271,7 @@ export class StreamingPipeline {
    * sort new tokens in layout order and to pass pixel coords to consumer
    * `RevealComponent` props. Returns null when pretext is unavailable.
    */
-  buildGlyphLookupForBlock(
-    node: EnrichedNode,
-    maxWidth: number,
-  ): GlyphPositionLookup | null {
+  buildGlyphLookupForBlock(node: EnrichedNode, maxWidth: number): GlyphPositionLookup | null {
     return this.measureLayer.buildGlyphLookupForBlock(node, maxWidth);
   }
 
@@ -365,7 +367,13 @@ export class StreamingPipeline {
       containerWidth: this.containerWidth,
       isStreaming: this.ingest.isStreaming,
     };
-    const transformed = transformBlocks(nodes, this.registry, ctx, this.transformCache, parsedBlockIds);
+    const transformed = transformBlocks(
+      nodes,
+      this.registry,
+      ctx,
+      this.transformCache,
+      parsedBlockIds,
+    );
     this.currentNodes = this.applyHyphenation(transformed);
     this.metrics.lastTransformMs = performance.now() - transformStart;
 
@@ -382,8 +390,7 @@ export class StreamingPipeline {
 
     this.metrics.totalPipelineMs = performance.now() - pipelineStart;
     this.metrics.cacheHitRate =
-      this.measureLayer.cacheStats.size /
-      Math.max(1, this.measureLayer.cacheStats.maxSize);
+      this.measureLayer.cacheStats.size / Math.max(1, this.measureLayer.cacheStats.maxSize);
 
     this.notify();
   }
@@ -415,11 +422,7 @@ export class StreamingPipeline {
         const plugin = measured.node.transformedBy
           ? this.registry.get(measured.node.transformedBy)
           : undefined;
-        const dims = await this.measureLayer.relayout(
-          measured,
-          targetWidth,
-          plugin,
-        );
+        const dims = await this.measureLayer.relayout(measured, targetWidth, plugin);
         reMeasured.push({ ...measured, dimensions: dims });
       }
       nextMeasured = reMeasured;
@@ -454,15 +457,9 @@ export class StreamingPipeline {
         continue;
       }
 
-      const plugin = node.transformedBy
-        ? this.registry.get(node.transformedBy)
-        : undefined;
+      const plugin = node.transformedBy ? this.registry.get(node.transformedBy) : undefined;
 
-      const result = await this.measureLayer.measureBlock(
-        node,
-        containerWidth,
-        plugin,
-      );
+      const result = await this.measureLayer.measureBlock(node, containerWidth, plugin);
 
       // Shrinkwrap only applies to text-shaped blocks; plugin-rendered blocks
       // (code, table, math) own their own width and shouldn't be narrowed.

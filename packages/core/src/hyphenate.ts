@@ -6,6 +6,7 @@
 // supplies those, and the triple-slash reference below guarantees it's loaded
 // even when a downstream tsconfig (e.g. the Next.js playground) would otherwise
 // skip sibling declaration files.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./hyphenate-modules.d.ts" />
 import type { ASTNode, BlockType, EnrichedNode } from "./types";
 
@@ -48,10 +49,7 @@ export const loadHyphenator = (lang: SupportedLanguage = DEFAULT_LANG): Promise<
 };
 
 const buildHyphenator = async (lang: SupportedLanguage): Promise<Hyphenator> => {
-  const [HypherModule, patternsModule] = await Promise.all([
-    import("hypher"),
-    loadPatterns(lang),
-  ]);
+  const [HypherModule, patternsModule] = await Promise.all([import("hypher"), loadPatterns(lang)]);
 
   // Hypher ships CJS: in an ESM context the constructor lands on .default.
   const Hypher = (HypherModule.default ?? HypherModule) as unknown as HypherConstructor;
@@ -61,9 +59,13 @@ const buildHyphenator = async (lang: SupportedLanguage): Promise<Hyphenator> => 
   return (text: string) => instance.hyphenateText(text);
 };
 
-const loadPatterns = async (lang: SupportedLanguage): Promise<{ default?: HyphenPatterns } & HyphenPatterns> => {
+const loadPatterns = async (
+  lang: SupportedLanguage,
+): Promise<{ default?: HyphenPatterns } & HyphenPatterns> => {
   if (lang === "en-us") {
-    return (await import("hyphenation.en-us")) as unknown as { default?: HyphenPatterns } & HyphenPatterns;
+    return (await import("hyphenation.en-us")) as unknown as {
+      default?: HyphenPatterns;
+    } & HyphenPatterns;
   }
   throw new Error(`[inkset] unsupported hyphenation language: ${lang}`);
 };
@@ -74,10 +76,7 @@ const loadPatterns = async (lang: SupportedLanguage): Promise<{ default?: Hyphen
  * Returns a copy of `node` with soft hyphens inserted into text descendants.
  * Skips block types where hyphenation would damage rendering (code, math, tables).
  */
-export const hyphenateBlock = (
-  node: EnrichedNode,
-  hyphenator: Hyphenator,
-): EnrichedNode => {
+export const hyphenateBlock = (node: EnrichedNode, hyphenator: Hyphenator): EnrichedNode => {
   if (!shouldHyphenateBlock(node.blockType)) return node;
   return hyphenateNode(node, hyphenator) as EnrichedNode;
 };

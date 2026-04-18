@@ -1,16 +1,43 @@
 {
   "name": "@inkset/animate",
   "version": "0.1.0",
+  "description": "Streaming reveal primitives, timelines, and shader hooks for Inkset.",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "author": "Davis Keene",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daviskeene/inkset.git",
+    "directory": "packages/animate"
+  },
+  "homepage": "https://github.com/daviskeene/inkset/tree/main/packages/animate#readme",
+  "bugs": {
+    "url": "https://github.com/daviskeene/inkset/issues"
+  },
+  "keywords": [
+    "inkset",
+    "streaming",
+    "animation",
+    "reveal",
+    "shader",
+    "react"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

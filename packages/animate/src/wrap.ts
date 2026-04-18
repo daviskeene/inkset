@@ -26,21 +26,10 @@
 //     caller apply block-level entrance animation separately.
 
 import { extractText } from "@inkset/core";
-import type {
-  ASTNode,
-  EnrichedNode,
-  GlyphPositionLookup,
-  TokenCoord,
-} from "@inkset/core";
+import type { ASTNode, EnrichedNode, GlyphPositionLookup, TokenCoord } from "@inkset/core";
 import type { ChunkingMode, StaggerOrder } from "./types";
 
-const SKIP_TAGS: ReadonlySet<string> = new Set([
-  "code",
-  "pre",
-  "svg",
-  "math",
-  "annotation",
-]);
+const SKIP_TAGS: ReadonlySet<string> = new Set(["code", "pre", "svg", "math", "annotation"]);
 
 const DEFAULT_MAX_STAGGER_SPAN_MS = 400;
 
@@ -98,10 +87,7 @@ type WalkState = {
   tokens: RevealTokenMeta[];
 };
 
-export const wrapBlockDelta = (
-  node: EnrichedNode,
-  options: WrapOptions,
-): WrapResult => {
+export const wrapBlockDelta = (node: EnrichedNode, options: WrapOptions): WrapResult => {
   const state: WalkState = {
     offset: 0,
     revealedOffset: options.revealedOffset,
@@ -155,10 +141,7 @@ const walkNode = (node: EnrichedNode, state: WalkState): EnrichedNode[] => {
   let changed = false;
   for (const child of node.children) {
     const replacements = walkNode(child as EnrichedNode, state);
-    if (
-      replacements.length !== 1 ||
-      replacements[0] !== (child as EnrichedNode)
-    ) {
+    if (replacements.length !== 1 || replacements[0] !== (child as EnrichedNode)) {
       changed = true;
     }
     for (const replacement of replacements) {
@@ -173,10 +156,7 @@ const walkNode = (node: EnrichedNode, state: WalkState): EnrichedNode[] => {
   return [{ ...node, children: nextChildren }];
 };
 
-const splitTextNode = (
-  node: EnrichedNode,
-  state: WalkState,
-): EnrichedNode[] => {
+const splitTextNode = (node: EnrichedNode, state: WalkState): EnrichedNode[] => {
   const text = node.value ?? "";
   const start = state.offset;
   const end = start + text.length;
@@ -208,12 +188,7 @@ const splitTextNode = (
       } else {
         const offsetStart = freshStartAbs + cursor;
         const offsetEnd = offsetStart + segment.text.length;
-        const span = makeRevealSpan(
-          segment.text,
-          state.tickId,
-          state.tokens.length,
-          node,
-        );
+        const span = makeRevealSpan(segment.text, state.tickId, state.tokens.length, node);
         state.tokens.push({
           span,
           offsetStart,
@@ -248,10 +223,7 @@ const splitTextNode = (
 
 // ── Pass 2: delay + coord assignment ────────────────────────────────
 
-const assignDelaysAndCoords = (
-  tokens: readonly RevealTokenMeta[],
-  options: WrapOptions,
-): void => {
+const assignDelaysAndCoords = (tokens: readonly RevealTokenMeta[], options: WrapOptions): void => {
   if (tokens.length === 0) return;
 
   const order = options.staggerOrder ?? "layout";
@@ -302,9 +274,7 @@ const assignDelaysAndCoords = (
 };
 
 const applyDelay = (span: EnrichedNode, delayMs: number): void => {
-  const style = span.properties?.style as
-    | Record<string, string | number>
-    | undefined;
+  const style = span.properties?.style as Record<string, string | number> | undefined;
   if (style) {
     style["--inkset-reveal-delay"] = `${delayMs}ms`;
   }

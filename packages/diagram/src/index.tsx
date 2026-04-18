@@ -74,7 +74,10 @@ const estimateDiagramContentHeight = (source: string): number => {
 type MermaidModule = {
   default: {
     initialize: (config: Record<string, unknown>) => void;
-    render: (id: string, text: string) => Promise<{ svg: string; bindFunctions?: (el: Element) => void }>;
+    render: (
+      id: string,
+      text: string,
+    ) => Promise<{ svg: string; bindFunctions?: (el: Element) => void }>;
   };
 };
 
@@ -146,8 +149,7 @@ const detectLanguage = (node: ASTNode): string | null => {
   return null;
 };
 
-const isMermaidNode = (node: ASTNode): boolean =>
-  detectLanguage(node) === "mermaid";
+const isMermaidNode = (node: ASTNode): boolean => detectLanguage(node) === "mermaid";
 
 // ── Diagram component ─────────────────────────────────────────────
 
@@ -222,17 +224,16 @@ const DiagramBlock = ({ node, isStreaming }: PluginComponentProps) => {
     };
 
     run();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [id, source, theme, isStreaming]);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(source).then(() => {
       setCopied(true);
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(
-        () => setCopied(false),
-        COPY_FEEDBACK_DURATION_MS,
-      );
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
     });
   }, [source]);
 
@@ -255,15 +256,10 @@ const DiagramBlock = ({ node, isStreaming }: PluginComponentProps) => {
       )}
 
       {displaySvg && !isStreaming ? (
-        <div
-          className="inkset-diagram-content"
-          dangerouslySetInnerHTML={{ __html: displaySvg }}
-        />
+        <div className="inkset-diagram-content" dangerouslySetInnerHTML={{ __html: displaySvg }} />
       ) : error && !isStreaming && !displaySvg ? (
         <div className="inkset-diagram-error">
-          <div className="inkset-diagram-error-label">
-            Diagram error: {error}
-          </div>
+          <div className="inkset-diagram-error-label">Diagram error: {error}</div>
           <pre className="inkset-diagram-source">{source}</pre>
         </div>
       ) : (
@@ -322,15 +318,13 @@ export const createDiagramPlugin = (options?: DiagramPluginOptions): InksetPlugi
 
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
       const source = (node.pluginData?.source as string) ?? "";
-      const headerSpace = (node.pluginData?.showHeader as boolean) === false
-        ? 0
-        : DIAGRAM_HEADER_HEIGHT;
+      const headerSpace =
+        (node.pluginData?.showHeader as boolean) === false ? 0 : DIAGRAM_HEADER_HEIGHT;
       // Type-aware content estimate + chrome. The ResizeObserver feedback
       // in the React layer corrects to real SVG height after paint; this
       // estimate just aims to keep the initial paint close enough that
       // the layout shift doesn't overlap the next block.
-      const estimated =
-        estimateDiagramContentHeight(source) + headerSpace + DIAGRAM_PADDING;
+      const estimated = estimateDiagramContentHeight(source) + headerSpace + DIAGRAM_PADDING;
       return {
         width: maxWidth,
         height: Math.max(DIAGRAM_MIN_HEIGHT, Math.min(DIAGRAM_MAX_ESTIMATE, estimated)),

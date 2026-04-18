@@ -2,6 +2,7 @@ node_modules/
 dist/
 .turbo/
 .next/
+.npm-cache/
 *.tsbuildinfo
 coverage/
 test-results/

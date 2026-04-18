@@ -40,8 +40,7 @@ const collectTokenChunks = (node: EnrichedNode): string[] => {
   return out;
 };
 
-const countRevealSpans = (node: EnrichedNode): number =>
-  collectTokenChunks(node).length;
+const countRevealSpans = (node: EnrichedNode): number => collectTokenChunks(node).length;
 
 // Reconstruct the visible text from the wrapped tree (plain text + span text).
 const flattenText = (node: EnrichedNode): string => {
@@ -99,7 +98,11 @@ describe("splitByChar", () => {
 describe("wrapBlockDelta — first-tick reveal", () => {
   it("wraps every word when starting from offset 0", () => {
     const node = mkElement("p", [mkText("hello world")]);
-    const { node: out, newOffset, tokenCount } = wrapBlockDelta(node, {
+    const {
+      node: out,
+      newOffset,
+      tokenCount,
+    } = wrapBlockDelta(node, {
       revealedOffset: 0,
       tickId: 1,
       staggerMs: 30,
@@ -151,7 +154,11 @@ describe("wrapBlockDelta — delta detection", () => {
 
   it("splits a text node mid-content when the offset lands inside it", () => {
     const node = mkElement("p", [mkText("hello world foo")]);
-    const { node: out, newOffset, tokenCount } = wrapBlockDelta(node, {
+    const {
+      node: out,
+      newOffset,
+      tokenCount,
+    } = wrapBlockDelta(node, {
       // "hello " = 6 chars already revealed
       revealedOffset: 6,
       tickId: 2,
@@ -172,7 +179,11 @@ describe("wrapBlockDelta — delta detection", () => {
       mkText(" foo"),
     ]);
     // Reveal "hello " (6 chars), leaving "world" inside <strong> and " foo" as fresh.
-    const { node: out, newOffset, tokenCount } = wrapBlockDelta(node, {
+    const {
+      node: out,
+      newOffset,
+      tokenCount,
+    } = wrapBlockDelta(node, {
       revealedOffset: 6,
       tickId: 3,
       staggerMs: 30,
@@ -200,9 +211,9 @@ describe("wrapBlockDelta — skip rules", () => {
     });
 
     // code subtree should have NO reveal spans inside it.
-    const code = (out.children ?? []).find(
-      (c) => (c as EnrichedNode).tagName === "code",
-    ) as EnrichedNode | undefined;
+    const code = (out.children ?? []).find((c) => (c as EnrichedNode).tagName === "code") as
+      | EnrichedNode
+      | undefined;
     expect(code).toBeDefined();
     expect(countRevealSpans(code!)).toBe(0);
 
@@ -216,7 +227,11 @@ describe("wrapBlockDelta — skip rules", () => {
     });
     const root = mkElement("div", [codeBlock]);
 
-    const { node: out, newOffset, tokenCount } = wrapBlockDelta(root, {
+    const {
+      node: out,
+      newOffset,
+      tokenCount,
+    } = wrapBlockDelta(root, {
       revealedOffset: 0,
       tickId: 1,
       staggerMs: 30,
@@ -259,23 +274,14 @@ type TokenSpanInfo = {
 const collectSpans = (node: EnrichedNode): TokenSpanInfo[] => {
   const out: TokenSpanInfo[] = [];
   const walk = (n: EnrichedNode) => {
-    if (
-      n.type === "element" &&
-      n.properties?.["data-inkset-reveal-token"] === ""
-    ) {
+    if (n.type === "element" && n.properties?.["data-inkset-reveal-token"] === "") {
       const text = (n.children?.[0] as EnrichedNode | undefined)?.value ?? "";
       const style = n.properties["style"] as Record<string, string>;
-      const delay = parseInt(
-        (style["--inkset-reveal-delay"] ?? "0ms").replace("ms", ""),
-        10,
-      );
+      const delay = parseInt((style["--inkset-reveal-delay"] ?? "0ms").replace("ms", ""), 10);
       out.push({
         text,
         delay,
-        layoutIndex: parseInt(
-          (n.properties["data-inkset-reveal-index"] as string) ?? "-1",
-          10,
-        ),
+        layoutIndex: parseInt((n.properties["data-inkset-reveal-index"] as string) ?? "-1", 10),
         coord: {
           x: n.properties["data-inkset-reveal-x"] as string | undefined,
           y: n.properties["data-inkset-reveal-y"] as string | undefined,

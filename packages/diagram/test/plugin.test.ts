@@ -84,8 +84,7 @@ describe("createDiagramPlugin", () => {
     const longDiagram = plugin.transform(
       makeCodeNode(
         "mermaid",
-        "graph TD\n" +
-          Array.from({ length: 40 }, (_, i) => `  N${i}-->N${i + 1}`).join("\n"),
+        "graph TD\n" + Array.from({ length: 40 }, (_, i) => `  N${i}-->N${i + 1}`).join("\n"),
       ),
       ctx,
     );
@@ -99,10 +98,7 @@ describe("createDiagramPlugin", () => {
   it("type-aware estimates differ between diagram types", () => {
     const plugin = createDiagramPlugin();
     const seq = plugin.transform(
-      makeCodeNode(
-        "mermaid",
-        `sequenceDiagram\nparticipant A\nparticipant B\nA->>B: hi`,
-      ),
+      makeCodeNode("mermaid", `sequenceDiagram\nparticipant A\nparticipant B\nA->>B: hi`),
       ctx,
     );
     const state = plugin.transform(

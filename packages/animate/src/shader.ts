@@ -1,28 +1,59 @@
-import type { ShaderLoader, ShaderPreset } from "./types";
+import type { ShaderLoader, ShaderPreset, ShaderRegistry, ShaderSource } from "./types";
 
-const shaderRegistry = new Map<string, ShaderLoader>();
-
-export const registerShader = (name: string, loader: ShaderLoader): void => {
-  shaderRegistry.set(name, loader);
+type CreateShaderRegistryOptions = {
+  includeBuiltIns?: boolean;
 };
 
-export const hasShader = (name: string): boolean => shaderRegistry.has(name);
+const registerBuiltIns = (registry: ShaderRegistry): void => {
+  registry.register("ink-bleed", async () => {
+    const mod = await import("./shaders/ink-bleed");
+    return mod.inkBleedShader;
+  });
 
-export const listRegisteredShaders = (): string[] =>
-  Array.from(shaderRegistry.keys()).sort();
-
-export const loadShaderPreset = async (name: string): Promise<ShaderPreset | null> => {
-  const loader = shaderRegistry.get(name);
-  if (!loader) return null;
-  return loader();
+  registry.register("dissolve", async () => {
+    const mod = await import("./shaders/dissolve");
+    return mod.dissolveShader;
+  });
 };
 
-registerShader("ink-bleed", async () => {
-  const mod = await import("./shaders/ink-bleed");
-  return mod.inkBleedShader;
-});
+export const createShaderRegistry = (options: CreateShaderRegistryOptions = {}): ShaderRegistry => {
+  const shaderLoaders = new Map<string, ShaderLoader>();
 
-registerShader("dissolve", async () => {
-  const mod = await import("./shaders/dissolve");
-  return mod.dissolveShader;
-});
+  const registry: ShaderRegistry = {
+    register(name, loader) {
+      shaderLoaders.set(name, loader);
+    },
+    has(name) {
+      return shaderLoaders.has(name);
+    },
+    list() {
+      return Array.from(shaderLoaders.keys()).sort();
+    },
+    async load(name) {
+      const loader = shaderLoaders.get(name);
+      if (!loader) return null;
+      return loader();
+    },
+  };
+
+  if (options.includeBuiltIns) {
+    registerBuiltIns(registry);
+  }
+
+  return registry;
+};
+
+export const defaultShaderRegistry = createShaderRegistry({ includeBuiltIns: true });
+
+export const resolveShaderSource = async (
+  source: ShaderSource,
+  registry: ShaderRegistry = defaultShaderRegistry,
+): Promise<ShaderPreset | null> => {
+  if (typeof source === "string") {
+    return registry.load(source);
+  }
+  if (typeof source === "function") {
+    return source();
+  }
+  return source;
+};

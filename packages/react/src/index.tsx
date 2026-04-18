@@ -12,9 +12,6 @@ import React, {
 import {
   StreamingPipeline,
   PluginRegistry,
-  DEFAULT_HEADING_SIZES,
-  DEFAULT_HEADING_WEIGHTS,
-  DEFAULT_HEADING_LINE_HEIGHTS,
   extractText,
   type PipelineState,
   type InksetOptions,
@@ -31,15 +28,19 @@ import {
 } from "@inkset/core";
 import {
   createTokenGate,
-  loadShaderPreset,
+  defaultShaderRegistry,
+  resolveShaderSource,
   wrapBlockDelta,
   type TokenGate,
   type RevealProp,
   type ThrottleOptions,
-  type AnimateOptions,
+  type TimelineOptions,
+  type CssRevealOptions,
   type RevealComponent,
   type RevealComponentProps,
   type ShaderConfig,
+  type ShaderRegistry,
+  type ShaderSource,
   type ShaderInstance,
   type ShaderToken,
 } from "@inkset/animate";
@@ -661,22 +662,38 @@ export interface UseInksetOptions extends InksetOptions {
 // Shapes the `reveal` prop object into the two concrete sub-configs we actually
 // act on during render. `false` / missing keys collapse to `null` so later
 // checks are a single truthiness test.
-type ResolvedAnimate = Required<Omit<AnimateOptions, "staggerOrder" | "maxStaggerSpanMs">> & {
-  staggerOrder: NonNullable<AnimateOptions["staggerOrder"]>;
-  maxStaggerSpanMs: number;
+type ResolvedTimeline = Required<Omit<TimelineOptions, "order" | "maxSpanMs">> & {
+  order: NonNullable<TimelineOptions["order"]>;
+  maxSpanMs: number;
 };
-type ResolvedShader = {
+
+type ResolvedCss = Required<CssRevealOptions> & {
   preset: string;
+};
+
+type ResolvedShader = {
+  source: ShaderSource;
   options?: Record<string, unknown>;
+};
+
+const isShaderConfigObject = (
+  shader: ShaderConfig | false | undefined,
+): shader is Extract<ShaderConfig, { source: ShaderSource }> =>
+  typeof shader === "object" && shader !== null && "source" in shader;
+
+const shaderSourceSignature = (source: ShaderSource): string => {
+  if (typeof source === "string") return `name:${source}`;
+  if (typeof source === "function") return `loader:${source.name || "anonymous"}`;
+  return `preset:${source.name}`;
 };
 
 const shaderConfigSignature = (shader: ShaderConfig | false | undefined): string => {
   if (!shader) return "off";
-  if (typeof shader === "string") return shader;
+  if (!isShaderConfigObject(shader)) return shaderSourceSignature(shader);
   try {
-    return `${shader.preset}:${JSON.stringify(shader.options ?? {})}`;
+    return `${shaderSourceSignature(shader.source)}:${JSON.stringify(shader.options ?? {})}`;
   } catch {
-    return shader.preset;
+    return shaderSourceSignature(shader.source);
   }
 };
 
@@ -684,12 +701,14 @@ const resolveRevealConfig = (
   reveal: RevealProp | undefined,
 ): {
   throttle: Required<ThrottleOptions> | null;
-  animate: ResolvedAnimate | null;
+  timeline: ResolvedTimeline | null;
+  css: ResolvedCss | null;
   component: RevealComponent | null;
   shader: ResolvedShader | null;
 } => {
   const throttleRaw = reveal?.throttle;
-  const animateRaw = reveal?.animate;
+  const timelineRaw = reveal?.timeline;
+  const cssRaw = reveal?.css;
   const shaderRaw = reveal?.shader;
 
   const throttle =
@@ -700,31 +719,34 @@ const resolveRevealConfig = (
           chunking: throttleRaw?.chunking ?? "word",
         };
 
-  const animate: ResolvedAnimate | null =
-    animateRaw === false || reveal === undefined
+  const timeline: ResolvedTimeline | null =
+    timelineRaw === false || reveal === undefined
       ? null
       : {
-          preset: animateRaw?.preset ?? "fadeIn",
-          duration: animateRaw?.duration ?? 320,
-          easing: animateRaw?.easing ?? "cubic-bezier(.2,.8,.2,1)",
-          stagger: animateRaw?.stagger ?? 30,
-          sep: animateRaw?.sep ?? "word",
-          staggerOrder: animateRaw?.staggerOrder ?? "layout",
-          maxStaggerSpanMs: animateRaw?.maxStaggerSpanMs ?? 400,
+          durationMs: timelineRaw?.durationMs ?? 320,
+          stagger: timelineRaw?.stagger ?? 30,
+          sep: timelineRaw?.sep ?? "word",
+          order: timelineRaw?.order ?? "layout",
+          maxSpanMs: timelineRaw?.maxSpanMs ?? 400,
+        };
+
+  const css: ResolvedCss | null =
+    cssRaw === false || reveal === undefined
+      ? null
+      : {
+          preset: cssRaw?.preset ?? "fadeIn",
+          easing: cssRaw?.easing ?? "cubic-bezier(.2,.8,.2,1)",
         };
 
   const component = reveal?.component ?? null;
   const shader =
     shaderRaw === false || shaderRaw == null
       ? null
-      : typeof shaderRaw === "string"
-        ? { preset: shaderRaw }
-        : {
-            preset: shaderRaw.preset,
-            options: shaderRaw.options,
-          };
+      : isShaderConfigObject(shaderRaw)
+        ? { source: shaderRaw.source, options: shaderRaw.options }
+        : { source: shaderRaw };
 
-  return { throttle, animate, component, shader };
+  return { throttle, timeline, css, component, shader };
 };
 
 // Map preset name → CSS `@keyframes` identifier. Unknown strings pass through,
@@ -763,10 +785,7 @@ export type UseInksetResult = {
    * returns non-null once the pipeline has initialized and pretext has
    * loaded. Safe to call from render; cheap for the same (blockId, width).
    */
-  getGlyphLookup: (
-    node: EnrichedNode,
-    maxWidth: number,
-  ) => GlyphPositionLookup | null;
+  getGlyphLookup: (node: EnrichedNode, maxWidth: number) => GlyphPositionLookup | null;
 };
 
 export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
@@ -779,6 +798,11 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
   const [pipelineVersion, setPipelineVersion] = useState(0);
   const pluginSignature =
     options?.plugins?.map((plugin) => `${plugin.name}:${plugin.key ?? ""}`).join("|") ?? "";
+  const hyphenationKey = hyphenationSignature(options?.hyphenation);
+  const shrinkwrapKey = String(options?.shrinkwrap ?? false);
+  const headingSizesKey = options?.headingSizes?.join(",") ?? "";
+  const headingWeightsKey = options?.headingWeights?.join(",") ?? "";
+  const headingLineHeightsKey = options?.headingLineHeights?.join(",") ?? "";
 
   useEffect(() => {
     const pipeline = new StreamingPipeline(options);
@@ -795,7 +819,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     const seededWidth =
       typeof options?.width === "number" && options.width > 0
         ? options.width
-        : containerRef.current?.getBoundingClientRect().width ?? 0;
+        : (containerRef.current?.getBoundingClientRect().width ?? 0);
     if (seededWidth > 0) {
       pipeline.setWidth(seededWidth);
     }
@@ -819,11 +843,11 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     options?.lineHeight,
     options?.blockMargin,
     options?.cacheSize,
-    hyphenationSignature(options?.hyphenation),
-    String(options?.shrinkwrap ?? false),
-    options?.headingSizes?.join(",") ?? "",
-    options?.headingWeights?.join(",") ?? "",
-    options?.headingLineHeights?.join(",") ?? "",
+    hyphenationKey,
+    shrinkwrapKey,
+    headingSizesKey,
+    headingWeightsKey,
+    headingLineHeightsKey,
   ]);
 
   useEffect(() => {
@@ -937,20 +961,21 @@ const BlockRenderer = memo(
     const { node, x, y, width, height, shrinkwrapWidth } = block;
     const blockRef = useRef<HTMLDivElement>(null);
 
-    const plugin = node.transformedBy
-      ? registry.get(node.transformedBy)
-      : undefined;
+    const plugin = node.transformedBy ? registry.get(node.transformedBy) : undefined;
 
     const PluginComponent = plugin?.component;
 
-    const reportHeight = useCallback((priority: "sync" | "deferred") => {
-      const element = blockRef.current;
-      if (!element) return;
-      const nextHeight = Math.ceil(element.getBoundingClientRect().height);
-      if (nextHeight > 0) {
-        onHeightChange(block.blockId, node, width, nextHeight, priority);
-      }
-    }, [block.blockId, node, onHeightChange, width]);
+    const reportHeight = useCallback(
+      (priority: "sync" | "deferred") => {
+        const element = blockRef.current;
+        if (!element) return;
+        const nextHeight = Math.ceil(element.getBoundingClientRect().height);
+        if (nextHeight > 0) {
+          onHeightChange(block.blockId, node, width, nextHeight, priority);
+        }
+      },
+      [block.blockId, node, onHeightChange, width],
+    );
 
     const handleContentSettled = useCallback(() => {
       reportHeight("sync");
@@ -958,9 +983,8 @@ const BlockRenderer = memo(
 
     // Shrinkwrap narrows the text content without changing the block's allocated
     // width, so positioning math and plugin-rendered blocks stay unaffected.
-    const contentMaxWidth = shrinkwrapWidth && shrinkwrapWidth < width
-      ? shrinkwrapWidth
-      : undefined;
+    const contentMaxWidth =
+      shrinkwrapWidth && shrinkwrapWidth < width ? shrinkwrapWidth : undefined;
 
     const style: React.CSSProperties =
       positioning === "absolute"
@@ -1113,11 +1137,7 @@ const renderAstNode = (
   // numeric props here. Inner text is rendered normally via `children`; the
   // consumer can render `{children}` to keep the token visible, or ignore it
   // (e.g. if they're drawing the text themselves on a canvas).
-  if (
-    revealComponent &&
-    tagName === "span" &&
-    props["data-inkset-reveal-token"] === ""
-  ) {
+  if (revealComponent && tagName === "span" && props["data-inkset-reveal-token"] === "") {
     const rawChildren = node.children;
     const children = rawChildren?.map((child, index) =>
       renderAstNode(
@@ -1130,27 +1150,17 @@ const renderAstNode = (
       ),
     );
 
-    const style = props.style as
-      | Record<string, string | number>
-      | undefined;
+    const style = props.style as Record<string, string | number> | undefined;
     const delayRaw = style?.["--inkset-reveal-delay"] as string | undefined;
     const delayMs = delayRaw ? parseFloat(delayRaw) : 0;
     const token = extractTextFromChildren(rawChildren);
     const x = parseFloat((props["data-inkset-reveal-x"] as string) ?? "") || 0;
     const y = parseFloat((props["data-inkset-reveal-y"] as string) ?? "") || 0;
-    const width =
-      parseFloat((props["data-inkset-reveal-w"] as string) ?? "") || 0;
-    const height =
-      parseFloat((props["data-inkset-reveal-h"] as string) ?? "") || 0;
+    const width = parseFloat((props["data-inkset-reveal-w"] as string) ?? "") || 0;
+    const height = parseFloat((props["data-inkset-reveal-h"] as string) ?? "") || 0;
     const hasCoords = "data-inkset-reveal-x" in props;
-    const tickId = parseInt(
-      (props["data-inkset-reveal-tick"] as string) ?? "0",
-      10,
-    );
-    const tokenIndex = parseInt(
-      (props["data-inkset-reveal-index"] as string) ?? "0",
-      10,
-    );
+    const tickId = parseInt((props["data-inkset-reveal-tick"] as string) ?? "0", 10);
+    const tokenIndex = parseInt((props["data-inkset-reveal-index"] as string) ?? "0", 10);
 
     const RevealImpl = revealComponent;
     const componentProps: RevealComponentProps = {
@@ -1188,9 +1198,7 @@ const renderAstNode = (
   return React.createElement(tagName, props, ...(children ?? []));
 };
 
-const extractTextFromChildren = (
-  children: EnrichedNode["children"] | undefined,
-): string => {
+const extractTextFromChildren = (children: EnrichedNode["children"] | undefined): string => {
   if (!children) return "";
   let out = "";
   for (const child of children) {
@@ -1227,11 +1235,7 @@ const renderTextNode = (
 
   return segments.map((segment, index) => {
     if (segment.type === "text") {
-      return (
-        <React.Fragment key={`${key}.text.${index}`}>
-          {segment.value}
-        </React.Fragment>
-      );
+      return <React.Fragment key={`${key}.text.${index}`}>{segment.value}</React.Fragment>;
     }
 
     const inlineNode: EnrichedNode = {
@@ -1256,13 +1260,7 @@ const renderTextNode = (
     };
 
     const InlineMath = mathPlugin.component;
-    return (
-      <InlineMath
-        key={`${key}.math.${index}`}
-        node={inlineNode}
-        isStreaming={false}
-      />
-    );
+    return <InlineMath key={`${key}.math.${index}`} node={inlineNode} isStreaming={false} />;
   });
 };
 
@@ -1272,6 +1270,20 @@ const toReactProps = (
 ): Record<string, unknown> => {
   const props: Record<string, unknown> = { key };
   if (!properties) return props;
+
+  const revealTick = properties["data-inkset-reveal-tick"];
+  const revealIndex = properties["data-inkset-reveal-index"];
+  if (
+    properties["data-inkset-reveal-token"] === "" &&
+    typeof revealTick === "string" &&
+    typeof revealIndex === "string"
+  ) {
+    // Force each freshly revealed token span to remount on every pipeline tick.
+    // Without this, long plain-text runs reuse the same <span> DOM node at the
+    // same child index, React only updates its textContent, and the CSS reveal
+    // keyframes do not replay for the latest streamed word.
+    props.key = `${key}.reveal.${revealTick}.${revealIndex}`;
+  }
 
   for (const [name, value] of Object.entries(properties)) {
     if (value == null || value === false) continue;
@@ -1335,9 +1347,7 @@ const collectShaderTokens = (
   }
 };
 
-type InlineMathSegment =
-  | { type: "text"; value: string }
-  | { type: "math"; value: string };
+type InlineMathSegment = { type: "text"; value: string } | { type: "math"; value: string };
 
 const splitInlineMath = (text: string): InlineMathSegment[] => {
   const segments: InlineMathSegment[] = [];
@@ -1386,7 +1396,6 @@ const findInlineMathDelimiter = (text: string, fromIndex: number): number => {
 
   return -1;
 };
-
 
 // ── <Inkset> component ──────────────────────────────────────────
 
@@ -1452,13 +1461,13 @@ export type InksetProps = {
    */
   loadingFallback?: ReactNode;
   /**
-   * Reveal configuration: token throttling, per-token animation, and (in later
-   * phases) custom reveal components / shader overlays. Pass an empty object
-   * `{}` for opinionated defaults (word-level throttle at 30ms + fadeIn). Set
-   * individual keys to `false` to opt out of a sub-feature, e.g.
-   * `reveal={{ throttle: false, animate: {} }}` for animation without pacing.
+   * Reveal configuration: token throttling, sequencing metadata, the built-in
+   * CSS token renderer, and optional custom component / shader layers. Pass an
+   * empty object `{}` for opinionated defaults.
    */
   reveal?: RevealProp;
+  /** Optional shader registry used to resolve string shader sources. */
+  shaderRegistry?: ShaderRegistry;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -1483,34 +1492,46 @@ export const Inkset = ({
   unstyled,
   loadingFallback,
   reveal,
+  shaderRegistry,
   className,
   style,
   children,
 }: InksetProps) => {
-  const { state, registry, pipelineVersion, containerRef, setContent, endStream, getGlyphLookup } = useInkset({
-    plugins,
-    width,
-    font,
-    fontSize,
-    lineHeight,
-    blockMargin,
-    hyphenation,
-    shrinkwrap,
-    headingSizes,
-    headingWeights,
-    headingLineHeights,
-  });
+  const { state, registry, pipelineVersion, containerRef, setContent, endStream, getGlyphLookup } =
+    useInkset({
+      plugins,
+      width,
+      font,
+      fontSize,
+      lineHeight,
+      blockMargin,
+      hyphenation,
+      shrinkwrap,
+      headingSizes,
+      headingWeights,
+      headingLineHeights,
+    });
 
   // Reveal config — memoized so stable refs feed the rendering + effect deps.
   // Intentionally not depending on `reveal` object identity: consumers pass
   // inline literals often, so we key on concrete fields.
-  const revealThrottleDelay = reveal?.throttle === false
-    ? -1
-    : reveal?.throttle?.delayInMs ?? (reveal ? 30 : -1);
-  const revealThrottleChunking = reveal?.throttle === false
-    ? "word"
-    : reveal?.throttle?.chunking ?? "word";
+  const revealThrottleDelay =
+    reveal?.throttle === false ? -1 : (reveal?.throttle?.delayInMs ?? (reveal ? 30 : -1));
+  const revealThrottleChunking =
+    reveal?.throttle === false ? "word" : (reveal?.throttle?.chunking ?? "word");
+  const revealTimelineDuration =
+    reveal?.timeline === false ? -1 : (reveal?.timeline?.durationMs ?? (reveal ? 320 : -1));
+  const revealTimelineStagger =
+    reveal?.timeline === false ? -1 : (reveal?.timeline?.stagger ?? (reveal ? 30 : -1));
+  const revealTimelineSep = reveal?.timeline === false ? "word" : (reveal?.timeline?.sep ?? "word");
+  const revealTimelineOrder =
+    reveal?.timeline === false ? "layout" : (reveal?.timeline?.order ?? "layout");
+  const revealTimelineMaxSpan =
+    reveal?.timeline === false ? -1 : (reveal?.timeline?.maxSpanMs ?? (reveal ? 400 : -1));
+  const revealCssPreset = reveal?.css === false ? false : reveal?.css?.preset;
+  const revealCssEasing = reveal?.css === false ? false : reveal?.css?.easing;
   const revealShaderSignature = shaderConfigSignature(reveal?.shader);
+  const revealIsUndefined = reveal === undefined;
   const revealConfig = useMemo(
     () => resolveRevealConfig(reveal),
     // Order matters for perf — this runs on every render if deps change.
@@ -1518,13 +1539,16 @@ export const Inkset = ({
     [
       revealThrottleDelay,
       revealThrottleChunking,
-      reveal?.animate === false ? false : reveal?.animate?.preset,
-      reveal?.animate === false ? false : reveal?.animate?.duration,
-      reveal?.animate === false ? false : reveal?.animate?.easing,
-      reveal?.animate === false ? false : reveal?.animate?.stagger,
-      reveal?.animate === false ? false : reveal?.animate?.sep,
+      revealTimelineDuration,
+      revealTimelineStagger,
+      revealTimelineSep,
+      revealTimelineOrder,
+      revealTimelineMaxSpan,
+      revealCssPreset,
+      revealCssEasing,
       revealShaderSignature,
-      reveal === undefined,
+      reveal?.component,
+      revealIsUndefined,
     ],
   );
 
@@ -1545,17 +1569,23 @@ export const Inkset = ({
   // Stays true for the streaming -> settled transition so the final append can
   // drain through the gate instead of fast-forwarding and replaying reveal.
   const streamSessionActiveRef = useRef(false);
+  // Handle for the post-drain hold that keeps the reveal session alive long
+  // enough for the tail chunk's wrap tick + blur-in keyframes to play out
+  // before data-inkset-reveal is torn down. Cleared on re-entry or unmount.
+  const drainHoldTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealThrottleConfig = revealConfig.throttle;
+  const shaderTokenBatchRef = useRef<ShaderToken[]>([]);
 
   // Build / rebuild the gate when throttle config changes.
   useEffect(() => {
-    if (!revealConfig.throttle) {
+    if (!revealThrottleConfig) {
       tokenGateRef.current = null;
       setRevealDrainActive(false);
       return;
     }
     const gate = createTokenGate({
-      delayInMs: revealConfig.throttle.delayInMs,
-      chunking: revealConfig.throttle.chunking,
+      delayInMs: revealThrottleConfig.delayInMs,
+      chunking: revealThrottleConfig.chunking,
       onEmit: (chunk) => {
         setDisplayedContent((prev) => (prev ?? "") + chunk);
       },
@@ -1564,7 +1594,7 @@ export const Inkset = ({
     return () => {
       gate.reset();
     };
-  }, [revealConfig.throttle?.delayInMs, revealConfig.throttle?.chunking]);
+  }, [revealThrottleConfig]);
 
   // Feed external content through the gate (or pass through if no throttle).
   useEffect(() => {
@@ -1622,16 +1652,54 @@ export const Inkset = ({
       return;
     }
     const gate = tokenGateRef.current;
-    if (revealConfig.animate) {
+    const timeline = revealConfig.timeline;
+    const revealTokenEffectsConfigured =
+      timeline != null &&
+      (revealConfig.css != null || revealConfig.component != null || revealConfig.shader != null);
+    if (revealTokenEffectsConfigured) {
       setRevealDrainActive(true);
     }
+
+    let cancelled = false;
     void gate.flush().finally(() => {
-      if (tokenGateRef.current === gate) {
+      if (cancelled || tokenGateRef.current !== gate) return;
+      // The last emit inside drainTick scheduled a setDisplayedContent, and
+      // .finally runs as a microtask chained to that same resolve. If we
+      // flip the session off here synchronously, React batches both updates
+      // into a single render where revealSessionActive has already gone
+      // false — the wrap pass skips, the tail tokens never get
+      // data-inkset-reveal-token spans, and the blur-in never triggers.
+      //
+      // Defer via setTimeout so the final content render commits first
+      // (wrap tick runs with reveal effects still on, CSS selector
+      // matches, animations kick off). Hold for one animation lifetime
+      // so the keyframes play out before data-inkset-reveal is torn down
+      // and the CSS selector stops matching.
+      const holdMs = timeline ? timeline.durationMs + timeline.maxSpanMs : 0;
+      drainHoldTimeoutRef.current = setTimeout(() => {
+        drainHoldTimeoutRef.current = null;
+        if (cancelled || tokenGateRef.current !== gate) return;
         streamSessionActiveRef.current = false;
-        setRevealDrainActive(false);
-      }
+        if (revealTokenEffectsConfigured) {
+          setRevealDrainActive(false);
+        }
+      }, holdMs);
     });
-  }, [streaming, revealConfig.animate]);
+
+    return () => {
+      cancelled = true;
+      if (drainHoldTimeoutRef.current !== null) {
+        clearTimeout(drainHoldTimeoutRef.current);
+        drainHoldTimeoutRef.current = null;
+      }
+    };
+  }, [
+    streaming,
+    revealConfig.timeline,
+    revealConfig.css,
+    revealConfig.component,
+    revealConfig.shader,
+  ]);
 
   const effectiveContent = revealConfig.throttle ? displayedContent : content;
 
@@ -1679,8 +1747,7 @@ export const Inkset = ({
 
     const prevContent = prevContentRef.current.content;
     const prevPipelineVersion = prevContentRef.current.pipelineVersion;
-    const grewMonotonically =
-      prevContent !== undefined && effectiveContent.startsWith(prevContent);
+    const grewMonotonically = prevContent !== undefined && effectiveContent.startsWith(prevContent);
     const continuingRevealSession = streaming || streamSessionActiveRef.current;
     const replacedDocument =
       prevPipelineVersion !== pipelineVersion ||
@@ -1719,10 +1786,7 @@ export const Inkset = ({
     if (!state) return;
 
     const currentBlocks = new Map(
-      state.layout.map((block) => [
-        block.blockId,
-        { node: block.node, width: block.width },
-      ]),
+      state.layout.map((block) => [block.blockId, { node: block.node, width: block.width }]),
     );
 
     setResolvedHeights((prev) => {
@@ -1880,9 +1944,8 @@ export const Inkset = ({
   const resolvedLayout = state
     ? resolveLayout(state.layout, resolvedHeights, observedHeightsRef.current, margin)
     : [];
-  const resolvedHeight = resolvedLayout.length > 0
-    ? getLayoutHeight(resolvedLayout)
-    : (state?.totalHeight ?? 0);
+  const resolvedHeight =
+    resolvedLayout.length > 0 ? getLayoutHeight(resolvedLayout) : (state?.totalHeight ?? 0);
 
   // Compute delta-wrapped render nodes for blocks that opted into animation.
   // Cached per (tick, blockId) so subsequent renders within the same pipeline
@@ -1893,15 +1956,16 @@ export const Inkset = ({
   const displayNodes = new Map<number, EnrichedNode>();
   const shaderTokenBatch: ShaderToken[] = [];
   let pendingAriaMirrorText = "";
-  const animateConfig = revealConfig.animate;
-  const revealSessionActive =
-    streaming || streamSessionActiveRef.current || revealDrainActive;
+  const timelineConfig = revealConfig.timeline;
+  const cssRevealConfig = revealConfig.css;
+  const revealSessionActive = streaming || streamSessionActiveRef.current || revealDrainActive;
   const revealTokenEffectsConfigured =
-    animateConfig != null || revealConfig.component != null || revealConfig.shader != null;
-  const revealTokenEffectsActive =
-    revealTokenEffectsConfigured && revealSessionActive;
+    timelineConfig != null &&
+    (cssRevealConfig != null || revealConfig.component != null || revealConfig.shader != null);
+  const revealTokenEffectsActive = revealTokenEffectsConfigured && revealSessionActive;
   const defaultCssRevealActive =
-    animateConfig != null &&
+    timelineConfig != null &&
+    cssRevealConfig != null &&
     revealConfig.component == null &&
     revealSessionActive;
   if (revealTokenEffectsActive && state) {
@@ -1924,7 +1988,7 @@ export const Inkset = ({
         if (cached !== block.node) {
           displayNodes.set(block.blockId, cached);
           if (revealConfig.shader) {
-            collectShaderTokens(cached, block, animateConfig?.duration ?? 320, shaderTokenBatch);
+            collectShaderTokens(cached, block, timelineConfig?.durationMs ?? 320, shaderTokenBatch);
           }
         }
         continue;
@@ -1935,35 +1999,32 @@ export const Inkset = ({
       // sort by (y, x) and stash coords on each span. `getGlyphLookup` returns
       // null when pretext hasn't loaded or the environment has no Canvas;
       // wrap.ts falls through to arrival-order delays in that case.
-      const wrapStaggerOrder = animateConfig?.staggerOrder ?? "layout";
+      const wrapStaggerOrder = timelineConfig?.order ?? "layout";
       const glyphLookup =
-        wrapStaggerOrder === "layout"
-          ? getGlyphLookup(block.node, block.width)
-          : null;
+        wrapStaggerOrder === "layout" ? getGlyphLookup(block.node, block.width) : null;
       const { node: wrapped, newOffset } = wrapBlockDelta(block.node, {
         revealedOffset: prevOffset,
         tickId: currentRevealTick,
-        staggerMs: animateConfig?.stagger ?? 30,
-        sep: animateConfig?.sep ?? "word",
+        staggerMs: timelineConfig?.stagger ?? 30,
+        sep: timelineConfig?.sep ?? "word",
         staggerOrder: wrapStaggerOrder,
-        maxStaggerSpanMs: animateConfig?.maxStaggerSpanMs ?? 400,
+        maxStaggerSpanMs: timelineConfig?.maxSpanMs ?? 400,
         glyphLookup,
       });
       wrapCacheRef.current.set(block.blockId, wrapped);
       if (wrapped !== block.node) {
         displayNodes.set(block.blockId, wrapped);
         if (revealConfig.shader) {
-          collectShaderTokens(wrapped, block, animateConfig?.duration ?? 320, shaderTokenBatch);
+          collectShaderTokens(wrapped, block, timelineConfig?.durationMs ?? 320, shaderTokenBatch);
         }
       }
       pendingRevealOffsetsRef.current.set(block.blockId, newOffset);
     }
     // Build aria mirror text from original (unwrapped) nodes so screen readers
     // announce coherent block content instead of tokenised span runs.
-    pendingAriaMirrorText = resolvedLayout
-      .map((block) => extractText(block.node))
-      .join("\n\n");
+    pendingAriaMirrorText = resolvedLayout.map((block) => extractText(block.node)).join("\n\n");
   }
+  shaderTokenBatchRef.current = shaderTokenBatch;
 
   // Commit pending reveal offsets after each pipeline tick. Gated on
   // lastProcessedRevealTickRef so strict-mode double-render / interleaved
@@ -1979,30 +2040,19 @@ export const Inkset = ({
 
   // The hot block (last during streaming) uses normal document flow so CSS
   // handles its height natively, avoiding measurement race conditions
-  const hotBlockIndex = streaming && resolvedLayout.length > 0
-    ? resolvedLayout.length - 1
-    : -1;
-  const frozenBlocks = hotBlockIndex >= 0
-    ? resolvedLayout.slice(0, hotBlockIndex)
-    : resolvedLayout;
-  const hotBlock = hotBlockIndex >= 0
-    ? resolvedLayout[hotBlockIndex]
-    : null;
+  const hotBlockIndex = streaming && resolvedLayout.length > 0 ? resolvedLayout.length - 1 : -1;
+  const frozenBlocks = hotBlockIndex >= 0 ? resolvedLayout.slice(0, hotBlockIndex) : resolvedLayout;
+  const hotBlock = hotBlockIndex >= 0 ? resolvedLayout[hotBlockIndex] : null;
 
   // Pushes the normal-flow hot block below the absolute-positioned frozen blocks
-  const spacerHeight = hotBlock
-    ? hotBlock.y
-    : 0;
+  const spacerHeight = hotBlock ? hotBlock.y : 0;
 
-  const containerMinHeight = hotBlock
-    ? undefined
-    : resolvedHeight || (state?.totalHeight ?? 0);
+  const containerMinHeight = hotBlock ? undefined : resolvedHeight || (state?.totalHeight ?? 0);
 
   const baseFontSize = fontSize ?? DEFAULT_FONT_SIZE;
   const baseLineHeight = lineHeight ?? DEFAULT_LINE_HEIGHT;
-  const baseLineHeightRatio = baseFontSize > 0
-    ? baseLineHeight / baseFontSize
-    : DEFAULT_LINE_HEIGHT_RATIO;
+  const baseLineHeightRatio =
+    baseFontSize > 0 ? baseLineHeight / baseFontSize : DEFAULT_LINE_HEIGHT_RATIO;
 
   // Precedence (low → high): CSS defaults in INKSET_STYLES → font/fontSize/
   // lineHeight props → heading tuple props → `theme` prop → `style` prop.
@@ -2023,13 +2073,13 @@ export const Inkset = ({
     WebkitHyphens: hyphenation ? "manual" : undefined,
     overflowWrap: hyphenation ? "break-word" : undefined,
     textWrap,
-    ...(animateConfig
+    ...(timelineConfig && cssRevealConfig
       ? {
           "--inkset-reveal-display":
-            animateConfig.preset === "fadeIn" ? "inline" : "inline-block",
-          "--inkset-reveal-name": presetToKeyframeName(animateConfig.preset),
-          "--inkset-reveal-duration": `${animateConfig.duration}ms`,
-          "--inkset-reveal-easing": animateConfig.easing,
+            cssRevealConfig.preset === "fadeIn" ? "inline" : "inline-block",
+          "--inkset-reveal-name": presetToKeyframeName(cssRevealConfig.preset),
+          "--inkset-reveal-duration": `${timelineConfig.durationMs}ms`,
+          "--inkset-reveal-easing": cssRevealConfig.easing,
         }
       : {}),
     ...style,
@@ -2039,15 +2089,15 @@ export const Inkset = ({
   // Only show the fallback when we actually have content to render; empty
   // Inkset instances stay empty.
   const isLoading = state === null && content !== undefined && content.length > 0;
-  const fallbackNode =
-    loadingFallback === undefined ? <InksetDefaultLoading /> : loadingFallback;
+  const fallbackNode = loadingFallback === undefined ? <InksetDefaultLoading /> : loadingFallback;
+  const resolvedShaderRegistry = shaderRegistry ?? defaultShaderRegistry;
   const disposeShaderInstance = useCallback(() => {
     shaderInstanceRef.current?.dispose();
     shaderInstanceRef.current = null;
   }, []);
 
   const resizeShaderCanvas = useCallback(() => {
-    if (!revealConfig.shader) return;
+    if (!revealConfig.shader || !timelineConfig) return;
     const canvas = shaderCanvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -2066,15 +2116,15 @@ export const Inkset = ({
     }
     canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${cssHeight}px`;
-  }, [containerRef, revealConfig.shader, resolvedHeight, state?.totalHeight]);
+  }, [containerRef, revealConfig.shader, resolvedHeight, state?.totalHeight, timelineConfig]);
 
   useLayoutEffect(() => {
-    if (!revealConfig.shader) return;
+    if (!revealConfig.shader || !timelineConfig) return;
     resizeShaderCanvas();
-  }, [revealConfig.shader, resizeShaderCanvas]);
+  }, [revealConfig.shader, resizeShaderCanvas, timelineConfig]);
 
   useEffect(() => {
-    if (!revealConfig.shader) {
+    if (!revealConfig.shader || !timelineConfig) {
       shaderDisabledRef.current = false;
       pendingShaderTokensRef.current = [];
       lastShaderEmitTickRef.current = -1;
@@ -2091,7 +2141,7 @@ export const Inkset = ({
     shaderDisabledRef.current = false;
     resizeShaderCanvas();
 
-    void loadShaderPreset(shaderConfig.preset)
+    void resolveShaderSource(shaderConfig.source, resolvedShaderRegistry)
       .then((preset) => {
         if (!preset || cancelled) return null;
         return preset.init(container, {
@@ -2136,11 +2186,13 @@ export const Inkset = ({
     disposeShaderInstance,
     revealConfig.shader,
     revealShaderSignature,
+    resolvedShaderRegistry,
     resizeShaderCanvas,
+    timelineConfig,
   ]);
 
   useEffect(() => {
-    if (!revealConfig.shader) return;
+    if (!revealConfig.shader || !timelineConfig) return;
     const container = containerRef.current;
     if (!container) return;
 
@@ -2149,11 +2201,12 @@ export const Inkset = ({
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, [containerRef, revealConfig.shader, resizeShaderCanvas]);
+  }, [containerRef, revealConfig.shader, resizeShaderCanvas, timelineConfig]);
 
   useLayoutEffect(() => {
-    if (!revealConfig.shader) return;
-    if (shaderTokenBatch.length === 0) return;
+    if (!revealConfig.shader || !timelineConfig) return;
+    const tokenBatch = shaderTokenBatchRef.current;
+    if (tokenBatch.length === 0) return;
     if (currentRevealTick === lastShaderEmitTickRef.current) return;
 
     lastShaderEmitTickRef.current = currentRevealTick;
@@ -2162,11 +2215,11 @@ export const Inkset = ({
     }
     const instance = shaderInstanceRef.current;
     if (instance) {
-      instance.emit(shaderTokenBatch);
+      instance.emit(tokenBatch);
     } else {
-      pendingShaderTokensRef.current.push(...shaderTokenBatch);
+      pendingShaderTokensRef.current.push(...tokenBatch);
     }
-  }, [currentRevealTick, revealConfig.shader, shaderTokenBatch]);
+  }, [currentRevealTick, revealConfig.shader, timelineConfig]);
 
   // When reveal token effects are active, per-token wrappers would otherwise
   // fragment `aria-live`. We move announcements to a visually-hidden mirror
@@ -2187,7 +2240,7 @@ export const Inkset = ({
 
       {isLoading && fallbackNode}
 
-      {revealConfig.shader && (
+      {revealConfig.shader && timelineConfig && (
         <canvas
           ref={shaderCanvasRef}
           aria-hidden
@@ -2215,7 +2268,7 @@ export const Inkset = ({
           onHeightChange={handleHeightChange}
           displayNode={displayNodes.get(block.blockId)}
           revealComponent={revealConfig.component}
-          revealDurationMs={animateConfig?.duration ?? 320}
+          revealDurationMs={timelineConfig?.durationMs ?? 320}
         />
       ))}
 
@@ -2238,18 +2291,13 @@ export const Inkset = ({
             onHeightChange={handleHeightChange}
             displayNode={displayNodes.get(hotBlock.blockId)}
             revealComponent={revealConfig.component}
-            revealDurationMs={animateConfig?.duration ?? 320}
+            revealDurationMs={timelineConfig?.durationMs ?? 320}
           />
         </>
       )}
 
       {revealTokenEffectsActive && (
-        <div
-          className="inkset-aria-mirror"
-          role="status"
-          aria-live="polite"
-          aria-atomic={false}
-        >
+        <div className="inkset-aria-mirror" role="status" aria-live="polite" aria-atomic={false}>
           {pendingAriaMirrorText}
         </div>
       )}
@@ -2276,18 +2324,23 @@ export type {
 export { themeToCssVars } from "./theme";
 export type { InksetTheme, HeadingTuple, InksetCssVars } from "./theme";
 
+export { createShaderRegistry, defaultShaderRegistry } from "@inkset/animate";
+
 export type {
   RevealProp,
   ThrottleOptions,
-  AnimateOptions,
-  AnimationPreset,
+  TimelineOptions,
+  CssRevealOptions,
+  CssRevealPreset,
   ChunkingMode,
   StaggerOrder,
   RevealComponent,
   RevealComponentProps,
+  ShaderRegistry,
+  ShaderPreset,
+  ShaderLoader,
+  ShaderSource,
+  ShaderConfig,
 } from "@inkset/animate";
 
-export type {
-  TokenCoord,
-  GlyphPositionLookup,
-} from "@inkset/core";
+export type { TokenCoord, GlyphPositionLookup } from "@inkset/core";

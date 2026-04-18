@@ -22,7 +22,9 @@ describe("Inkset custom reveal components", () => {
   let originalResizeObserver: typeof globalThis.ResizeObserver | undefined;
 
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
 
     originalResizeObserver = globalThis.ResizeObserver;
     globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
@@ -73,64 +75,44 @@ describe("Inkset custom reveal components", () => {
     container.remove();
     vi.restoreAllMocks();
     globalThis.ResizeObserver = originalResizeObserver as typeof ResizeObserver;
-    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+      .IS_REACT_ACT_ENVIRONMENT;
   });
 
   it("remounts the custom component for each fresh token in a continuing stream", async () => {
     const mountedTokens: string[] = [];
 
-    function MountOnlyReveal({ token, children }: RevealComponentProps) {
+    const MountOnlyReveal = ({ token, children }: RevealComponentProps) => {
       useEffect(() => {
         mountedTokens.push(token);
       }, [token]);
 
       return <span data-token={token}>{children}</span>;
-    }
+    };
 
     const reveal = {
       throttle: false as const,
-      animate: {
-        preset: "fadeIn" as const,
-        duration: 120,
+      timeline: {
+        durationMs: 120,
         stagger: 30,
         sep: "word" as const,
       },
+      css: false as const,
       component: MountOnlyReveal,
     };
 
     await act(async () => {
-      root.render(
-        <Inkset
-          content="Alpha"
-          streaming
-          width={320}
-          reveal={reveal}
-        />,
-      );
+      root.render(<Inkset content="Alpha" streaming width={320} reveal={reveal} />);
     });
     await flushMicrotasks();
 
     await act(async () => {
-      root.render(
-        <Inkset
-          content="Alpha beta"
-          streaming
-          width={320}
-          reveal={reveal}
-        />,
-      );
+      root.render(<Inkset content="Alpha beta" streaming width={320} reveal={reveal} />);
     });
     await flushMicrotasks();
 
     await act(async () => {
-      root.render(
-        <Inkset
-          content="Alpha beta gamma"
-          streaming
-          width={320}
-          reveal={reveal}
-        />,
-      );
+      root.render(<Inkset content="Alpha beta gamma" streaming width={320} reveal={reveal} />);
     });
     await flushMicrotasks();
 

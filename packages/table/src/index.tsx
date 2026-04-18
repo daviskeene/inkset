@@ -112,9 +112,8 @@ export const createTablePlugin = (options?: TablePluginOptions): InksetPlugin =>
       const html = (node.pluginData?.html as string) ?? "";
       const rowCount = (html.match(/<tr/g) ?? []).length;
       // The header bar only occupies space when showCopy is on.
-      const headerHeight = (node.pluginData?.showCopy as boolean) === false
-        ? 0
-        : TABLE_HEADER_HEIGHT;
+      const headerHeight =
+        (node.pluginData?.showCopy as boolean) === false ? 0 : TABLE_HEADER_HEIGHT;
 
       return {
         width: maxWidth,
@@ -133,7 +132,10 @@ const nodeToCSV = (node: ASTNode): string => {
   return rows
     .map((row) => {
       const cells = findNodes(row, "th").concat(findNodes(row, "td"));
-      return cells.map((cell) => extractText(cell).replace(/"/g, '""')).map((t) => `"${t}"`).join(",");
+      return cells
+        .map((cell) => extractText(cell).replace(/"/g, '""'))
+        .map((t) => `"${t}"`)
+        .join(",");
     })
     .join("\n");
 };

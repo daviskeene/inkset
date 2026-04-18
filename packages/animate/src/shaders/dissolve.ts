@@ -11,11 +11,9 @@ type Speck = {
   delayMs: number;
 };
 
-const now = (): number =>
-  typeof performance !== "undefined" ? performance.now() : Date.now();
+const now = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
-const clamp01 = (value: number): number =>
-  value < 0 ? 0 : value > 1 ? 1 : value;
+const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
 const hash = (seed: number): number => {
   const x = Math.sin(seed * 12.9898) * 43758.5453;

@@ -1,25 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
-  hasShader,
-  listRegisteredShaders,
-  loadShaderPreset,
-  registerShader,
+  createShaderRegistry,
+  defaultShaderRegistry,
+  resolveShaderSource,
   type ShaderPreset,
 } from "../src/index";
 
 describe("shader registry", () => {
   it("pre-registers the built-in shader presets", async () => {
-    expect(hasShader("ink-bleed")).toBe(true);
-    expect(hasShader("dissolve")).toBe(true);
+    expect(defaultShaderRegistry.has("ink-bleed")).toBe(true);
+    expect(defaultShaderRegistry.has("dissolve")).toBe(true);
 
-    const bleed = await loadShaderPreset("ink-bleed");
-    const dissolve = await loadShaderPreset("dissolve");
+    const bleed = await defaultShaderRegistry.load("ink-bleed");
+    const dissolve = await defaultShaderRegistry.load("dissolve");
 
     expect(bleed?.name).toBe("ink-bleed");
     expect(dissolve?.name).toBe("dissolve");
   });
 
-  it("loads consumer-registered shaders by name", async () => {
+  it("loads consumer-registered shaders by name from an instance-scoped registry", async () => {
     const preset: ShaderPreset = {
       name: "unit-test-shader",
       async init() {
@@ -29,10 +28,27 @@ describe("shader registry", () => {
         };
       },
     };
+    const registry = createShaderRegistry();
 
-    registerShader("unit-test-shader", async () => preset);
+    registry.register("unit-test-shader", async () => preset);
 
-    expect(listRegisteredShaders()).toContain("unit-test-shader");
-    expect(await loadShaderPreset("unit-test-shader")).toBe(preset);
+    expect(registry.list()).toContain("unit-test-shader");
+    expect(await registry.load("unit-test-shader")).toBe(preset);
+    expect(defaultShaderRegistry.has("unit-test-shader")).toBe(false);
+  });
+
+  it("resolves direct preset and loader sources without registration", async () => {
+    const preset: ShaderPreset = {
+      name: "direct-shader",
+      async init() {
+        return {
+          emit() {},
+          dispose() {},
+        };
+      },
+    };
+
+    expect(await resolveShaderSource(preset)).toBe(preset);
+    expect(await resolveShaderSource(async () => preset)).toBe(preset);
   });
 });

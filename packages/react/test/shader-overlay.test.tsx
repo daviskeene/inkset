@@ -2,7 +2,7 @@ import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerShader, type ShaderPreset, type ShaderToken } from "@inkset/animate";
+import { createShaderRegistry, type ShaderPreset, type ShaderToken } from "@inkset/animate";
 import { Inkset } from "../src/index.js";
 
 class MockResizeObserver {
@@ -31,7 +31,9 @@ describe("Inkset shader overlay", () => {
   let originalResizeObserver: typeof globalThis.ResizeObserver | undefined;
 
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
 
     originalResizeObserver = globalThis.ResizeObserver;
     globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
@@ -94,7 +96,8 @@ describe("Inkset shader overlay", () => {
     container.remove();
     vi.restoreAllMocks();
     globalThis.ResizeObserver = originalResizeObserver as typeof ResizeObserver;
-    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+      .IS_REACT_ACT_ENVIRONMENT;
   });
 
   it("queues and emits fresh token rects to the shader instance", async () => {
@@ -113,17 +116,18 @@ describe("Inkset shader overlay", () => {
       },
     };
 
-    registerShader(shaderName, async () => preset);
+    const shaderRegistry = createShaderRegistry();
+    shaderRegistry.register(shaderName, async () => preset);
 
     const reveal = {
       throttle: false as const,
-      animate: {
-        preset: "fadeIn" as const,
-        duration: 120,
+      timeline: {
+        durationMs: 120,
         stagger: 30,
         sep: "word" as const,
       },
-      shader: shaderName,
+      css: false as const,
+      shader: { source: shaderName },
     };
 
     await act(async () => {
@@ -133,6 +137,7 @@ describe("Inkset shader overlay", () => {
           streaming
           width={320}
           reveal={reveal}
+          shaderRegistry={shaderRegistry}
         />,
       );
     });
@@ -149,6 +154,7 @@ describe("Inkset shader overlay", () => {
           streaming
           width={320}
           reveal={reveal}
+          shaderRegistry={shaderRegistry}
         />,
       );
     });
@@ -166,10 +172,9 @@ describe("Inkset shader overlay", () => {
 
   it("preserves shader token batches across same-tick rerenders", async () => {
     const emittedBatches: ShaderToken[][] = [];
-    const shaderName = "unit-test-react-shader-rerender";
 
     const preset: ShaderPreset = {
-      name: shaderName,
+      name: "unit-test-react-shader-rerender",
       async init() {
         return {
           emit(tokens) {
@@ -180,41 +185,25 @@ describe("Inkset shader overlay", () => {
       },
     };
 
-    registerShader(shaderName, async () => preset);
-
     const reveal = {
       throttle: false as const,
-      animate: {
-        preset: "fadeIn" as const,
-        duration: 120,
+      timeline: {
+        durationMs: 120,
         stagger: 30,
         sep: "word" as const,
       },
-      shader: shaderName,
+      css: false as const,
+      shader: { source: preset },
     };
 
     await act(async () => {
-      root.render(
-        <Inkset
-          content="Alpha beta"
-          streaming
-          width={320}
-          reveal={reveal}
-        />,
-      );
+      root.render(<Inkset content="Alpha beta" streaming width={320} reveal={reveal} />);
 
       // Force a same-tick rerender before effects flush. The wrapped reveal
       // tree will be reused from the cache; the shader batch still needs to
       // be reconstructed from that cached tree so the initial words get the
       // overlay.
-      root.render(
-        <Inkset
-          content="Alpha beta"
-          streaming
-          width={300}
-          reveal={reveal}
-        />,
-      );
+      root.render(<Inkset content="Alpha beta" streaming width={300} reveal={reveal} />);
     });
 
     await flushMicrotasks();

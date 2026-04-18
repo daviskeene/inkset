@@ -60,11 +60,7 @@ export const createMathJaxRenderer = (): MathRenderer => {
 
 // ── Math block component ──────────────────────────────────────────
 
-const MathBlock = ({
-  node,
-  isStreaming = false,
-  onContentSettled,
-}: PluginComponentProps) => {
+const MathBlock = ({ node, isStreaming = false, onContentSettled }: PluginComponentProps) => {
   const [html, setHtml] = useState<string>("");
   const [error, setError] = useState<string>("");
 
@@ -87,41 +83,45 @@ const MathBlock = ({
     let cancelled = false;
 
     if (rendererName === "katex") {
-      loadKatex().then((katex) => {
-        if (cancelled) return;
-        try {
-          const result = katex.default.renderToString(latex, {
-            displayMode,
-            throwOnError: false,
-            trust: false,
-            strict: false,
-            output: "htmlAndMathml",
-          });
-          setHtml(result);
-          setError("");
-        } catch (err) {
+      loadKatex()
+        .then((katex) => {
+          if (cancelled) return;
+          try {
+            const result = katex.default.renderToString(latex, {
+              displayMode,
+              throwOnError: false,
+              trust: false,
+              strict: false,
+              output: "htmlAndMathml",
+            });
+            setHtml(result);
+            setError("");
+          } catch (err) {
+            setHtml("");
+            if (isStreaming) {
+              setError("");
+            } else {
+              setError(err instanceof Error ? err.message : "Parse error");
+            }
+          }
+        })
+        .catch((loadErr: unknown) => {
+          if (cancelled) return;
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[inkset/math] KaTeX import failed:", loadErr);
+          }
           setHtml("");
           if (isStreaming) {
             setError("");
           } else {
-            setError(err instanceof Error ? err.message : "Parse error");
+            setError("KaTeX not available");
           }
-        }
-      }).catch((loadErr: unknown) => {
-        if (cancelled) return;
-        if (process.env.NODE_ENV !== "production") {
-          console.debug("[inkset/math] KaTeX import failed:", loadErr);
-        }
-        setHtml("");
-        if (isStreaming) {
-          setError("");
-        } else {
-          setError("KaTeX not available");
-        }
-      });
+        });
     }
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [displayMode, isStreaming, latex, rendererName]);
 
   useLayoutEffect(() => {
@@ -132,11 +132,7 @@ const MathBlock = ({
 
   const Tag = displayMode ? "div" : "span";
 
-  const errorContent = errorDisplay === "message"
-    ? error
-    : errorDisplay === "hide"
-      ? null
-      : latex;
+  const errorContent = errorDisplay === "message" ? error : errorDisplay === "hide" ? null : latex;
 
   return (
     <Tag
@@ -199,7 +195,10 @@ export const createMathPlugin = (options?: MathPluginOptions): InksetPlugin => {
 
     transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
       const raw = extractText(node);
-      const latex = raw.replace(/^\$\$\s*/, "").replace(/\s*\$\$$/, "").trim();
+      const latex = raw
+        .replace(/^\$\$\s*/, "")
+        .replace(/\s*\$\$$/, "")
+        .trim();
 
       return {
         ...node,

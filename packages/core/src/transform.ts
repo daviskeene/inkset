@@ -48,10 +48,7 @@ export const retransformWidthSensitive = (
   const result: EnrichedNode[] = [];
 
   for (const node of nodes) {
-    if (
-      node.transformedBy &&
-      widthSensitivePlugins.some((p) => p.name === node.transformedBy)
-    ) {
+    if (node.transformedBy && widthSensitivePlugins.some((p) => p.name === node.transformedBy)) {
       const reTransformed = registry.transform(node, ctx);
       cache.set(node.blockId, reTransformed);
       result.push(reTransformed);

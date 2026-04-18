@@ -18,7 +18,7 @@ const getSettledHeight = (width: number): number => {
   return 28;
 };
 
-const AsyncMeasuredMathBlock = ({ node, onContentSettled }: PluginComponentProps) => {
+const AsyncMeasuredMathBlock = ({ node: _node, onContentSettled }: PluginComponentProps) => {
   const blockRef = useRef<HTMLDivElement>(null);
   const prevSettledCallbackRef = useRef(onContentSettled);
   const [readyWidth, setReadyWidth] = useState<number | null>(null);
@@ -27,10 +27,7 @@ const AsyncMeasuredMathBlock = ({ node, onContentSettled }: PluginComponentProps
   const settledHeight = isSettled ? getSettledHeight(readyWidth) : HEURISTIC_HEIGHT;
 
   useEffect(() => {
-    const blockWidth = Number.parseInt(
-      blockRef.current?.parentElement?.style.width ?? "0",
-      10,
-    );
+    const blockWidth = Number.parseInt(blockRef.current?.parentElement?.style.width ?? "0", 10);
     prevSettledCallbackRef.current = onContentSettled;
     setReadyWidth(null);
     const timeoutId = window.setTimeout(() => {
@@ -118,7 +115,9 @@ describe("Inkset observed height cache", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
 
     originalResizeObserver = globalThis.ResizeObserver;
     originalRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -149,7 +148,8 @@ describe("Inkset observed height cache", () => {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
       const selfHeight = Number((this as HTMLElement).dataset.measuredHeight ?? 0);
       const descendantHeight = Number(
-        (this as HTMLElement).querySelector<HTMLElement>("[data-measured-height]")?.dataset.measuredHeight ?? 0,
+        (this as HTMLElement).querySelector<HTMLElement>("[data-measured-height]")?.dataset
+          .measuredHeight ?? 0,
       );
       const height = Math.max(selfHeight, descendantHeight);
       const width = Number.parseInt((this as HTMLElement).style.width || "0", 10) || 0;
@@ -183,9 +183,11 @@ describe("Inkset observed height cache", () => {
     vi.useRealTimers();
 
     globalThis.ResizeObserver = originalResizeObserver as typeof ResizeObserver;
-    globalThis.requestAnimationFrame = originalRequestAnimationFrame as typeof requestAnimationFrame;
+    globalThis.requestAnimationFrame =
+      originalRequestAnimationFrame as typeof requestAnimationFrame;
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame as typeof cancelAnimationFrame;
-    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+      .IS_REACT_ACT_ENVIRONMENT;
   });
 
   it("reuses the previously observed height when returning to a width", async () => {
@@ -195,13 +197,7 @@ describe("Inkset observed height cache", () => {
     const renderAtWidth = async (width: number) => {
       await act(async () => {
         root.render(
-          <Inkset
-            content={content}
-            streaming
-            width={width}
-            blockMargin={12}
-            plugins={[plugin]}
-          />,
+          <Inkset content={content} streaming width={width} blockMargin={12} plugins={[plugin]} />,
         );
       });
       await flushMicrotasks();

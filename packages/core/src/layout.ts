@@ -63,8 +63,5 @@ export const getVisibleBlocks = (
   viewportHeight: number,
 ): LayoutBlock[] => {
   const viewBottom = scrollTop + viewportHeight;
-  return layout.filter(
-    (block) =>
-      block.y + block.height > scrollTop && block.y < viewBottom,
-  );
+  return layout.filter((block) => block.y + block.height > scrollTop && block.y < viewBottom);
 };

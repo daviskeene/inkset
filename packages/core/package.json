@@ -1,9 +1,31 @@
 {
   "name": "@inkset/core",
   "version": "0.1.0",
+  "description": "Core parsing, measurement, layout, and streaming pipeline for Inkset.",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "author": "Davis Keene",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daviskeene/inkset.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/daviskeene/inkset/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/daviskeene/inkset/issues"
+  },
+  "keywords": [
+    "inkset",
+    "markdown",
+    "streaming",
+    "renderer",
+    "layout",
+    "measurement",
+    "pretext"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -11,8 +33,12 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

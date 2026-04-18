@@ -8,7 +8,6 @@ import type {
   HeadingWeightTuple,
   HeadingLineHeightTuple,
 } from "./types";
-import type { PluginRegistry } from "./plugin";
 import { extractText } from "./parse";
 import {
   buildGlyphLookup,
@@ -113,11 +112,7 @@ let pretextModule: PretextModule | null = null;
 
 type PretextModule = {
   prepare: (text: string, font: string, options?: { fontSize?: number }) => unknown;
-  prepareWithSegments: (
-    text: string,
-    font: string,
-    options?: { fontSize?: number },
-  ) => unknown;
+  prepareWithSegments: (text: string, font: string, options?: { fontSize?: number }) => unknown;
   layout: (
     prepared: unknown,
     maxWidth: number,
@@ -271,11 +266,7 @@ export class MeasureLayer {
     maxWidth: number,
   ): Promise<Dimensions> {
     const baseTypography = this.getBaseTypography();
-    const baseDims = await this.measureTextWithTypography(
-      text,
-      maxWidth,
-      baseTypography,
-    );
+    const baseDims = await this.measureTextWithTypography(text, maxWidth, baseTypography);
 
     switch (node.blockType) {
       case "heading": {
@@ -314,11 +305,7 @@ export class MeasureLayer {
         const innerWidth = Math.max(1, maxWidth - listIndent);
         let total = 0;
         for (const item of items) {
-          const d = await this.measureTextWithTypography(
-            item,
-            innerWidth,
-            baseTypography,
-          );
+          const d = await this.measureTextWithTypography(item, innerWidth, baseTypography);
           total += d.height;
         }
         total += items.length * LIST_ITEM_PADDING;
@@ -345,11 +332,7 @@ export class MeasureLayer {
   }
 
   async measureText(text: string, maxWidth: number): Promise<Dimensions> {
-    return this.measureTextWithTypography(
-      text,
-      maxWidth,
-      this.getBaseTypography(),
-    );
+    return this.measureTextWithTypography(text, maxWidth, this.getBaseTypography());
   }
 
   /**
@@ -404,12 +387,7 @@ export class MeasureLayer {
     const pretext = await getPretext();
 
     if (!pretext || this.pretextUnavailable) {
-      return this.fallbackMeasure(
-        text,
-        maxWidth,
-        typography.fontSize,
-        typography.lineHeight,
-      );
+      return this.fallbackMeasure(text, maxWidth, typography.fontSize, typography.lineHeight);
     }
 
     const cacheKey = `${text}|${typography.font}`;
@@ -433,12 +411,7 @@ export class MeasureLayer {
         "[inkset] pretext measurement failed; falling back to character-width estimate:",
         err,
       );
-      return this.fallbackMeasure(
-        text,
-        maxWidth,
-        typography.fontSize,
-        typography.lineHeight,
-      );
+      return this.fallbackMeasure(text, maxWidth, typography.fontSize, typography.lineHeight);
     }
   }
 
@@ -484,17 +457,15 @@ export class MeasureLayer {
    * time a block is being rendered (pipeline has emitted state) the module
    * is guaranteed ready. The render hot path can call this without waiting.
    */
-  buildGlyphLookupForBlock(
-    node: EnrichedNode,
-    maxWidth: number,
-  ): GlyphPositionLookup | null {
+  buildGlyphLookupForBlock(node: EnrichedNode, maxWidth: number): GlyphPositionLookup | null {
     if (!pretextModule || this.pretextUnavailable) return null;
     const text = extractText(node);
     if (!text) return null;
 
-    const typography = node.blockType === "heading"
-      ? this.getHeadingTypography(getHeadingLevel(node))
-      : this.getBaseTypography();
+    const typography =
+      node.blockType === "heading"
+        ? this.getHeadingTypography(getHeadingLevel(node))
+        : this.getBaseTypography();
 
     return buildGlyphLookup(pretextModule as unknown as GlyphPretextModule, {
       text,
@@ -551,10 +522,6 @@ const getHeadingLevel = (node: EnrichedNode): number => {
   return match ? parseInt(match[1], 10) : 1;
 };
 
-const buildFontShorthand = (
-  weight: number,
-  fontSize: number,
-  family: string,
-): string => {
+const buildFontShorthand = (weight: number, fontSize: number, family: string): string => {
   return `${weight} ${fontSize}px ${family}`;
 };

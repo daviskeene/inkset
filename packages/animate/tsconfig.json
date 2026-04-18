@@ -10,7 +10,5 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": ["test/**/*", "dist/**/*"],
-  "references": [
-    { "path": "../core" }
-  ]
+  "references": [{ "path": "../core" }]
 }

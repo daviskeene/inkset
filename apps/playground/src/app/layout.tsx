@@ -1,5 +1,6 @@
+import type { CSSProperties, ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
-import { sans, reading, mono } from "./fonts";
+import { fontVariables } from "./fonts";
 import { RootChrome } from "../components/root-chrome";
 // Self-host KaTeX CSS so the font files are bundled by Next and served
 // same-origin. Using the CDN <link> caused a measurable font-swap flicker
@@ -10,6 +11,11 @@ import "katex/dist/katex.min.css";
 export const metadata: Metadata = {
   title: "Inkset Playground",
   description: "Interactive demo of pretext-powered streaming markdown rendering",
+  icons: {
+    icon: "/inkset-mark.svg",
+    shortcut: "/inkset-mark.svg",
+    apple: "/inkset-mark.svg",
+  },
 };
 
 export const viewport: Viewport = {
@@ -21,16 +27,9 @@ export const viewport: Viewport = {
 const RESPONSIVE_CSS = `
 @media (max-width: 768px) {
   .pg-aside,
-  .pg-playground-controls-desktop,
+  .pg-playground-controls,
   .pg-scenario-strip {
     display: none !important;
-  }
-  .pg-playground-controls {
-    padding: 8px 14px !important;
-    justify-content: flex-end !important;
-  }
-  .pg-playground-mobile-options {
-    display: inline-flex !important;
   }
   .pg-chat-scroll {
     padding: 16px 14px 20px !important;
@@ -40,7 +39,6 @@ const RESPONSIVE_CSS = `
   }
 }
 @media (min-width: 769px) {
-  .pg-playground-mobile-options,
   .pg-mobile-menu {
     display: none !important;
   }
@@ -89,18 +87,20 @@ const RESPONSIVE_CSS = `
 }
 `;
 
-const RootLayout = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+const RootLayout = ({ children }: { children: ReactNode }) => {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${sans.variable} ${reading.variable} ${mono.variable}`}
-    >
+    <html lang="en" suppressHydrationWarning style={fontVariables as CSSProperties}>
       <head>
+        {/* Progressive-enhancement webfont load. Fetched by the browser at
+            runtime (not at build time), so a networkless build still succeeds;
+            if the fetch fails, the font-family stacks in fonts.ts fall back to
+            system faces. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Libre+Franklin:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500&display=swap"
+        />
         <style dangerouslySetInnerHTML={{ __html: RESPONSIVE_CSS }} />
       </head>
       <body

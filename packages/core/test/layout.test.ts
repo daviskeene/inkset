@@ -56,11 +56,13 @@ describe("computeLayout", () => {
   });
 
   it("limits block width to container", () => {
-    const blocks: MeasuredBlock[] = [{
-      blockId: 0,
-      node: makeNode(0),
-      dimensions: { width: 1200, height: 24 }, // wider than container
-    }];
+    const blocks: MeasuredBlock[] = [
+      {
+        blockId: 0,
+        node: makeNode(0),
+        dimensions: { width: 1200, height: 24 }, // wider than container
+      },
+    ];
     const layout = computeLayout(blocks, { containerWidth: 800 });
     expect(layout[0].width).toBe(800);
   });
@@ -79,10 +81,10 @@ describe("getLayoutHeight", () => {
   });
 
   it("returns last block bottom edge", () => {
-    const layout = computeLayout(
-      [makeMeasured(0, 24), makeMeasured(1, 48)],
-      { containerWidth: 800, blockMargin: 16 },
-    );
+    const layout = computeLayout([makeMeasured(0, 24), makeMeasured(1, 48)], {
+      containerWidth: 800,
+      blockMargin: 16,
+    });
     expect(getLayoutHeight(layout)).toBe(24 + 16 + 48);
   });
 
@@ -113,10 +115,10 @@ describe("getVisibleBlocks", () => {
   });
 
   it("includes partially visible blocks", () => {
-    const layout = computeLayout(
-      [makeMeasured(0, 100), makeMeasured(1, 100)],
-      { containerWidth: 800, blockMargin: 0 },
-    );
+    const layout = computeLayout([makeMeasured(0, 100), makeMeasured(1, 100)], {
+      containerWidth: 800,
+      blockMargin: 0,
+    });
     // Block 0 ends at y=100, viewport starts at y=50 — block 0 is partially visible
     const visible = getVisibleBlocks(layout, 50, 100);
     expect(visible.map((b) => b.blockId)).toEqual([0, 1]);

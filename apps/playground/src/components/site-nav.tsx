@@ -7,7 +7,13 @@ import { THEME_LABELS, THEME_ORDER, type ThemeKey } from "../lib/themes";
 
 type Page = "playground" | "compare";
 
-export const SiteNav = ({ activePage }: { activePage: Page }) => {
+export const SiteNav = ({
+  activePage,
+  onOpenMobileMenu,
+}: {
+  activePage: Page;
+  onOpenMobileMenu?: () => void;
+}) => {
   const { themeKey, setThemeKey, cycleTheme } = useThemeKey();
   const [themeOpen, setThemeOpen] = useState(false);
   const themeWrapRef = useRef<HTMLDivElement | null>(null);
@@ -35,12 +41,7 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
     (e: KeyboardEvent) => {
       // Don't hijack typing in inputs / textareas / contentEditable.
       const tgt = e.target as HTMLElement | null;
-      if (
-        tgt &&
-        (tgt.tagName === "INPUT" ||
-          tgt.tagName === "TEXTAREA" ||
-          tgt.isContentEditable)
-      ) {
+      if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable)) {
         return;
       }
       if (e.key === "t" && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -81,9 +82,10 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
             color: "var(--pg-text-primary)",
             display: "inline-flex",
             alignItems: "center",
-            gap: 10,
+            gap: 4,
           }}
         >
+          <InksetMark />
           <span
             style={{
               fontFamily: "var(--font-reading), Georgia, serif",
@@ -95,16 +97,17 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
           >
             inkset
           </span>
-          <span
-            aria-hidden
-            style={{
-              display: "inline-block",
-              width: 1,
-              height: 16,
-              background: "var(--pg-divider)",
-            }}
-          />
         </Link>
+        <span
+          aria-hidden
+          className="pg-site-nav-brand-divider"
+          style={{
+            display: "inline-block",
+            width: 1,
+            height: 16,
+            background: "var(--pg-divider)",
+          }}
+        />
         <span
           className="pg-site-nav-sub"
           style={{
@@ -128,10 +131,7 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
           flexShrink: 0,
         }}
       >
-        <nav
-          aria-label="Primary"
-          style={{ display: "flex", alignItems: "center", gap: 4 }}
-        >
+        <nav aria-label="Primary" style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <TabLink href="/" active={activePage === "playground"}>
             Playground
           </TabLink>
@@ -146,11 +146,7 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
           style={{ width: 1, height: 16, background: "var(--pg-divider)" }}
         />
 
-        <div
-          ref={themeWrapRef}
-          style={{ position: "relative" }}
-          className="pg-site-nav-theme-wrap"
-        >
+        <div ref={themeWrapRef} style={{ position: "relative" }} className="pg-site-nav-theme-wrap">
           <button
             type="button"
             onClick={() => setThemeOpen((v) => !v)}
@@ -172,6 +168,7 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
             }}
           >
             <span
+              className="pg-site-nav-theme-label"
               style={{
                 fontSize: 12.5,
                 color: "var(--pg-text-muted)",
@@ -180,9 +177,7 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
             >
               theme
             </span>
-            <span style={{ color: "var(--pg-text-primary)" }}>
-              {THEME_LABELS[themeKey]}
-            </span>
+            <span style={{ color: "var(--pg-text-primary)" }}>{THEME_LABELS[themeKey]}</span>
             <Chevron open={themeOpen} />
           </button>
           {themeOpen ? (
@@ -215,8 +210,52 @@ export const SiteNav = ({ activePage }: { activePage: Page }) => {
         >
           <GithubMark />
         </a>
+
+        {onOpenMobileMenu ? (
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            aria-label="Open options menu"
+            className="pg-site-nav-mobile-options"
+            style={{
+              display: "none",
+              width: 28,
+              height: 28,
+              borderRadius: 999,
+              border: "1px solid var(--pg-border-default)",
+              background: "transparent",
+              color: "var(--pg-text-primary)",
+              cursor: "pointer",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "inherit",
+            }}
+          >
+            <HamburgerMark />
+          </button>
+        ) : null}
       </div>
     </header>
+  );
+};
+
+const HamburgerMark = () => {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
   );
 };
 
@@ -331,9 +370,7 @@ const ThemePopover = ({
           >
             <Swatch themeKey={k} />
             <span style={{ flex: 1 }}>{THEME_LABELS[k]}</span>
-            {isActive ? (
-              <span style={{ color: "var(--pg-accent)", fontSize: 12 }}>•</span>
-            ) : null}
+            {isActive ? <span style={{ color: "var(--pg-accent)", fontSize: 12 }}>•</span> : null}
           </button>
         );
       })}
@@ -353,35 +390,33 @@ const ThemePopover = ({
   );
 };
 
-const SWATCH_BY_KEY: Record<
-  ThemeKey,
-  { bg: string; fg: string; accent: string; divider: string }
-> = {
-  dark: {
-    bg: "#0a0a0a",
-    fg: "#ededed",
-    accent: "#8da3c9",
-    divider: "rgba(255,255,255,0.08)",
-  },
-  light: {
-    bg: "#fafaf9",
-    fg: "#1a1a1a",
-    accent: "#2b3a6b",
-    divider: "rgba(0,0,0,0.08)",
-  },
-  sepia: {
-    bg: "#f3ecdc",
-    fg: "#3a2e20",
-    accent: "#8b4d2b",
-    divider: "rgba(58,46,32,0.10)",
-  },
-  dusk: {
-    bg: "#0e1019",
-    fg: "#e6dfc8",
-    accent: "#d4a55a",
-    divider: "rgba(230,223,200,0.10)",
-  },
-};
+const SWATCH_BY_KEY: Record<ThemeKey, { bg: string; fg: string; accent: string; divider: string }> =
+  {
+    dark: {
+      bg: "#0a0a0a",
+      fg: "#ededed",
+      accent: "#8da3c9",
+      divider: "rgba(255,255,255,0.08)",
+    },
+    light: {
+      bg: "#fafaf9",
+      fg: "#1a1a1a",
+      accent: "#2b3a6b",
+      divider: "rgba(0,0,0,0.08)",
+    },
+    sepia: {
+      bg: "#f3ecdc",
+      fg: "#3a2e20",
+      accent: "#8b4d2b",
+      divider: "rgba(58,46,32,0.10)",
+    },
+    dusk: {
+      bg: "#0e1019",
+      fg: "#e6dfc8",
+      accent: "#d4a55a",
+      divider: "rgba(230,223,200,0.10)",
+    },
+  };
 
 const Swatch = ({ themeKey }: { themeKey: ThemeKey }) => {
   const s = SWATCH_BY_KEY[themeKey];
@@ -447,13 +482,7 @@ const Kbd = ({ children }: { children: React.ReactNode }) => {
 
 const GithubMark = () => {
   return (
-    <svg
-      viewBox="0 0 16 16"
-      width="16"
-      height="16"
-      fill="currentColor"
-      aria-hidden
-    >
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden>
       <path
         fillRule="evenodd"
         d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
@@ -468,35 +497,61 @@ const GithubMark = () => {
   );
 };
 
+const InksetMark = () => {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      width="24"
+      height="24"
+      fill="currentColor"
+      aria-hidden
+      style={{
+        display: "block",
+        flexShrink: 0,
+      }}
+    >
+      <path
+        d="M 10 18 L 30 18 Q 50 28 70 18 L 90 18 L 50 94 Z M 55 44 a 5 5 0 1 0 -10 0 a 5 5 0 1 0 10 0 Z"
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+};
+
 export const SITE_NAV_STYLES = `
 @media (max-width: 720px) {
   .pg-site-nav {
-    flex-direction: column !important;
-    align-items: stretch !important;
+    padding: 10px 14px !important;
     gap: 10px !important;
-    padding: 12px 14px 10px !important;
-  }
-  .pg-site-nav-brand {
-    justify-content: space-between !important;
   }
   .pg-site-nav-right {
     gap: 10px !important;
-    justify-content: space-between !important;
   }
-  .pg-site-nav-sub {
+  .pg-site-nav-sub,
+  .pg-site-nav-brand-divider,
+  .pg-site-nav-divider,
+  .pg-site-nav-theme-wrap,
+  .pg-site-nav-gh {
     display: none !important;
+  }
+  .pg-site-nav-mobile-options {
+    display: inline-flex !important;
   }
 }
 @media (max-width: 540px) {
-  .pg-site-nav-theme-wrap {
-    flex: 1;
+  .pg-site-nav {
+    gap: 8px !important;
   }
-  .pg-site-nav-divider {
-    display: none !important;
+  .pg-site-nav-right {
+    gap: 6px !important;
   }
 }
 .pg-site-nav-gh:hover {
   color: var(--pg-text-primary) !important;
+  background: var(--pg-surface-raised) !important;
+}
+.pg-site-nav-mobile-options:hover {
+  border-color: var(--pg-border-strong) !important;
   background: var(--pg-surface-raised) !important;
 }
 `;

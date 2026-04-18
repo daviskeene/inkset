@@ -3,14 +3,14 @@
 Inkset ships four layers of customization. Pick the lightest one that
 satisfies your need.
 
-| Layer              | When to use                                        | Wins over                |
-| ------------------ | -------------------------------------------------- | ------------------------ |
-| CSS variables      | One-off overrides in consumer CSS                  | Built-in defaults        |
-| `theme` prop       | Typed, grouped overrides on a single `<Inkset>`    | CSS variables            |
-| Heading tuples     | Change heading sizes without breaking layout       | Theme typography strings |
-| `style` prop       | Final escape hatch for a single property           | Everything above         |
-| `unstyled` prop    | Drop the default stylesheet, own the cascade       | All CSS the component emits |
-| Plugin options     | Behavior toggles per plugin (not just visuals)     | (orthogonal)             |
+| Layer           | When to use                                     | Wins over                   |
+| --------------- | ----------------------------------------------- | --------------------------- |
+| CSS variables   | One-off overrides in consumer CSS               | Built-in defaults           |
+| `theme` prop    | Typed, grouped overrides on a single `<Inkset>` | CSS variables               |
+| Heading tuples  | Change heading sizes without breaking layout    | Theme typography strings    |
+| `style` prop    | Final escape hatch for a single property        | Everything above            |
+| `unstyled` prop | Drop the default stylesheet, own the cascade    | All CSS the component emits |
+| Plugin options  | Behavior toggles per plugin (not just visuals)  | (orthogonal)                |
 
 Precedence, low to high:
 
@@ -51,7 +51,7 @@ Categories:
   `code-header-padding|font-size|opacity|border`, `code-copy-padding|opacity`,
   `code-selection-bg`, `code-scrollbar-color`
 - **Table:** `table-border`, `table-header-text|bg|font-size|weight|
-  tracking|padding`, `table-cell-padding`, `table-zebra-bg`,
+tracking|padding`, `table-cell-padding`, `table-zebra-bg`,
   `table-row-hover-bg`
 - **Math:** `math-error|error-font-size`,
   `math-display-padding|line-height|bg|radius`, `math-inline-bg`,
@@ -94,7 +94,7 @@ how much vertical space Inkset's measurement layer reserves for them. If
 the two drift apart, you'll see gaps or clipping between blocks.
 
 The `headingSizes` / `headingWeights` / `headingLineHeights` props drive
-both measurement *and* CSS from the same numeric tuples.
+both measurement _and_ CSS from the same numeric tuples.
 
 ```tsx
 <Inkset
@@ -128,7 +128,7 @@ import { createCodePlugin } from "@inkset/code";
 
 const code = createCodePlugin({
   theme: "one-dark-pro",
-  lightTheme: "github-light",   // dual-rendered, swaps under prefers-color-scheme: light
+  lightTheme: "github-light", // dual-rendered, swaps under prefers-color-scheme: light
   showHeader: true,
   showCopy: true,
   showLangLabel: true,
@@ -143,7 +143,7 @@ import { createTablePlugin } from "@inkset/table";
 
 const table = createTablePlugin({
   showCopy: true,
-  borderStyle: "horizontal",   // "all" | "horizontal" | "none"
+  borderStyle: "horizontal", // "all" | "horizontal" | "none"
   zebra: false,
   stickyHeader: false,
 });
@@ -155,8 +155,8 @@ const table = createTablePlugin({
 import { createMathPlugin } from "@inkset/math";
 
 const math = createMathPlugin({
-  displayAlign: "center",       // "left" | "center" | "right"
-  errorDisplay: "source",       // "source" (raw LaTeX) | "message" | "hide"
+  displayAlign: "center", // "left" | "center" | "right"
+  errorDisplay: "source", // "source" (raw LaTeX) | "message" | "hide"
 });
 ```
 
@@ -176,7 +176,7 @@ Drops the entire built-in `<style>` block. Layout still works (block
 positioning is applied inline). Your stylesheet now owns the cascade.
 
 ```tsx
-<Inkset content={markdown} unstyled className="my-prose" />;
+<Inkset content={markdown} unstyled className="my-prose" />
 ```
 
 Good fits:
@@ -220,7 +220,7 @@ const code = createCodePlugin({
 ### Integrate with Tailwind `prose`
 
 ```tsx
-<Inkset content={markdown} unstyled className="prose prose-invert max-w-none" />;
+<Inkset content={markdown} unstyled className="prose prose-invert max-w-none" />
 ```
 
 The `unstyled` prop removes Inkset's cascade; the `prose` class gives you
@@ -235,7 +235,7 @@ from inline styles on each block.
   headingSizes={[1.8, 1.5, 1.25, 1]}
   headingWeights={[600, 600, 600, 500]}
   headingLineHeights={[1.2, 1.25, 1.3, 1.35]}
-/>;
+/>
 ```
 
 Single numeric tuples keep visuals and layout in sync. No CSS needed.
@@ -246,7 +246,7 @@ Single numeric tuples keep visuals and layout in sync. No CSS needed.
 <Inkset
   content={markdown}
   style={{ "--inkset-blockquote-accent": "#ff4444" } as React.CSSProperties}
-/>;
+/>
 ```
 
 `style` has the final word, so this wins even over a theme you passed.

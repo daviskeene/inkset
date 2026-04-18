@@ -25,23 +25,41 @@ type ShikiHighlighter = {
 };
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
-let highlighterInstance: ShikiHighlighter | null = null;
 const loadedThemes = new Set<string>();
 
 const DEFAULT_LANGS = [
-  "javascript", "typescript", "python", "rust", "go", "java",
-  "c", "cpp", "csharp", "ruby", "php", "swift", "kotlin",
-  "html", "css", "json", "yaml", "toml", "markdown",
-  "bash", "shell", "sql", "graphql", "dockerfile",
-  "tsx", "jsx",
+  "javascript",
+  "typescript",
+  "python",
+  "rust",
+  "go",
+  "java",
+  "c",
+  "cpp",
+  "csharp",
+  "ruby",
+  "php",
+  "swift",
+  "kotlin",
+  "html",
+  "css",
+  "json",
+  "yaml",
+  "toml",
+  "markdown",
+  "bash",
+  "shell",
+  "sql",
+  "graphql",
+  "dockerfile",
+  "tsx",
+  "jsx",
 ];
 
 // Load shiki once and lazily extend it with any extra themes requested by
 // later plugin instances. We don't know all themes up front — callers can
 // pass any shiki-supported theme name.
-const getHighlighter = async (
-  themes: string[],
-): Promise<ShikiHighlighter> => {
+const getHighlighter = async (themes: string[]): Promise<ShikiHighlighter> => {
   const uniqueThemes = [...new Set(themes.filter(Boolean))];
 
   if (!highlighterPromise) {
@@ -51,7 +69,6 @@ const getHighlighter = async (
         themes: uniqueThemes.length > 0 ? uniqueThemes : ["github-dark"],
         langs: DEFAULT_LANGS,
       });
-      highlighterInstance = instance;
       uniqueThemes.forEach((t) => loadedThemes.add(t));
       return instance;
     })();
@@ -68,11 +85,13 @@ const getHighlighter = async (
     if (typeof instanceWithLoader.loadTheme === "function") {
       await Promise.all(
         missing.map((t) =>
-          instanceWithLoader.loadTheme!(t).then(() => loadedThemes.add(t)).catch((err: unknown) => {
-            if (process.env.NODE_ENV !== "production") {
-              console.debug(`[inkset/code] failed to load theme "${t}":`, err);
-            }
-          }),
+          instanceWithLoader.loadTheme!(t)
+            .then(() => loadedThemes.add(t))
+            .catch((err: unknown) => {
+              if (process.env.NODE_ENV !== "production") {
+                console.debug(`[inkset/code] failed to load theme "${t}":`, err);
+              }
+            }),
         ),
       );
     }
@@ -93,8 +112,8 @@ const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const code = node.pluginData?.code as string ?? "";
-  const lang = node.pluginData?.lang as string ?? "text";
+  const code = (node.pluginData?.code as string) ?? "";
+  const lang = (node.pluginData?.lang as string) ?? "text";
   const theme = (node.pluginData?.theme as string) ?? "github-dark";
   const lightTheme = node.pluginData?.lightTheme as string | undefined;
   const showHeader = (node.pluginData?.showHeader as boolean) ?? true;
@@ -125,7 +144,9 @@ const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps
       }
     });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [code, lang, theme, lightTheme]);
 
   useLayoutEffect(() => {
@@ -254,9 +275,8 @@ export const createCodePlugin = (options?: CodePluginOptions): InksetPlugin => {
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
       const code = (node.pluginData?.code as string) ?? "";
       const lines = code.split("\n");
-      const headerSpace = (node.pluginData?.showHeader as boolean) === false
-        ? 0
-        : CODE_HEADER_HEIGHT;
+      const headerSpace =
+        (node.pluginData?.showHeader as boolean) === false ? 0 : CODE_HEADER_HEIGHT;
 
       return {
         width: maxWidth,

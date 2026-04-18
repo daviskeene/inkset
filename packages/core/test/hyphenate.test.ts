@@ -103,7 +103,7 @@ describe("hyphenateBlock", () => {
     };
     const out = hyphenateBlock(node, hyphenate);
     const proseText = out.children?.[0].value ?? "";
-    const codeText = (out.children?.[1].children?.[0].value) ?? "";
+    const codeText = out.children?.[1].children?.[0].value ?? "";
     expect(proseText.includes("\u00AD")).toBe(true);
     expect(codeText).toBe("representation"); // untouched
   });

@@ -2,7 +2,13 @@
 
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
-import { Inkset, type InksetTheme, type RevealProp } from "@inkset/react";
+import {
+  Inkset,
+  createShaderRegistry,
+  type InksetTheme,
+  type RevealProp,
+  type ShaderRegistry,
+} from "@inkset/react";
 import type { InksetPlugin } from "@inkset/core";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
@@ -16,17 +22,11 @@ import {
   LIGHT_PALETTE,
   SEPIA_PALETTE,
   DUSK_PALETTE,
-  getPalette,
-  paletteToCssVars,
 } from "../lib/themes";
 import { useThemeKey } from "../lib/theme-context";
 import { SiteNav } from "../components/site-nav";
 import { Footer } from "../components/footer";
-import {
-  BracketToggle,
-  CHIP_GROUP_STYLE,
-  CHIP_SECTION_LABEL_STYLE,
-} from "../components/chip";
+import { BracketToggle, CHIP_GROUP_STYLE, CHIP_SECTION_LABEL_STYLE } from "../components/chip";
 
 const MARKDOWN_PANEL_WIDTH = 340;
 const CHAT_MAX_WIDTH = 760;
@@ -67,11 +67,13 @@ const STREAM_WITH_ANIMATION_REVEAL: RevealProp = {
     delayInMs: 58,
     chunking: "word",
   },
-  animate: {
-    preset: "blurIn",
-    duration: 260,
+  timeline: {
+    durationMs: 260,
     stagger: 36,
     sep: "word",
+  },
+  css: {
+    preset: "blurIn",
   },
 };
 
@@ -80,16 +82,16 @@ const INK_BLEED_SHADER_REVEAL: RevealProp = {
     delayInMs: 56,
     chunking: "word",
   },
-  animate: {
-    preset: "blurIn",
-    duration: 300,
+  timeline: {
+    durationMs: 300,
     stagger: 34,
     sep: "word",
-    staggerOrder: "layout",
-    maxStaggerSpanMs: 520,
+    order: "layout",
+    maxSpanMs: 520,
   },
+  css: false,
   shader: {
-    preset: "ink-bleed",
+    source: "ink-bleed",
     options: {
       tint: "214, 166, 70",
       alpha: 0.22,
@@ -190,16 +192,18 @@ const INK_SWEEP_REVEAL: RevealProp = {
   // stream-animated, but the custom component leans more editorial than
   // decorative: a short wash + sharpen, not an effects-heavy spectacle.
   throttle: { delayInMs: 60, chunking: "word" },
-  animate: {
-    preset: "fadeIn",
-    duration: 320,
+  timeline: {
+    durationMs: 320,
     stagger: 42,
     sep: "word",
-    staggerOrder: "layout",
-    maxStaggerSpanMs: 600,
+    order: "layout",
+    maxSpanMs: 600,
   },
+  css: false,
   component: InkSweepReveal,
 };
+
+const playgroundShaderRegistry = createShaderRegistry({ includeBuiltIns: true });
 
 const SCENARIO_LIST: Scenario[] = [
   {
@@ -303,7 +307,8 @@ Stable, O(n log n) guaranteed, O(n) extra space. What most language standard lib
     label: "draw me a diagram",
     description: "streaming chat request lifecycle, via mermaid",
     group: "plugins",
-    userPrompt: "Sketch the lifecycle of a streaming chat request from user input through response.",
+    userPrompt:
+      "Sketch the lifecycle of a streaming chat request from user input through response.",
     assistant: `Sure\u00A0— here's the round-trip for a typical chat completion, from keystroke to rendered response:
 
 \`\`\`mermaid
@@ -426,10 +431,10 @@ That matters because real network streams are bursty. A renderer might receive h
 \`\`\`ts
 reveal={{
   throttle: { delayInMs: 58, chunking: "word" },
-  animate: {
-    preset: "blurIn",
-    staggerOrder: "layout",
+  timeline: {
+    order: "layout",
   },
+  css: { preset: "blurIn" },
 }}
 \`\`\`
 
@@ -476,8 +481,9 @@ This is the kind of effect that is hard to fake cleanly in a DOM-first renderer.
 \`\`\`ts
 reveal={{
   throttle: { delayInMs: 56, chunking: "word" },
-  animate: { preset: "blurIn", staggerOrder: "layout" },
-  shader: { preset: "ink-bleed" },
+  timeline: { order: "layout" },
+  css: false,
+  shader: { source: "ink-bleed" },
 }}
 \`\`\`
 
@@ -637,7 +643,6 @@ const PlaygroundPage = () => {
   });
   const [hyphenationEnabled, setHyphenationEnabled] = useState(false);
   const [shrinkwrapMode, setShrinkwrapMode] = useState<"off" | "headings" | "on">("off");
-  const [revealEnabled, setRevealEnabled] = useState(false);
   const { themeKey, setThemeKey } = useThemeKey();
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -667,7 +672,7 @@ const PlaygroundPage = () => {
   }, [enabledPlugins, themeKey]);
 
   const activeScenario = SCENARIOS[activeKey] ?? SCENARIOS.mixed;
-  const effectiveReveal = revealEnabled ? activeScenario.reveal ?? {} : undefined;
+  const effectiveReveal = activeScenario.reveal;
 
   const stopStreaming = useCallback(() => {
     if (streamIntervalRef.current) {
@@ -712,7 +717,6 @@ const PlaygroundPage = () => {
       stopStreaming();
       setActiveKey(key);
       setEditedContent(scenario.assistant);
-      setRevealEnabled(Boolean(scenario.reveal));
       if (scenario.stream) {
         runStream(scenario.assistant, scenario.streamInitialChunkSize ?? 4);
       }
@@ -768,7 +772,7 @@ const PlaygroundPage = () => {
         height: "100dvh",
       }}
     >
-      <SiteNav activePage="playground" />
+      <SiteNav activePage="playground" onOpenMobileMenu={() => setMenuOpen(true)} />
 
       <ScenarioStrip
         active={activeKey}
@@ -829,12 +833,6 @@ const PlaygroundPage = () => {
               }
               title="Narrow each paragraph/heading to the width of its longest line"
             />
-            <BracketToggle
-              label="reveal"
-              active={revealEnabled}
-              onClick={() => setRevealEnabled((v) => !v)}
-              title="Throttle token delivery and fade each word in as it streams"
-            />
           </div>
         </div>
 
@@ -866,29 +864,6 @@ const PlaygroundPage = () => {
             ))}
           </div>
         </div>
-
-        <button
-          className="pg-playground-mobile-options"
-          onClick={() => setMenuOpen(true)}
-          style={{
-            display: "none",
-            padding: "5px 12px",
-            fontSize: 13,
-            border: "1px solid var(--pg-border-default)",
-            borderRadius: 999,
-            background: "transparent",
-            color: "var(--pg-text-primary)",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            alignItems: "center",
-            gap: 8,
-            margin: "8px 14px 8px auto",
-          }}
-          aria-label="Open options menu"
-        >
-          Options
-          <MenuIcon />
-        </button>
       </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
@@ -917,9 +892,7 @@ const PlaygroundPage = () => {
             }}
           >
             <span>assistant markdown</span>
-            <span style={{ color: "var(--pg-text-muted)", fontSize: 12 }}>
-              edit to rerender
-            </span>
+            <span style={{ color: "var(--pg-text-muted)", fontSize: 12 }}>edit to rerender</span>
           </div>
           <textarea
             value={isStreaming ? streamedContent : editedContent}
@@ -996,6 +969,7 @@ const PlaygroundPage = () => {
                 }
                 theme={THEMES[themeKey].theme}
                 reveal={effectiveReveal}
+                shaderRegistry={playgroundShaderRegistry}
                 onRegenerate={regenerate}
               />
             </div>
@@ -1225,6 +1199,7 @@ type AssistantMessageProps = {
   shrinkwrap: boolean | "headings" | "paragraphs";
   theme: InksetTheme | undefined;
   reveal: RevealProp | undefined;
+  shaderRegistry: ShaderRegistry;
   onRegenerate: () => void;
 };
 
@@ -1237,6 +1212,7 @@ const AssistantMessage = ({
   shrinkwrap,
   theme,
   reveal,
+  shaderRegistry,
   onRegenerate,
 }: AssistantMessageProps) => {
   const [copied, setCopied] = useState(false);
@@ -1274,6 +1250,7 @@ const AssistantMessage = ({
           shrinkwrap={shrinkwrap}
           theme={theme}
           reveal={reveal}
+          shaderRegistry={shaderRegistry}
           loadingFallback={<ThinkingFallback />}
         />
       </div>
@@ -1424,7 +1401,9 @@ const ChatInput = ({
           <textarea
             ref={textareaRef}
             value={value}
-            placeholder={justSent ? "Sent — this is a demo, no model is wired up." : "Ask anything…"}
+            placeholder={
+              justSent ? "Sent — this is a demo, no model is wired up." : "Ask anything…"
+            }
             onChange={(e) => onChange(e.target.value)}
             onFocus={() => onFocusChange(true)}
             onBlur={() => onFocusChange(false)}
@@ -1487,7 +1466,9 @@ const ChatInput = ({
             textAlign: "center",
           }}
         >
-          Type markdown to see the live preview. This demo doesn't call a model — pick a preset above to see a response.
+          Type markdown to see the live preview. This demo does not call a model
+          {" — "}
+          pick a preset above to see a response.
         </div>
       </div>
     </div>
@@ -1539,7 +1520,16 @@ const IconButton = ({
 
 const CopyIcon = () => {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
     </svg>
@@ -1548,7 +1538,16 @@ const CopyIcon = () => {
 
 const ThumbUpIcon = () => {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M7 10v12" />
       <path d="M15 5.88 14 10h5.83a2 2 0 011.92 2.56l-2.33 8A2 2 0 0117.5 22H7V10l4-7a2 2 0 012 1.46z" />
     </svg>
@@ -1557,7 +1556,16 @@ const ThumbUpIcon = () => {
 
 const ThumbDownIcon = () => {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M17 14V2" />
       <path d="M9 18.12 10 14H4.17a2 2 0 01-1.92-2.56l2.33-8A2 2 0 016.5 2H17v12l-4 7a2 2 0 01-2-1.46z" />
     </svg>
@@ -1566,7 +1574,16 @@ const ThumbDownIcon = () => {
 
 const RegenerateIcon = () => {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
       <path d="M21 3v5h-5" />
       <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
@@ -1577,7 +1594,16 @@ const RegenerateIcon = () => {
 
 const SendIcon = () => {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 19V5" />
       <path d="M5 12l7-7 7 7" />
     </svg>
@@ -1596,19 +1622,18 @@ const ThinkingFallback = () => {
   );
 };
 
-const MenuIcon = () => {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="4" y1="7" x2="20" y2="7" />
-      <line x1="4" y1="12" x2="20" y2="12" />
-      <line x1="4" y1="17" x2="20" y2="17" />
-    </svg>
-  );
-};
-
 const CloseIcon = () => {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <line x1="6" y1="6" x2="18" y2="18" />
       <line x1="6" y1="18" x2="18" y2="6" />
     </svg>
@@ -1733,9 +1758,7 @@ const MobileMenu = ({
                             ? "1px solid var(--pg-border-strong)"
                             : "1px solid var(--pg-border-default)",
                           borderRadius: 10,
-                          background: isActive
-                            ? "var(--pg-chip-active-bg)"
-                            : "transparent",
+                          background: isActive ? "var(--pg-chip-active-bg)" : "transparent",
                           color: "var(--pg-text-primary)",
                           cursor: "pointer",
                           display: "flex",
@@ -1771,8 +1794,7 @@ const MobileMenu = ({
                       : "1px solid var(--pg-border-default)",
                   borderRadius: 999,
                   background: themeKey === key ? "var(--pg-chip-active-bg)" : "transparent",
-                  color:
-                    themeKey === key ? "var(--pg-chip-active-text)" : "var(--pg-text-muted)",
+                  color: themeKey === key ? "var(--pg-chip-active-text)" : "var(--pg-text-muted)",
                   cursor: "pointer",
                 }}
               >
@@ -1851,7 +1873,16 @@ const MobileMenu = ({
           </div>
         </Section>
 
-        <div style={{ marginTop: 20, borderTop: "1px solid var(--pg-border-subtle)", paddingTop: 16 }}>
+        <div
+          style={{
+            marginTop: 20,
+            borderTop: "1px solid var(--pg-border-subtle)",
+            paddingTop: 16,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
           <Link
             href="/compare"
             onClick={onClose}
@@ -1867,6 +1898,30 @@ const MobileMenu = ({
           >
             side-by-side comparison →
           </Link>
+          <a
+            href="https://github.com/daviskeene/inkset"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 14,
+              color: "var(--pg-text-muted)",
+              textDecoration: "none",
+              padding: "8px 14px",
+              border: "1px solid var(--pg-border-default)",
+              borderRadius: 999,
+            }}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden>
+              <path
+                fillRule="evenodd"
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+              />
+            </svg>
+            GitHub
+          </a>
         </div>
       </div>
     </div>

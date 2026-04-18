@@ -5,7 +5,7 @@ export type CopyHandler = {
   attach(container: HTMLElement): () => void;
 };
 
-export const createCopyHandler = (registry: PluginRegistry): CopyHandler => {
+export const createCopyHandler = (_registry: PluginRegistry): CopyHandler => {
   return {
     attach(container: HTMLElement) {
       const handler = (e: ClipboardEvent) => {
@@ -28,10 +28,7 @@ export const createCopyHandler = (registry: PluginRegistry): CopyHandler => {
   };
 };
 
-const extractSmartText = (
-  container: HTMLElement,
-  range: Range,
-): string | null => {
+const extractSmartText = (container: HTMLElement, range: Range): string | null => {
   const parts: string[] = [];
   const blocks = container.querySelectorAll("[data-block-id]");
 
@@ -100,8 +97,6 @@ const tableToText = (table: HTMLTableElement): string => {
   );
 
   return rows
-    .map((row) =>
-      row.map((cell, i) => cell.padEnd(colWidths[i] ?? 0)).join("  "),
-    )
+    .map((row) => row.map((cell, i) => cell.padEnd(colWidths[i] ?? 0)).join("  "))
     .join("\n");
 };

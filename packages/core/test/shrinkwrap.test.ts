@@ -9,7 +9,9 @@ describe("shrinkwrap option", () => {
   it("defaults to false and leaves shrinkwrapWidth unset", async () => {
     const pipeline = new StreamingPipeline();
     await pipeline.setWidth(600);
-    await pipeline.setContent("# A heading\n\nA paragraph of text that spans enough chars to wrap at narrow widths, probably.");
+    await pipeline.setContent(
+      "# A heading\n\nA paragraph of text that spans enough chars to wrap at narrow widths, probably.",
+    );
 
     const state = pipeline.getState();
     for (const block of state.layout) {
@@ -26,7 +28,9 @@ describe("shrinkwrap option", () => {
       expect(state.blockCount).toBe(2);
       // In Node without Canvas, pretext falls back and shrinkwrapWidth stays unset.
       for (const block of state.layout) {
-        expect(block.shrinkwrapWidth === undefined || typeof block.shrinkwrapWidth === "number").toBe(true);
+        expect(
+          block.shrinkwrapWidth === undefined || typeof block.shrinkwrapWidth === "number",
+        ).toBe(true);
       }
     }
   });
