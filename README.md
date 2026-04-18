@@ -15,9 +15,10 @@ npm install @inkset/core @inkset/react
 Optional plugins:
 
 ```bash
-npm install @inkset/code    # Shiki syntax highlighting
-npm install @inkset/math    # KaTeX or MathJax math rendering
-npm install @inkset/table   # Responsive tables
+npm install @inkset/code     # Shiki syntax highlighting
+npm install @inkset/math     # KaTeX or MathJax math rendering
+npm install @inkset/table    # Responsive tables
+npm install @inkset/diagram  # Mermaid diagrams
 ```
 
 ## Quick start
@@ -72,8 +73,9 @@ Plugins participate in the full pipeline. They transform AST nodes, measure thei
 
 ```tsx
 import { createCodePlugin } from "@inkset/code";
-import { createMathPlugin, createKaTeXRenderer, createMathJaxRenderer } from "@inkset/math";
+import { createMathPlugin, createMathJaxRenderer } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
+import { createDiagramPlugin } from "@inkset/diagram";
 
 // KaTeX (default, fast)
 createMathPlugin();
@@ -83,6 +85,10 @@ createMathPlugin({ renderer: createMathJaxRenderer() });
 
 // Shiki with custom theme
 createCodePlugin({ theme: "github-light" });
+
+// Mermaid diagrams — claims code blocks where lang === "mermaid",
+// other languages still flow through @inkset/code.
+createDiagramPlugin({ theme: "neutral" });
 ```
 
 Writing a custom plugin:
@@ -104,21 +110,24 @@ const myPlugin: InksetPlugin = {
 
 ## Packages
 
-| Package         | What it does                                          |
-| --------------- | ----------------------------------------------------- |
-| `@inkset/core`  | Pipeline engine: ingest, parse, measure, layout       |
-| `@inkset/react` | `<Inkset>` component and `useInkset()` hook           |
-| `@inkset/code`  | Shiki syntax highlighting with streaming support      |
-| `@inkset/math`  | KaTeX or MathJax rendering, delimiter normalization   |
-| `@inkset/table` | Responsive tables with horizontal scroll and CSV copy |
+| Package           | What it does                                          |
+| ----------------- | ----------------------------------------------------- |
+| `@inkset/core`    | Pipeline engine: ingest, parse, measure, layout       |
+| `@inkset/react`   | `<Inkset>` component and `useInkset()` hook           |
+| `@inkset/animate` | Reveal primitives: token gate, timelines, shaders     |
+| `@inkset/code`    | Shiki syntax highlighting with streaming support      |
+| `@inkset/math`    | KaTeX or MathJax rendering, delimiter normalization   |
+| `@inkset/table`   | Responsive tables with horizontal scroll and CSV copy |
+| `@inkset/diagram` | Mermaid diagrams via a lang-scoped code-block plugin  |
 
 ## Development
 
 ```bash
 pnpm install
-pnpm --filter @inkset/core test     # 55 unit tests
-pnpm --filter @inkset/core build    # Build core
-pnpm --filter @inkset/playground dev # Playground at localhost:3333
+pnpm test                             # Full monorepo test suite
+pnpm --filter @inkset/core test       # Core-only tests
+pnpm --filter @inkset/core build      # Build core
+pnpm --filter @inkset/playground dev  # Playground at localhost:3333
 ```
 
 ## Status

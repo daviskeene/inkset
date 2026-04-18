@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useThemeKey } from "../lib/theme-context";
 import { THEME_LABELS, THEME_ORDER, type ThemeKey } from "../lib/themes";
 
-type Page = "playground" | "compare";
+type Page = "playground" | "compare" | "docs";
 
 export const SiteNav = ({
   activePage,
@@ -60,6 +60,12 @@ export const SiteNav = ({
     <header
       className="pg-site-nav"
       style={{
+        // Sticky so the top bar stays pinned on pages that let the outer
+        // viewport scroll (docs). On playground/compare the outer column
+        // doesn't scroll, so sticky is a no-op there.
+        position: "sticky",
+        top: 0,
+        zIndex: 20,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -137,6 +143,9 @@ export const SiteNav = ({
           </TabLink>
           <TabLink href="/compare" active={activePage === "compare"}>
             Compare
+          </TabLink>
+          <TabLink href="/docs" active={activePage === "docs"}>
+            Docs
           </TabLink>
         </nav>
 

@@ -819,7 +819,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     const seededWidth =
       typeof options?.width === "number" && options.width > 0
         ? options.width
-        : (containerRef.current?.getBoundingClientRect().width ?? 0);
+        : containerRef.current?.getBoundingClientRect().width ?? 0;
     if (seededWidth > 0) {
       pipeline.setWidth(seededWidth);
     }
@@ -1516,18 +1516,18 @@ export const Inkset = ({
   // Intentionally not depending on `reveal` object identity: consumers pass
   // inline literals often, so we key on concrete fields.
   const revealThrottleDelay =
-    reveal?.throttle === false ? -1 : (reveal?.throttle?.delayInMs ?? (reveal ? 30 : -1));
+    reveal?.throttle === false ? -1 : reveal?.throttle?.delayInMs ?? (reveal ? 30 : -1);
   const revealThrottleChunking =
-    reveal?.throttle === false ? "word" : (reveal?.throttle?.chunking ?? "word");
+    reveal?.throttle === false ? "word" : reveal?.throttle?.chunking ?? "word";
   const revealTimelineDuration =
-    reveal?.timeline === false ? -1 : (reveal?.timeline?.durationMs ?? (reveal ? 320 : -1));
+    reveal?.timeline === false ? -1 : reveal?.timeline?.durationMs ?? (reveal ? 320 : -1);
   const revealTimelineStagger =
-    reveal?.timeline === false ? -1 : (reveal?.timeline?.stagger ?? (reveal ? 30 : -1));
-  const revealTimelineSep = reveal?.timeline === false ? "word" : (reveal?.timeline?.sep ?? "word");
+    reveal?.timeline === false ? -1 : reveal?.timeline?.stagger ?? (reveal ? 30 : -1);
+  const revealTimelineSep = reveal?.timeline === false ? "word" : reveal?.timeline?.sep ?? "word";
   const revealTimelineOrder =
-    reveal?.timeline === false ? "layout" : (reveal?.timeline?.order ?? "layout");
+    reveal?.timeline === false ? "layout" : reveal?.timeline?.order ?? "layout";
   const revealTimelineMaxSpan =
-    reveal?.timeline === false ? -1 : (reveal?.timeline?.maxSpanMs ?? (reveal ? 400 : -1));
+    reveal?.timeline === false ? -1 : reveal?.timeline?.maxSpanMs ?? (reveal ? 400 : -1);
   const revealCssPreset = reveal?.css === false ? false : reveal?.css?.preset;
   const revealCssEasing = reveal?.css === false ? false : reveal?.css?.easing;
   const revealShaderSignature = shaderConfigSignature(reveal?.shader);
@@ -1945,7 +1945,7 @@ export const Inkset = ({
     ? resolveLayout(state.layout, resolvedHeights, observedHeightsRef.current, margin)
     : [];
   const resolvedHeight =
-    resolvedLayout.length > 0 ? getLayoutHeight(resolvedLayout) : (state?.totalHeight ?? 0);
+    resolvedLayout.length > 0 ? getLayoutHeight(resolvedLayout) : state?.totalHeight ?? 0;
 
   // Compute delta-wrapped render nodes for blocks that opted into animation.
   // Cached per (tick, blockId) so subsequent renders within the same pipeline

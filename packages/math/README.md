@@ -23,8 +23,15 @@ export const Example = ({ content }: { content: string }) => {
 };
 ```
 
+## Options
+
+`createMathPlugin(options?)`:
+
+- `renderer` — `createKaTeXRenderer()` (default) or `createMathJaxRenderer()`.
+- `displayAlign` — horizontal alignment for display-mode equations. `"left" | "center" | "right"`. Default `"center"`.
+- `errorDisplay` — how parse errors render. `"source"` (raw LaTeX, default), `"message"` (the renderer's error text), or `"hide"`.
+
 ## Exports
 
-- `createMathPlugin`
-- `createKaTeXRenderer`
-- `createMathJaxRenderer`
+- `createMathPlugin` (with `MathPluginOptions`, `MathDisplayAlign`, `MathErrorDisplay`)
+- `createKaTeXRenderer`, `createMathJaxRenderer` (with `MathRenderer`, `MathRenderOptions`)

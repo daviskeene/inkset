@@ -23,7 +23,7 @@ export const Example = ({ content }: { content: string }) => {
 
 ## Options
 
-- `showCopy`
-- `borderStyle`
-- `zebra`
-- `stickyHeader`
+- `showCopy` — show the CSV copy button in the table header bar. Default `true`.
+- `borderStyle` — `"all"` (full grid), `"horizontal"` (row dividers only, default), or `"none"`.
+- `zebra` — alternate row backgrounds via `--inkset-table-zebra-bg`. Default `false`.
+- `stickyHeader` — pin `<thead>` while the table scrolls vertically. Default `false`. Only meaningful inside a height-clipped container.
