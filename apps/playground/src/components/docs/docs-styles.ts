@@ -93,10 +93,25 @@ export const DOCS_SHELL_STYLES = `
     grid-template-columns: minmax(0, 1fr) !important;
     padding: 0 16px !important;
     overflow-x: hidden;
+    max-width: 100%;
   }
   .pg-docs-main {
     padding: 28px 0 96px !important;
     min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  .pg-docs-main article {
+    max-width: 100% !important;
+  }
+  .pg-docs-body,
+  .pg-docs-lede {
+    max-width: 100% !important;
+    overflow-x: hidden;
+  }
+  .pg-docs-body .inkset-root,
+  .pg-docs-lede .inkset-root {
+    max-width: 100% !important;
   }
   /* The 2px left-bar active indicator reads as a dangling bracket inside
      the drawer — swap it for a filled highlight that matches the hover

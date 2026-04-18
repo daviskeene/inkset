@@ -532,9 +532,28 @@ export const SITE_NAV_STYLES = `
   .pg-site-nav {
     padding: 10px 14px !important;
     gap: 10px !important;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: clip;
+  }
+  .pg-site-nav-brand {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
   }
   .pg-site-nav-right {
     gap: 10px !important;
+    flex-shrink: 1 !important;
+    min-width: 0 !important;
+  }
+  .pg-site-nav nav[aria-label="Primary"] {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    min-width: 0 !important;
+  }
+  .pg-site-nav nav[aria-label="Primary"] a {
+    font-size: 13px !important;
+    padding: 4px 7px 6px !important;
   }
   .pg-site-nav-sub,
   .pg-site-nav-brand-divider,
@@ -553,6 +572,10 @@ export const SITE_NAV_STYLES = `
   }
   .pg-site-nav-right {
     gap: 6px !important;
+  }
+  .pg-site-nav nav[aria-label="Primary"] a {
+    font-size: 12.5px !important;
+    padding: 4px 6px 6px !important;
   }
 }
 .pg-site-nav-gh:hover {

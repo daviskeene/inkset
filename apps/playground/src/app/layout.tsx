@@ -62,6 +62,20 @@ export const viewport: Viewport = {
 };
 
 const RESPONSIVE_CSS = `
+/* Prevent body-level horizontal scroll on any page. Any overflow from a
+   child (wide code block, unexpected layout) is clipped at the root, not
+   shifted via scroll. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+html, body, .pg-root {
+  box-sizing: border-box;
+}
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
 @media (max-width: 768px) {
   .pg-aside,
   .pg-playground-controls,
