@@ -9,7 +9,9 @@ import React, {
   Profiler,
   type ProfilerOnRenderCallback,
 } from "react";
-import Link from "next/link";
+import { SiteNav } from "../../components/site-nav";
+import { Footer } from "../../components/footer";
+import { Chip, CHIP_GROUP_STYLE, CHIP_SECTION_LABEL_STYLE } from "../../components/chip";
 
 // ── Inkset column ──────────────────────────────────────────────────
 import { Inkset } from "@inkset/react";
@@ -22,6 +24,7 @@ import { createDiagramPlugin } from "@inkset/diagram";
 import { Streamdown } from "streamdown";
 import { math as streamdownMath } from "@streamdown/math";
 import { mermaid as streamdownMermaid } from "@streamdown/mermaid";
+import { createCodePlugin as createStreamdownCodePlugin } from "@streamdown/code";
 import "streamdown/styles.css";
 
 // ── React-markdown column ──────────────────────────────────────────
@@ -78,6 +81,7 @@ $$t_{resize} \\approx t_{arithmetic} + t_{paint}$$
 - One caveat: the cheap path requires a measurement cache hit.
 - On cache miss (font or content change) it's a normal measure pass.
 - Container resize is a cache hit.
+- Rich async blocks are cached too: once math or highlighted code settles at a width, revisiting that width reuses the settled height instead of replaying the shift.
 `,
   },
   {
@@ -91,7 +95,7 @@ Watch this paragraph land token-by-token. The three renderers below show the sam
 
 **streamdown** diffs at the block level — incomplete fences are gated until they close, and completed blocks freeze.
 
-**inkset** streams into a "hot block" at the bottom. Prior blocks are absolute-positioned and don't re-measure. Drag the width slider mid-stream.
+**inkset** streams into a "hot block" at the bottom. Prior blocks are absolute-positioned and don't re-measure. Drag the width slider mid-stream: text relayout stays arithmetic, and settled math/code blocks keep their previous height when you revisit a width.
 
 \`\`\`ts
 // The hot block lives in normal flow.
@@ -102,7 +106,7 @@ function appendToken(text: string) {
 }
 \`\`\`
 
-The difference grows with wider text, more blocks, and narrower windows.
+The difference grows with wider text, more blocks, and narrower windows — especially once rich blocks enter the stream.
 `,
   },
   {
@@ -140,7 +144,11 @@ const INKSET_TABLE = createTablePlugin();
 const INKSET_DIAGRAM = createDiagramPlugin({ theme: "dark" });
 const INKSET_PLUGINS = [INKSET_CODE, INKSET_MATH, INKSET_TABLE, INKSET_DIAGRAM];
 
+const STREAMDOWN_CODE = createStreamdownCodePlugin({
+  themes: ["github-dark", "github-dark"],
+});
 const STREAMDOWN_PLUGINS = {
+  code: STREAMDOWN_CODE,
   math: streamdownMath,
   mermaid: streamdownMermaid,
 };
@@ -155,7 +163,7 @@ const BUNDLE_SIZES = {
   inkset: "~55 KB",
 };
 const BUNDLE_NOTES = {
-  streamdown: "streamdown@2.5 + @streamdown/math + mermaid",
+  streamdown: "streamdown@2.5 + @streamdown/{code,math,mermaid}",
   reactMarkdown: "react-markdown@10 + gfm + math + katex + highlight",
   inkset: "@inkset/{core,react,code,math,table,diagram}",
 };
@@ -174,11 +182,30 @@ const INITIAL_METRICS: Metrics = {
   renderCount: 0,
 };
 
-export default function ComparePage() {
+const ComparePage = () => {
   const [scenarioKey, setScenarioKey] = useState<string>("rich");
   const [streaming, setStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState("");
   const [sharedWidth, setSharedWidth] = useState(480);
+  // Track a mobile breakpoint so we can clamp the width slider and tighten
+  // chrome. The columns stack under 900px (see GlobalStyles); we treat
+  // <768px as "phone" for control-layout purposes.
+  const [isNarrow, setIsNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  // On mobile the slider's 780px cap would overflow the viewport and waste
+  // the right half of the track. Cap the usable range to the actual column
+  // width minus gutters, and snap stored state so we never render wider
+  // than the device can show.
+  const effectiveMaxWidth = isNarrow
+    ? Math.max(280, Math.min(780, typeof window !== "undefined" ? window.innerWidth - 32 : 780))
+    : 780;
+  const effectiveWidth = Math.min(sharedWidth, effectiveMaxWidth);
 
   // Metrics live in refs + are flushed on a timer only when the user
   // explicitly turns recording on. Without this gate, the flush interval
@@ -298,192 +325,93 @@ export default function ComparePage() {
         display: "flex",
         flexDirection: "column",
         minHeight: "100vh",
-        background: "#0a0a0a",
-        color: "#ededed",
-        fontFamily: "system-ui, -apple-system, sans-serif",
+        background: "var(--pg-bg)",
+        color: "var(--pg-text-primary)",
+        fontFamily: "var(--font-sans), system-ui, -apple-system, sans-serif",
       }}
     >
-      {/* Header */}
-      <header
-        style={{
-          padding: "12px 20px",
-          borderBottom: "1px solid #1a1a1a",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: -0.2 }}>
-            inkset
-          </h1>
-          <span style={{ fontSize: 12, opacity: 0.45, textTransform: "uppercase", letterSpacing: 0.4 }}>
-            compare
-          </span>
-          <Link
-            href="/"
-            style={{
-              fontSize: 11.5,
-              color: "#8b8fa6",
-              textDecoration: "none",
-              padding: "3px 9px",
-              border: "1px solid #242424",
-              borderRadius: 999,
-              marginLeft: 4,
-            }}
-          >
-            ← playground
-          </Link>
-        </div>
-
-        <div
-          style={{
-            fontSize: 12,
-            opacity: 0.55,
-            maxWidth: 520,
-            textAlign: "right",
-          }}
-        >
-          Three renderers, same markdown, same width, same stream rate. Drag the slider
-          mid-stream to feel the reflow cost difference.
-        </div>
-      </header>
+      <SiteNav activePage="compare" />
 
       {/* Controls */}
       <div
+        className="pg-compare-controls"
         style={{
-          padding: "14px 20px",
-          borderBottom: "1px solid #1a1a1a",
+          padding: "10px 22px",
+          borderBottom: "1px solid var(--pg-border-subtle)",
           display: "flex",
           flexWrap: "wrap",
-          gap: 16,
+          gap: 14,
           alignItems: "center",
           fontSize: 12,
+          background: "var(--pg-bg)",
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ opacity: 0.4, marginRight: 4, textTransform: "uppercase", letterSpacing: 0.3 }}>
-            scenario
-          </span>
+        <div style={CHIP_GROUP_STYLE}>
+          <span style={CHIP_SECTION_LABEL_STYLE}>Scenario</span>
           {SCENARIOS.map((s) => (
-            <button
+            <Chip
               key={s.key}
+              label={s.label}
+              active={scenarioKey === s.key}
               onClick={() => setScenarioKey(s.key)}
-              style={{
-                padding: "4px 11px",
-                fontSize: 12,
-                border:
-                  scenarioKey === s.key ? "1px solid #3a3a3a" : "1px solid #1f1f1f",
-                borderRadius: 999,
-                background: scenarioKey === s.key ? "#181818" : "transparent",
-                color: scenarioKey === s.key ? "#ededed" : "#999",
-                cursor: "pointer",
-              }}
-            >
-              {s.label}
-            </button>
+            />
           ))}
         </div>
 
-        <div style={{ width: 1, height: 18, background: "#222" }} />
+        <div className="pg-compare-divider" style={{ width: 1, height: 16, background: "var(--pg-divider)" }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ opacity: 0.4, textTransform: "uppercase", letterSpacing: 0.3 }}>
-            width
-          </span>
+        <div style={{ ...CHIP_GROUP_STYLE, gap: 10 }}>
+          <span style={CHIP_SECTION_LABEL_STYLE}>Width</span>
           <input
             type="range"
             min={280}
-            max={780}
+            max={effectiveMaxWidth}
             step={1}
-            value={sharedWidth}
+            value={effectiveWidth}
             onChange={(e) => setSharedWidth(Math.round(Number(e.target.value)))}
-            style={{ width: 180 }}
+            style={{ width: 160, maxWidth: "100%", accentColor: "var(--pg-accent)" }}
           />
           <span
             style={{
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              opacity: 0.7,
+              color: "var(--pg-text-muted)",
               fontSize: 11,
-              minWidth: 48,
+              minWidth: 46,
+              fontVariantNumeric: "tabular-nums",
             }}
           >
-            {sharedWidth}px
+            {effectiveWidth}px
           </span>
         </div>
 
-        <div style={{ width: 1, height: 18, background: "#222" }} />
+        <div className="pg-compare-divider" style={{ width: 1, height: 16, background: "var(--pg-divider)" }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {streaming ? (
-            <button
-              onClick={onStopStream}
-              style={{
-                padding: "4px 11px",
-                fontSize: 12,
-                border: "1px solid #3a3a3a",
-                borderRadius: 999,
-                background: "#181818",
-                color: "#ededed",
-                cursor: "pointer",
-              }}
-            >
-              ■ stop stream
-            </button>
-          ) : (
-            <button
-              onClick={onStartStream}
-              style={{
-                padding: "4px 11px",
-                fontSize: 12,
-                border: "1px solid #1f1f1f",
-                borderRadius: 999,
-                background: "transparent",
-                color: "#ededed",
-                cursor: "pointer",
-              }}
-            >
-              ▶ start stream
-            </button>
-          )}
-          <button
-            onClick={onReset}
-            style={{
-              padding: "4px 11px",
-              fontSize: 12,
-              border: "1px solid #1f1f1f",
-              borderRadius: 999,
-              background: "transparent",
-              color: "#999",
-              cursor: "pointer",
-            }}
-          >
-            reset
-          </button>
+        <div style={CHIP_GROUP_STYLE}>
+          <Chip
+            label={streaming ? "Stop stream" : "Start stream"}
+            active={streaming}
+            variant="accent"
+            onClick={streaming ? onStopStream : onStartStream}
+            leadingDot
+          />
+          <Chip label="Reset" variant="quiet" onClick={onReset} />
         </div>
 
-        <div style={{ width: 1, height: 18, background: "#222" }} />
+        <div className="pg-compare-divider" style={{ width: 1, height: 16, background: "var(--pg-divider)" }} />
 
-        <button
+        <Chip
+          label={recording ? "Recording metrics" : "Measure"}
+          active={recording}
+          variant="accent"
           onClick={onToggleRecording}
+          leadingDot
           title={
             recording
               ? "Metrics update 4×/sec while on"
               : "Enable to see live render-time + count"
           }
-          style={{
-            padding: "4px 11px",
-            fontSize: 12,
-            border: recording ? "1px solid #a55" : "1px solid #1f1f1f",
-            borderRadius: 999,
-            background: recording ? "rgba(180, 80, 80, 0.15)" : "transparent",
-            color: recording ? "#ffb3b3" : "#999",
-            cursor: "pointer",
-          }}
-        >
-          {recording ? "● recording metrics" : "○ measure"}
-        </button>
+        />
       </div>
 
       {/* Three columns */}
@@ -497,13 +425,38 @@ export default function ComparePage() {
         }}
       >
         <Column
+          label="inkset"
+          bundleSize={BUNDLE_SIZES.inkset}
+          bundleNote={BUNDLE_NOTES.inkset}
+          metrics={inksetMetrics}
+          accent
+        >
+          <Profiler id="inkset" onRender={onInksetRender}>
+            <div style={{ width: effectiveWidth, maxWidth: "100%" }}>
+              <Inkset
+                content={content}
+                streaming={streaming}
+                plugins={INKSET_PLUGINS}
+                width={effectiveWidth}
+                fontSize={14}
+                lineHeight={21}
+                blockMargin={12}
+                headingSizes={[1.5, 1.25, 1.1, 1]}
+                headingWeights={[700, 700, 600, 600]}
+                headingLineHeights={[1.2, 1.22, 1.25, 1.3]}
+              />
+            </div>
+          </Profiler>
+        </Column>
+
+        <Column
           label="react-markdown"
           bundleSize={BUNDLE_SIZES.reactMarkdown}
           bundleNote={BUNDLE_NOTES.reactMarkdown}
           metrics={reactMarkdownMetrics}
         >
           <Profiler id="react-markdown" onRender={onReactMarkdownRender}>
-            <div style={{ width: sharedWidth, maxWidth: "100%" }}>
+            <div style={{ width: effectiveWidth, maxWidth: "100%" }}>
               <div className="rm-prose">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkMath]}
@@ -521,56 +474,40 @@ export default function ComparePage() {
           bundleSize={BUNDLE_SIZES.streamdown}
           bundleNote={BUNDLE_NOTES.streamdown}
           metrics={streamdownMetrics}
+          note="requires tailwind — components ship as tailwind classes, so without it in the host app code blocks and controls render unstyled"
         >
           <Profiler id="streamdown" onRender={onStreamdownRender}>
-            <div style={{ width: sharedWidth, maxWidth: "100%" }}>
+            <div className="sd-column" style={{ width: effectiveWidth, maxWidth: "100%" }}>
               <Streamdown
                 plugins={STREAMDOWN_PLUGINS}
                 mode={streaming ? "streaming" : "static"}
                 shikiTheme={["github-dark", "github-dark"]}
+                controls={false}
+                animated={false}
               >
                 {content}
               </Streamdown>
             </div>
           </Profiler>
         </Column>
-
-        <Column
-          label="inkset"
-          bundleSize={BUNDLE_SIZES.inkset}
-          bundleNote={BUNDLE_NOTES.inkset}
-          metrics={inksetMetrics}
-          accent
-        >
-          <Profiler id="inkset" onRender={onInksetRender}>
-            <div style={{ width: sharedWidth, maxWidth: "100%" }}>
-              <Inkset
-                content={content}
-                streaming={streaming}
-                plugins={INKSET_PLUGINS}
-                width={sharedWidth}
-                fontSize={14}
-                lineHeight={21}
-                blockMargin={12}
-              />
-            </div>
-          </Profiler>
-        </Column>
       </div>
+
+      <Footer />
 
       <GlobalStyles />
     </div>
   );
-}
+};
 
 // ── Column wrapper ────────────────────────────────────────────────
 
-function Column({
+const Column = ({
   label,
   bundleSize,
   bundleNote,
   metrics,
   accent,
+  note,
   children,
 }: {
   label: string;
@@ -578,28 +515,29 @@ function Column({
   bundleNote: string;
   metrics: Metrics;
   accent?: boolean;
+  note?: string;
   children: React.ReactNode;
-}) {
+}) => {
   return (
     <div
+      className="pg-compare-column"
       style={{
         flex: 1,
         minWidth: 0,
-        borderRight: "1px solid #1a1a1a",
+        borderRight: "1px solid var(--pg-border-subtle)",
         display: "flex",
         flexDirection: "column",
-        background: accent ? "#0c0c10" : "transparent",
+        background: accent ? "var(--pg-accent-soft)" : "transparent",
       }}
     >
       <div
         style={{
           padding: "12px 16px",
-          borderBottom: "1px solid #1a1a1a",
+          borderBottom: "1px solid var(--pg-border-subtle)",
           display: "flex",
           flexDirection: "column",
           gap: 6,
           flexShrink: 0,
-          background: accent ? "rgba(80, 120, 200, 0.04)" : "transparent",
         }}
       >
         <div
@@ -615,7 +553,7 @@ function Column({
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
               fontSize: 13,
               fontWeight: 600,
-              color: accent ? "#a8c3ff" : "#ededed",
+              color: accent ? "var(--pg-accent)" : "var(--pg-text-primary)",
             }}
           >
             {label}
@@ -623,7 +561,7 @@ function Column({
           <div
             style={{
               fontSize: 11,
-              color: "#8b8fa6",
+              color: "var(--pg-text-muted)",
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
             }}
           >
@@ -640,10 +578,26 @@ function Column({
             opacity: 0.7,
           }}
         >
-          <MetricCell label="render" value={`${metrics.lastRenderMs.toFixed(2)}ms`} />
-          <MetricCell label="peak" value={`${metrics.peakRenderMs.toFixed(2)}ms`} />
+          <MetricCell label="render" value={`${metrics.lastRenderMs.toFixed(5)}ms`} />
+          <MetricCell label="peak" value={`${metrics.peakRenderMs.toFixed(5)}ms`} />
           <MetricCell label="count" value={`${metrics.renderCount}`} />
         </div>
+        {note ? (
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 10.5,
+              lineHeight: 1.45,
+              padding: "6px 8px",
+              borderRadius: 6,
+              background: "rgba(180, 140, 60, 0.08)",
+              border: "1px solid rgba(180, 140, 60, 0.2)",
+              color: "rgba(255, 210, 140, 0.85)",
+            }}
+          >
+            {note}
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -660,20 +614,20 @@ function Column({
       </div>
     </div>
   );
-}
+};
 
-function MetricCell({ label, value }: { label: string; value: string }) {
+const MetricCell = ({ label, value }: { label: string; value: string }) => {
   return (
     <div style={{ display: "flex", gap: 4, alignItems: "baseline" }}>
       <span style={{ opacity: 0.5 }}>{label}</span>
       <span>{value}</span>
     </div>
   );
-}
+};
 
 // ── Global styles for react-markdown output (dark-mode prose) ─────
 
-function GlobalStyles() {
+const GlobalStyles = () => {
   return (
     <style jsx global>{`
       /* Minimal dark-prose for react-markdown so the comparison isn't
@@ -685,19 +639,20 @@ function GlobalStyles() {
         line-height: 1.55;
       }
       .rm-prose h1 {
-        font-size: 2em;
+        font-size: 1.5em;
         font-weight: 700;
         margin: 0 0 0.5em;
         letter-spacing: -0.02em;
+        line-height: 1.15;
       }
       .rm-prose h2 {
-        font-size: 1.45em;
+        font-size: 1.25em;
         font-weight: 700;
         margin: 1em 0 0.4em;
         letter-spacing: -0.01em;
       }
       .rm-prose h3 {
-        font-size: 1.15em;
+        font-size: 1.1em;
         font-weight: 600;
         margin: 0.9em 0 0.3em;
       }
@@ -764,10 +719,93 @@ function GlobalStyles() {
         margin: 0.5em 0;
       }
 
-      /* Streamdown ships its own base styles; override to match dark page */
-      .streamdown {
+      /* Streamdown ships its own styles.css but sizes everything for a
+         full-width article context. Tone it down so the column reads at
+         the same rhythm as the other two. We scope via .sd-column so we
+         don't touch anything else on the page. */
+      .sd-column {
         color: #ededed;
         font-size: 14px;
+        line-height: 1.55;
+      }
+      .sd-column h1 {
+        font-size: 1.5em;
+        font-weight: 700;
+        margin: 0 0 0.5em;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+      }
+      .sd-column h2 {
+        font-size: 1.25em;
+        font-weight: 700;
+        margin: 1em 0 0.4em;
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+      }
+      .sd-column h3 {
+        font-size: 1.1em;
+        font-weight: 600;
+        margin: 0.9em 0 0.3em;
+      }
+      .sd-column p,
+      .sd-column ul,
+      .sd-column ol {
+        margin: 0 0 0.9em;
+      }
+      .sd-column ul,
+      .sd-column ol {
+        padding-left: 1.4em;
+      }
+      .sd-column li {
+        margin-bottom: 0.3em;
+      }
+      /* Deliberately not styling .sd-column pre / pre code / code blocks
+         here. Streamdown ships its own block chrome (header strip with
+         language label, flex-per-line structure for shiki tokens,
+         post-load highlight swap). Overriding pre collapses its line
+         rows and strips the header background, which turned the code
+         blocks into a wall of plain text. Letting streamdown's own
+         stylesheet run is the honest comparison anyway — the question
+         is "what do you get out of the box", not "what if I rebuild
+         their CSS". */
+      .sd-column code:not(pre code) {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 0.15em 0.35em;
+        border-radius: 0.35em;
+        font-size: 0.92em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .sd-column table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 0 0 0.9em;
+        font-size: 13px;
+      }
+      .sd-column th,
+      .sd-column td {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 8px 10px;
+        text-align: left;
+      }
+      .sd-column th {
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: rgba(232, 232, 235, 0.72);
+        font-weight: 700;
+      }
+      .sd-column blockquote {
+        padding-left: 1em;
+        border-left: 3px solid rgba(255, 255, 255, 0.18);
+        color: rgba(232, 232, 235, 0.78);
+        margin: 0 0 0.9em;
+      }
+      .sd-column hr {
+        border: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .sd-column .katex-display {
+        margin: 0.5em 0;
       }
 
       @media (max-width: 900px) {
@@ -776,6 +814,26 @@ function GlobalStyles() {
           overflow: auto !important;
         }
       }
+      @media (max-width: 900px) {
+        .pg-compare-column {
+          border-right: 0 !important;
+          border-bottom: 1px solid var(--pg-border-subtle);
+        }
+        .pg-compare-column:last-child {
+          border-bottom: 0 !important;
+        }
+      }
+      @media (max-width: 768px) {
+        .pg-compare-controls {
+          padding: 10px 14px !important;
+          gap: 10px !important;
+        }
+        .pg-compare-divider {
+          display: none !important;
+        }
+      }
     `}</style>
   );
-}
+};
+
+export default ComparePage;

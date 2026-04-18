@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { sans, reading, mono } from "./fonts";
+import { RootChrome } from "../components/root-chrome";
+// Self-host KaTeX CSS so the font files are bundled by Next and served
+// same-origin. Using the CDN <link> caused a measurable font-swap flicker
+// where pretext measured math blocks against the fallback font before the
+// KaTeX webfonts arrived.
+import "katex/dist/katex.min.css";
 
 export const metadata: Metadata = {
   title: "Inkset Playground",
@@ -15,14 +21,16 @@ export const viewport: Viewport = {
 const RESPONSIVE_CSS = `
 @media (max-width: 768px) {
   .pg-aside,
-  .pg-desktop-controls,
-  .pg-scenario-strip,
-  .pg-justification-link,
-  .pg-playground-label {
+  .pg-playground-controls-desktop,
+  .pg-scenario-strip {
     display: none !important;
   }
-  .pg-header {
-    padding: 10px 14px !important;
+  .pg-playground-controls {
+    padding: 8px 14px !important;
+    justify-content: flex-end !important;
+  }
+  .pg-playground-mobile-options {
+    display: inline-flex !important;
   }
   .pg-chat-scroll {
     padding: 16px 14px 20px !important;
@@ -32,7 +40,7 @@ const RESPONSIVE_CSS = `
   }
 }
 @media (min-width: 769px) {
-  .pg-menu-btn,
+  .pg-playground-mobile-options,
   .pg-mobile-menu {
     display: none !important;
   }
@@ -55,13 +63,37 @@ const RESPONSIVE_CSS = `
 @keyframes pg-shimmer-slide {
   to { background-position: -100% 0; }
 }
+
+.pg-assistant-mount {
+  animation: pg-assistant-fade-in 380ms ease-out both;
+}
+@keyframes pg-assistant-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pg-assistant-mount { animation: none; }
+}
+
+/* Used by the custom-component scenario in SCENARIO_LIST. Radial glow
+   animation anchored to each revealed token's pretext-computed origin. */
+@keyframes pg-particle-burst {
+  0%   { opacity: 0;   transform: scale(0.4); }
+  45%  { opacity: 1;   transform: scale(1.6); }
+  100% { opacity: 0;   transform: scale(2.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes pg-particle-burst {
+    from, to { opacity: 0; transform: none; }
+  }
+}
 `;
 
-export default function RootLayout({
+const RootLayout = ({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}) => {
   return (
     <html
       lang="en"
@@ -69,10 +101,6 @@ export default function RootLayout({
       className={`${sans.variable} ${reading.variable} ${mono.variable}`}
     >
       <head>
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css"
-        />
         <style dangerouslySetInnerHTML={{ __html: RESPONSIVE_CSS }} />
       </head>
       <body
@@ -82,13 +110,12 @@ export default function RootLayout({
           fontFamily: "var(--font-sans), system-ui, -apple-system, sans-serif",
           fontFeatureSettings: '"cv11", "ss01", "ss03"',
           fontVariantNumeric: "tabular-nums",
-          letterSpacing: "-0.003em",
-          backgroundColor: "#0a0a0a",
-          color: "#ededed",
         }}
       >
-        {children}
+        <RootChrome>{children}</RootChrome>
       </body>
     </html>
   );
-}
+};
+
+export default RootLayout;

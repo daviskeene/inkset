@@ -10,6 +10,11 @@ import type {
 } from "./types";
 import type { PluginRegistry } from "./plugin";
 import { extractText } from "./parse";
+import {
+  buildGlyphLookup,
+  type GlyphPositionLookup,
+  type GlyphPretextModule,
+} from "./glyph-positions";
 
 // ── LRU Cache ──────────────────────────────────────────────────────
 
@@ -118,10 +123,25 @@ type PretextModule = {
     maxWidth: number,
     lineHeight: number,
   ) => { height: number; lineCount: number };
+  layoutWithLines: (
+    prepared: unknown,
+    maxWidth: number,
+    lineHeight: number,
+  ) => {
+    lineCount: number;
+    height: number;
+    lines: Array<{
+      text: string;
+      width: number;
+      start: { segmentIndex: number; graphemeIndex: number };
+      end: { segmentIndex: number; graphemeIndex: number };
+    }>;
+  };
   measureLineStats: (
     prepared: unknown,
     maxWidth: number,
   ) => { lineCount: number; maxLineWidth: number };
+  measureNaturalWidth: (prepared: unknown) => number;
 };
 
 const getPretext = async (): Promise<PretextModule | null> => {
@@ -135,6 +155,16 @@ const getPretext = async (): Promise<PretextModule | null> => {
     return null;
   }
 };
+
+/**
+ * Sync handle on the already-loaded pretext module, or null if the dynamic
+ * import hasn't completed or the environment has no Canvas. Safe to call from
+ * React render — callers that need pretext asynchronously should prefer
+ * `getPretext()` internally to the core package.
+ */
+export const getPretextSync = (): PretextModule | null => pretextModule;
+
+export type { PretextModule };
 
 // Kick off the pretext dynamic-import the moment this module is evaluated,
 // so the chunk is fetching (and usually resolved) before <Inkset> mounts
@@ -443,6 +473,35 @@ export class MeasureLayer {
 
   clearCache(): void {
     this.cache.clear();
+  }
+
+  /**
+   * Build a glyph-position lookup for the given block node at the given
+   * container width. Returns null when pretext is unavailable (SSR, import
+   * failed) — callers must gracefully fall back to arrival-order behaviour.
+   *
+   * Sync because pretext is loaded lazily at module evaluation and by the
+   * time a block is being rendered (pipeline has emitted state) the module
+   * is guaranteed ready. The render hot path can call this without waiting.
+   */
+  buildGlyphLookupForBlock(
+    node: EnrichedNode,
+    maxWidth: number,
+  ): GlyphPositionLookup | null {
+    if (!pretextModule || this.pretextUnavailable) return null;
+    const text = extractText(node);
+    if (!text) return null;
+
+    const typography = node.blockType === "heading"
+      ? this.getHeadingTypography(getHeadingLevel(node))
+      : this.getBaseTypography();
+
+    return buildGlyphLookup(pretextModule as unknown as GlyphPretextModule, {
+      text,
+      font: typography.font,
+      maxWidth,
+      lineHeight: typography.lineHeight,
+    });
   }
 
   private getBaseTypography(): TypographySpec {

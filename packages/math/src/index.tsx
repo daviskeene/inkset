@@ -1,7 +1,7 @@
 // Math block plugin: LaTeX rendering via KaTeX or MathJax with streaming fallback.
 declare const process: { env: { NODE_ENV?: string } };
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   extractText,
   type InksetPlugin,
@@ -60,7 +60,11 @@ export const createMathJaxRenderer = (): MathRenderer => {
 
 // ── Math block component ──────────────────────────────────────────
 
-function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
+const MathBlock = ({
+  node,
+  isStreaming = false,
+  onContentSettled,
+}: PluginComponentProps) => {
   const [html, setHtml] = useState<string>("");
   const [error, setError] = useState<string>("");
 
@@ -120,6 +124,12 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
     return () => { cancelled = true; };
   }, [displayMode, isStreaming, latex, rendererName]);
 
+  useLayoutEffect(() => {
+    if (isStreaming) return;
+    if (!html && !error) return;
+    onContentSettled?.();
+  }, [error, html, isStreaming, onContentSettled]);
+
   const Tag = displayMode ? "div" : "span";
 
   const errorContent = errorDisplay === "message"
@@ -146,7 +156,7 @@ function MathBlock({ node, isStreaming = false }: PluginComponentProps) {
       )}
     </Tag>
   );
-}
+};
 
 // ── Plugin definition ─────────────────────────────────────────────
 

@@ -2,13 +2,31 @@
 
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
-import { Inkset, type InksetTheme } from "@inkset/react";
+import { Inkset, type InksetTheme, type RevealProp } from "@inkset/react";
 import type { InksetPlugin } from "@inkset/core";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
 import { createDiagramPlugin } from "@inkset/diagram";
 import { reading, mono } from "./fonts";
+import {
+  type ThemeKey,
+  type PagePalette,
+  DARK_PALETTE,
+  LIGHT_PALETTE,
+  SEPIA_PALETTE,
+  DUSK_PALETTE,
+  getPalette,
+  paletteToCssVars,
+} from "../lib/themes";
+import { useThemeKey } from "../lib/theme-context";
+import { SiteNav } from "../components/site-nav";
+import { Footer } from "../components/footer";
+import {
+  BracketToggle,
+  CHIP_GROUP_STYLE,
+  CHIP_SECTION_LABEL_STYLE,
+} from "../components/chip";
 
 const MARKDOWN_PANEL_WIDTH = 340;
 const CHAT_MAX_WIDTH = 760;
@@ -19,19 +37,15 @@ const CHAT_SIDE_PADDING = 24;
 const READING_FONT_FAMILY = `${reading.style.fontFamily}, "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif`;
 const READING_MONO_FAMILY = `${mono.style.fontFamily}, ui-monospace, SFMono-Regular, Menlo, monospace`;
 
-// ── Typography scale (1.2 ratio, base 13) ──────────────────────────
-// 11 · 13 · 15 · 18
-// Controls/buttons use 13. Body/input/bubble use 15. Brand uses 18.
-//
-// Small-caps labels render at 13 because small-caps glyphs only reach ~70%
-// of cap-height, so a 13px label reads closer to 9px visually — still
-// smaller than the 13px regular-case controls beside it, so hierarchy
-// holds without the labels becoming unreadable.
+// ── Label style ────────────────────────────────────────────────────
+// Section/marginalia labels across the playground. Plain sans, lowercase,
+// muted color — no caps, no italics, no tracking gymnastics. Kept as
+// SMALL_CAPS_LABEL for historical reasons (many call-sites) even though
+// the treatment isn't small-caps anymore.
 const SMALL_CAPS_LABEL = {
-  fontSize: 13,
-  letterSpacing: "0.03em",
-  fontVariantCaps: "all-small-caps" as const,
-  fontFeatureSettings: '"c2sc", "smcp"',
+  fontSize: 12.5,
+  letterSpacing: 0,
+  color: "var(--pg-text-muted)",
 };
 
 // ── Scenarios ──────────────────────────────────────────────────────
@@ -39,16 +53,162 @@ const SMALL_CAPS_LABEL = {
 type Scenario = {
   key: string;
   label: string;
+  description: string;
+  group: "plugins" | "animations";
   userPrompt: string;
   assistant: string;
+  stream?: boolean;
+  streamInitialChunkSize?: number;
+  reveal?: RevealProp;
+};
+
+const STREAM_WITH_ANIMATION_REVEAL: RevealProp = {
+  throttle: {
+    delayInMs: 58,
+    chunking: "word",
+  },
+  animate: {
+    preset: "blurIn",
+    duration: 260,
+    stagger: 36,
+    sep: "word",
+  },
+};
+
+const INK_BLEED_SHADER_REVEAL: RevealProp = {
+  throttle: {
+    delayInMs: 56,
+    chunking: "word",
+  },
+  animate: {
+    preset: "blurIn",
+    duration: 300,
+    stagger: 34,
+    sep: "word",
+    staggerOrder: "layout",
+    maxStaggerSpanMs: 520,
+  },
+  shader: {
+    preset: "ink-bleed",
+    options: {
+      tint: "214, 166, 70",
+      alpha: 0.22,
+      minLifetimeMs: 520,
+      lifetimeScale: 1.7,
+      blurStartPx: 8,
+      blurEndPx: 24,
+      spreadXStart: 0.92,
+      spreadXEnd: 1.34,
+      spreadYStart: 0.92,
+      spreadYEnd: 1.18,
+    },
+  },
+};
+
+// Phase 4 demo: custom RevealComponent. Renders a warm ink-like sweep behind
+// each token while the glyphs sharpen into place. Width/height are threaded in
+// from pretext so the wash can size itself to the measured token box.
+const InkSweepReveal: import("@inkset/react").RevealComponent = ({
+  children,
+  width,
+  height,
+  delayMs,
+  durationMs,
+}: import("@inkset/react").RevealComponentProps) => {
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    setActive(false);
+    const frameId = window.requestAnimationFrame(() => {
+      setActive(true);
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  const tokenWidth = Math.max(width, 12);
+  const tokenHeight = Math.max(height, 18);
+  const sweepHeight = Math.max(tokenHeight * 0.72, 14);
+  const sweepOffsetY = Math.max((tokenHeight - sweepHeight) * 0.55, 1);
+  const horizontalInset = Math.max(tokenWidth * 0.08, 2);
+
+  return (
+    <span
+      style={{
+        position: "relative",
+        display: "inline-block",
+        isolation: "isolate",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: `-${horizontalInset}px`,
+          top: `${sweepOffsetY}px`,
+          width: `${tokenWidth + horizontalInset * 2}px`,
+          height: `${sweepHeight}px`,
+          pointerEvents: "none",
+          borderRadius: Math.max(sweepHeight * 0.42, 8),
+          background:
+            "linear-gradient(90deg, rgba(198,142,42,0) 0%, rgba(230,187,84,0.32) 18%, rgba(245,214,128,0.72) 50%, rgba(222,174,66,0.24) 82%, rgba(198,142,42,0) 100%)",
+          opacity: active ? 0 : 1,
+          transform: active ? "translateX(28%) scaleX(1.08)" : "translateX(-32%) scaleX(0.82)",
+          transformOrigin: "left center",
+          transitionProperty: "transform, opacity",
+          transitionDuration: `${Math.max(durationMs * 0.9, 220)}ms`,
+          transitionTimingFunction: "cubic-bezier(.18,.82,.22,1)",
+          transitionDelay: `${delayMs}ms`,
+          mixBlendMode: "multiply",
+          zIndex: 0,
+        }}
+      />
+      <span
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "inline-block",
+          opacity: active ? 1 : 0.18,
+          filter: active ? "blur(0px)" : "blur(5px)",
+          transform: active ? "translateY(0)" : "translateY(0.05em)",
+          transitionProperty: "opacity, filter, transform",
+          transitionDuration: `${durationMs}ms`,
+          transitionTimingFunction: "cubic-bezier(.2,.82,.2,1)",
+          transitionDelay: `${delayMs}ms`,
+          willChange: "opacity, filter, transform",
+        }}
+      >
+        {children}
+      </span>
+    </span>
+  );
+};
+
+const INK_SWEEP_REVEAL: RevealProp = {
+  // Cadence tuned to feel like a steady typed-out stream: ~17 tok/s matches
+  // stream-animated, but the custom component leans more editorial than
+  // decorative: a short wash + sharpen, not an effects-heavy spectacle.
+  throttle: { delayInMs: 60, chunking: "word" },
+  animate: {
+    preset: "fadeIn",
+    duration: 320,
+    stagger: 42,
+    sep: "word",
+    staggerOrder: "layout",
+    maxStaggerSpanMs: 600,
+  },
+  component: InkSweepReveal,
 };
 
 const SCENARIO_LIST: Scenario[] = [
   {
     key: "mixed",
     label: "why inkset",
-    userPrompt: "What's the best way to render AI chat output in React?",
-    assistant: `# Tl;dr — Why Inkset
+    description: "the pitch — mixed content across plugins",
+    group: "plugins",
+    userPrompt: "How do I display AI output in my React/Next.js app?",
+    assistant: `# Tl;dr: Inkset is a streaming markdown renderer for AI chat UIs in React.
 
 If you've worked on AI chat interfaces in React, you've probably run into the same thing I have: there isn't one clear standard for rendering model output. There are a few competing approaches, and they all get awkward once you care about streaming, code blocks, math, diagrams, and responsive layout at the same time.
 
@@ -76,8 +236,10 @@ Use the controls above to switch themes, toggle shrinkwrap, and resize the layou
   {
     key: "code",
     label: "show me code",
+    description: "three sorting algorithms, syntax highlighted",
+    group: "plugins",
     userPrompt: "Show me three classic sorting algorithms in TypeScript.",
-    assistant: `Sure — here are the three you'll see in every intro algorithms course, with the implementations kept readable rather than clever:
+    assistant: `Sure\u00A0— here are the three you'll see in every intro algorithms course, with the implementations kept readable rather than clever:
 
 ## Bubble Sort
 
@@ -139,8 +301,10 @@ Stable, O(n log n) guaranteed, O(n) extra space. What most language standard lib
   {
     key: "diagram",
     label: "draw me a diagram",
+    description: "streaming chat request lifecycle, via mermaid",
+    group: "plugins",
     userPrompt: "Sketch the lifecycle of a streaming chat request from user input through response.",
-    assistant: `Sure — here's the round-trip for a typical chat completion, from keystroke to rendered response:
+    assistant: `Sure\u00A0— here's the round-trip for a typical chat completion, from keystroke to rendered response:
 
 \`\`\`mermaid
 sequenceDiagram
@@ -179,6 +343,8 @@ Every \` \`\`\`mermaid \` fence gets promoted to a real SVG diagram. The mermaid
   {
     key: "math",
     label: "give me math",
+    description: "linear algebra fundamentals, rendered with KaTeX",
+    group: "plugins",
     userPrompt: "Walk me through the linear algebra fundamentals I'd need for ML.",
     assistant: `Here's the short tour. These four show up constantly once you start reading ML papers:
 
@@ -215,14 +381,20 @@ Less obviously linear-algebraic, but the discrete version is literally a matrix-
   {
     key: "stream",
     label: "stream it",
+    description: "plain token-by-token streaming",
+    group: "animations",
     userPrompt: "What makes Inkset different from DOM-based renderers?",
-    assistant: `Watch this reply land token-by-token — same pipeline as a real LLM stream.
+    stream: true,
+    streamInitialChunkSize: 4,
+    assistant: `Watch this reply land token-by-token\u00A0— same pipeline as a real LLM stream.
 
 The **key insight** behind Inkset is that text measurement and rendering are *separate concerns*.
 
 Traditional renderers measure text by inserting it into the DOM and reading \`getBoundingClientRect()\`. That triggers synchronous layout reflow. Fine for a static page. Expensive on every token.
 
 Inkset uses **pretext** to measure text via Canvas, then positions blocks with absolute coordinates. On resize, only the layout math re-runs.
+
+For rich async blocks like math and highlighted code, Inkset also remembers the block's settled height per width, so a narrower-then-wider resize doesn't reintroduce jitter.
 
 \`\`\`javascript
 // This is the hot path — pure arithmetic.
@@ -232,7 +404,84 @@ const layout = computeLayout(measured, { containerWidth });
 
 $$\\text{speedup} = \\frac{t_{\\text{DOM reflow}}}{t_{\\text{pretext layout}}} \\approx 300\\text{-}600\\times$$
 
-That's the thesis. Resize the window mid-stream to see nothing jitter.`,
+That's the thesis. Resize the window mid-stream — even across math or code blocks — and the column stays settled.`,
+  },
+  {
+    key: "stream-animated",
+    label: "stream animated",
+    description: "throttle + blur-in, staggered by layout order",
+    group: "animations",
+    userPrompt: "What makes Inkset different from DOM-based renderers?",
+    stream: true,
+    streamInitialChunkSize: 0,
+    reveal: STREAM_WITH_ANIMATION_REVEAL,
+    assistant: `This preset is about the **reveal layer**, not just slower token pacing.
+
+Inkset can throttle incoming text, animate each fresh word, and still keep the message column stable while the model is generating.
+
+When multiple words land in the same tick, the reveal doesn't just follow arrival order. Inkset reorders the stagger by each token's pretext-computed **(y, x)**, so the cascade reads **top-to-bottom, left-to-right** across wrapped lines.
+
+That matters because real network streams are bursty. A renderer might receive half a sentence at once. Without layout-aware staggering, those words pop in as one lump. With it, the eye still tracks the sentence in reading order.
+
+\`\`\`ts
+reveal={{
+  throttle: { delayInMs: 58, chunking: "word" },
+  animate: {
+    preset: "blurIn",
+    staggerOrder: "layout",
+  },
+}}
+\`\`\`
+
+The result is controlled motion during generation, then plain settled text once the stream is done. No post-hoc replay, no resize jitter, no DOM-driven reflow tax.`,
+  },
+  {
+    key: "ink-sweep-reveal",
+    label: "ink sweep",
+    description: "user-supplied RevealComponent with warm sweep",
+    group: "animations",
+    userPrompt: "Show me a custom reveal component.",
+    stream: true,
+    streamInitialChunkSize: 0,
+    reveal: INK_SWEEP_REVEAL,
+    assistant: `Consumers pass their own **RevealComponent** to the \`reveal\` prop and get the token text, pretext-computed *(x, y, width, height)*, and the animation timing.
+
+This demo uses that hook to paint a warm **ink sweep** behind each fresh word, then sharpen the glyphs into place. The effect stays tied to the measured token box, so the motion reinforces reading order instead of competing with it.
+
+Because the sweep is anchored to the measured token width and line box, it tracks the text as the paragraph wraps, not as some detached decoration floating over the page. That matters once a response gets dense and editorial: long clauses, parenthetical asides, repeated line breaks, and enough horizontal variation that the eye can see the cascade move from line to line instead of just watching a single short sentence blink into place.
+
+It also means the effect survives real layout pressure. Narrow the window, widen it again, and the sweep still belongs to the word it was generated for. The animation is not guessing at DOM geometry after paint; it is riding on the same measurement data the renderer already used to place the block in the first place.
+
+That is the moat streamdown can't match without a pretext-like measurement layer. You need token-aware geometry to place an effect like this cleanly, keep it aligned as the paragraph reflows, and let a custom visual treatment feel typographic rather than ornamental. Once the stream settles, the effect disappears and you are left with plain, readable text instead of a UI that keeps performing after the message is already done.`,
+  },
+  {
+    key: "ink-bleed-shader",
+    label: "ink bleed shader",
+    description: "canvas shader blooms under each streamed token",
+    group: "animations",
+    userPrompt: "Show me the shader version.",
+    stream: true,
+    streamInitialChunkSize: 0,
+    reveal: INK_BLEED_SHADER_REVEAL,
+    assistant: `This variant moves the flourish out of the DOM tree and into a shader-style overlay.
+
+The text itself is still normal selectable HTML. Inkset measures each fresh word with pretext, streams it into place, and hands the overlay a small packet of geometry: the token's **x**, **y**, **width**, **height**, and reveal timing. The shader uses that packet to bloom a warm ink bleed under the exact word that just arrived.
+
+That split matters. Layout, accessibility, selection, and copy-paste all stay boring and reliable because the text is still text. The canvas layer is just atmosphere. If it fails to initialize, the stream still renders correctly; you merely lose the garnish.
+
+It also means the effect tracks the actual reading path instead of smearing across the whole paragraph. Bursty network ticks still get reordered by layout, so even when several words arrive together the glow follows the line the reader is on rather than the order bytes happened to show up over the wire.
+
+This is the kind of effect that is hard to fake cleanly in a DOM-first renderer. Once you already have token geometry, though, the shader layer becomes simple: treat each new word like a short-lived source of color, let it diffuse for a few hundred milliseconds, and then get out of the way before the message has finished settling.
+
+\`\`\`ts
+reveal={{
+  throttle: { delayInMs: 56, chunking: "word" },
+  animate: { preset: "blurIn", staggerOrder: "layout" },
+  shader: { preset: "ink-bleed" },
+}}
+\`\`\`
+
+The result should feel physical but still editorial: the words arrive, stain the page for a beat, sharpen, and then leave behind plain text.`,
   },
 ];
 
@@ -244,118 +493,29 @@ const SCENARIOS = Object.fromEntries(SCENARIO_LIST.map((s) => [s.key, s]));
 // the rest of the page. Cached once at module load to match the plugin
 // contract (same identity between renders while the key is unchanged).
 const CODE_PLUGINS_BY_THEME: Record<string, ReturnType<typeof createCodePlugin>> = {
-  default: createCodePlugin({ theme: "github-dark" }),
+  dark: createCodePlugin({ theme: "github-dark" }),
   light: createCodePlugin({ theme: "github-light" }),
-  highContrast: createCodePlugin({ theme: "github-dark" }),
-  compact: createCodePlugin({ theme: "github-dark" }),
+  sepia: createCodePlugin({ theme: "github-light" }),
+  dusk: createCodePlugin({ theme: "github-dark" }),
 };
 // Mermaid's own theme names — "dark"/"neutral" for dark page, "default"/"neutral"
 // for light. Re-instantiated per theme key so the plugin `key` changes and
 // the pipeline re-renders existing diagrams on theme switch.
 const DIAGRAM_PLUGINS_BY_THEME: Record<string, ReturnType<typeof createDiagramPlugin>> = {
-  default: createDiagramPlugin({ theme: "dark" }),
+  dark: createDiagramPlugin({ theme: "dark" }),
   light: createDiagramPlugin({ theme: "default" }),
-  highContrast: createDiagramPlugin({ theme: "dark" }),
-  compact: createDiagramPlugin({ theme: "dark" }),
+  sepia: createDiagramPlugin({ theme: "neutral" }),
+  dusk: createDiagramPlugin({ theme: "dark" }),
 };
 const mathPlugin = createMathPlugin();
 const tablePlugin = createTablePlugin();
 
 // ── Themes ─────────────────────────────────────────────────────────
-
-type ThemeKey = "default" | "light" | "highContrast" | "compact";
-
-// Page chrome palette. `default` keeps the current dark look; `light` flips
-// the whole page (header, sidebar, chat bg, borders, text) in addition to
-// the Inkset content theme. Other themes inherit the dark palette — they
-// only affect the rendered markdown, not the surrounding UI.
-type PagePalette = {
-  bg: string;
-  surface: string;
-  surfaceRaised: string;
-  borderSubtle: string;
-  borderDefault: string;
-  borderStrong: string;
-  textPrimary: string;
-  textMuted: string;
-  textFaint: string;
-  divider: string;
-  chipActiveBg: string;
-  chipActiveText: string;
-  userBubbleBg: string;
-  userBubbleText: string;
-  submitBg: string;
-  submitText: string;
-  submitDisabledBg: string;
-  submitDisabledText: string;
-  sidebarCodeText: string;
-};
-
-const DARK_PALETTE: PagePalette = {
-  bg: "#0a0a0a",
-  surface: "#101010",
-  surfaceRaised: "#181818",
-  borderSubtle: "#1a1a1a",
-  borderDefault: "#1f1f1f",
-  borderStrong: "#333",
-  textPrimary: "#ededed",
-  textMuted: "#8b8fa6",
-  textFaint: "#5a5a5a",
-  divider: "#222",
-  chipActiveBg: "#181818",
-  chipActiveText: "#ededed",
-  userBubbleBg: "#1c1c1f",
-  userBubbleText: "#ededed",
-  submitBg: "#ededed",
-  submitText: "#0a0a0a",
-  submitDisabledBg: "#1f1f1f",
-  submitDisabledText: "#5a5a5a",
-  sidebarCodeText: "#c8c8cc",
-};
-
-const LIGHT_PALETTE: PagePalette = {
-  bg: "#fafaf9",
-  surface: "#ffffff",
-  surfaceRaised: "#f2f2f0",
-  borderSubtle: "#ececea",
-  borderDefault: "#dddcd8",
-  borderStrong: "#b5b4af",
-  textPrimary: "#1a1a1a",
-  textMuted: "#6a6a6a",
-  textFaint: "#a8a8a6",
-  divider: "#e4e4e2",
-  chipActiveBg: "#ffffff",
-  chipActiveText: "#1a1a1a",
-  userBubbleBg: "#ebeae7",
-  userBubbleText: "#1a1a1a",
-  submitBg: "#1a1a1a",
-  submitText: "#fafaf9",
-  submitDisabledBg: "#e4e4e2",
-  submitDisabledText: "#b0b0ae",
-  sidebarCodeText: "#2a2a2a",
-};
-
-const paletteToCssVars = (p: PagePalette): Record<string, string> => ({
-  "--pg-bg": p.bg,
-  "--pg-surface": p.surface,
-  "--pg-surface-raised": p.surfaceRaised,
-  "--pg-border-subtle": p.borderSubtle,
-  "--pg-border-default": p.borderDefault,
-  "--pg-border-strong": p.borderStrong,
-  "--pg-text-primary": p.textPrimary,
-  "--pg-text-muted": p.textMuted,
-  "--pg-text-faint": p.textFaint,
-  "--pg-divider": p.divider,
-  "--pg-chip-active-bg": p.chipActiveBg,
-  "--pg-chip-active-text": p.chipActiveText,
-  "--pg-user-bubble-bg": p.userBubbleBg,
-  "--pg-user-bubble-text": p.userBubbleText,
-  "--pg-submit-bg": p.submitBg,
-  "--pg-submit-text": p.submitText,
-  "--pg-submit-disabled-bg": p.submitDisabledBg,
-  "--pg-submit-disabled-text": p.submitDisabledText,
-  "--pg-sidebar-code-text": p.sidebarCodeText,
-});
+// Palettes + the ThemeKey union live in `lib/themes.ts` and are shared
+// between Playground and Compare. This file owns only the Inkset `theme`
+// bindings (typography, colors, code/table styling) per key since those
+// depend on the app's font stack. RootChrome (in the root layout) applies
+// the palette CSS vars; this page only needs the Inkset theme per key.
 
 // Shared typography defaults applied to every theme so the rendered column
 // always reads as a book: serif for body, editorial mono for inline code.
@@ -365,17 +525,21 @@ const paletteToCssVars = (p: PagePalette): Record<string, string> => ({
 const BASE_TYPOGRAPHY = {
   fontFamily: READING_FONT_FAMILY,
   fontFamilyMono: READING_MONO_FAMILY,
+  // Tracking left at 0 so pretext's width measurements match the browser's.
+  // pretext's `prepare(text, font)` API doesn't accept letter-spacing, so any
+  // non-zero tracking produces a line-count disagreement that flickers on
+  // resize. Safe to reintroduce once the measure layer can compensate.
   headingTracking: {
-    h1: "-0.01em",
-    h2: "-0.005em",
+    h1: "0",
+    h2: "0",
     h3: "0",
     h4: "0",
   },
 };
 
 const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: PagePalette }> = {
-  default: {
-    label: "default",
+  dark: {
+    label: "dark",
     palette: DARK_PALETTE,
     theme: {
       typography: { ...BASE_TYPOGRAPHY },
@@ -405,53 +569,56 @@ const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: Pag
       },
     },
   },
-  highContrast: {
-    label: "hi-contrast",
-    palette: DARK_PALETTE,
+  // Sepia reads like a pocket journal: warm paper bg, dark coffee text,
+  // sienna accent for links/marginalia. Code blocks drop to a cream surface
+  // so the syntax palette doesn't punch through the warmth.
+  sepia: {
+    label: "sepia",
+    palette: SEPIA_PALETTE,
     theme: {
       colors: {
-        text: "#ffffff",
-        textMuted: "#d0d0d0",
-        blockquoteAccent: "#ffffff",
-        blockquoteText: "#ffffff",
-        inlineCodeBg: "rgba(255, 255, 255, 0.2)",
-        hr: "rgba(255, 255, 255, 0.4)",
+        text: "#3a2e20",
+        textMuted: "rgba(58, 46, 32, 0.72)",
+        blockquoteAccent: "#8b4d2b",
+        blockquoteText: "rgba(58, 46, 32, 0.82)",
+        inlineCodeBg: "rgba(139, 77, 43, 0.10)",
+        inlineCodeText: "#3a2e20",
+        hr: "rgba(58, 46, 32, 0.15)",
       },
-      typography: {
-        ...BASE_TYPOGRAPHY,
-        headingWeights: { h1: 900, h2: 900, h3: 800, h4: 800 },
-        // 900-weight Libre Franklin needs even more breathing room than the
-        // base 800-weight defaults above.
-        headingTracking: { h1: "0", h2: "0", h3: "0", h4: "0" },
-      },
+      typography: { ...BASE_TYPOGRAPHY },
       code: {
-        background: "#000000",
+        background: "#faf3df",
+        headerBorderColor: "rgba(58, 46, 32, 0.10)",
+      },
+      table: {
+        border: "rgba(58, 46, 32, 0.12)",
+        headerText: "rgba(58, 46, 32, 0.72)",
       },
     },
   },
-  compact: {
-    label: "compact",
-    palette: DARK_PALETTE,
+  // Dusk is reading by lamplight: deep blue-ink bg, cream text, a quiet
+  // gold accent. Softer than the default dark; meant for long sessions.
+  dusk: {
+    label: "dusk",
+    palette: DUSK_PALETTE,
     theme: {
-      typography: {
-        ...BASE_TYPOGRAPHY,
-        fontSize: 14,
-        lineHeight: 1.45,
-        headingSizes: { h1: "1.8em", h2: "1.4em", h3: "1.15em", h4: "1em" },
-        headingLineHeights: { h1: 1.2, h2: 1.2, h3: 1.25, h4: 1.3 },
+      colors: {
+        text: "#e6dfc8",
+        textMuted: "rgba(230, 223, 200, 0.68)",
+        blockquoteAccent: "#d4a55a",
+        blockquoteText: "rgba(230, 223, 200, 0.82)",
+        inlineCodeBg: "rgba(212, 165, 90, 0.14)",
+        inlineCodeText: "#f1ead1",
+        hr: "rgba(230, 223, 200, 0.18)",
       },
-      spacing: {
-        listIndent: "1.2em",
-        blockquotePaddingLeft: "0.75em",
-      },
+      typography: { ...BASE_TYPOGRAPHY },
       code: {
-        blockPadding: "10px 12px",
-        blockRadius: "8px",
-        blockFontSize: "13px",
-        headerPadding: "2px 10px",
+        background: "#14172b",
+        headerBorderColor: "rgba(230, 223, 200, 0.10)",
       },
       table: {
-        cellPadding: "6px 10px",
+        border: "rgba(230, 223, 200, 0.12)",
+        headerText: "rgba(230, 223, 200, 0.62)",
       },
     },
   },
@@ -459,7 +626,7 @@ const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: Pag
 
 // ── Playground page ────────────────────────────────────────────────
 
-export default function PlaygroundPage() {
+const PlaygroundPage = () => {
   const [activeKey, setActiveKey] = useState<string>("mixed");
   const [editedContent, setEditedContent] = useState(SCENARIOS.mixed.assistant);
   const [enabledPlugins, setEnabledPlugins] = useState({
@@ -470,7 +637,8 @@ export default function PlaygroundPage() {
   });
   const [hyphenationEnabled, setHyphenationEnabled] = useState(false);
   const [shrinkwrapMode, setShrinkwrapMode] = useState<"off" | "headings" | "on">("off");
-  const [themeKey, setThemeKey] = useState<ThemeKey>("default");
+  const [revealEnabled, setRevealEnabled] = useState(false);
+  const { themeKey, setThemeKey } = useThemeKey();
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState("");
@@ -487,10 +655,10 @@ export default function PlaygroundPage() {
   // shiki theme stays in sync. Other plugins are theme-independent.
   const plugins = React.useMemo(() => {
     const byName: Record<string, InksetPlugin> = {
-      code: CODE_PLUGINS_BY_THEME[themeKey] ?? CODE_PLUGINS_BY_THEME.default,
+      code: CODE_PLUGINS_BY_THEME[themeKey] ?? CODE_PLUGINS_BY_THEME.dark,
       math: mathPlugin,
       table: tablePlugin,
-      diagram: DIAGRAM_PLUGINS_BY_THEME[themeKey] ?? DIAGRAM_PLUGINS_BY_THEME.default,
+      diagram: DIAGRAM_PLUGINS_BY_THEME[themeKey] ?? DIAGRAM_PLUGINS_BY_THEME.dark,
     };
     return Object.entries(enabledPlugins)
       .filter(([, enabled]) => enabled)
@@ -499,6 +667,7 @@ export default function PlaygroundPage() {
   }, [enabledPlugins, themeKey]);
 
   const activeScenario = SCENARIOS[activeKey] ?? SCENARIOS.mixed;
+  const effectiveReveal = revealEnabled ? activeScenario.reveal ?? {} : undefined;
 
   const stopStreaming = useCallback(() => {
     if (streamIntervalRef.current) {
@@ -509,12 +678,12 @@ export default function PlaygroundPage() {
   }, []);
 
   const runStream = useCallback(
-    (targetContent: string) => {
+    (targetContent: string, initialChunkSize = 4) => {
       stopStreaming();
       const words = targetContent.split(/(\s+)/);
-      const initialChunkSize = Math.min(4, words.length);
-      let idx = initialChunkSize;
-      setStreamedContent(words.slice(0, initialChunkSize).join(""));
+      const seedSize = Math.max(0, Math.min(initialChunkSize, words.length));
+      let idx = seedSize;
+      setStreamedContent(words.slice(0, seedSize).join(""));
       setIsStreaming(true);
 
       streamIntervalRef.current = setInterval(() => {
@@ -543,20 +712,27 @@ export default function PlaygroundPage() {
       stopStreaming();
       setActiveKey(key);
       setEditedContent(scenario.assistant);
-      if (key === "stream") {
-        runStream(scenario.assistant);
+      setRevealEnabled(Boolean(scenario.reveal));
+      if (scenario.stream) {
+        runStream(scenario.assistant, scenario.streamInitialChunkSize ?? 4);
       }
     },
     [runStream, stopStreaming],
   );
 
   const regenerate = useCallback(() => {
-    if (activeKey === "stream") {
-      runStream(activeScenario.assistant);
+    if (activeScenario.stream) {
+      runStream(activeScenario.assistant, activeScenario.streamInitialChunkSize ?? 4);
     } else {
-      runStream(editedContent);
+      runStream(editedContent, activeScenario.streamInitialChunkSize ?? 4);
     }
-  }, [activeKey, activeScenario.assistant, editedContent, runStream]);
+  }, [
+    activeScenario.assistant,
+    activeScenario.stream,
+    activeScenario.streamInitialChunkSize,
+    editedContent,
+    runStream,
+  ]);
 
   useEffect(() => {
     const container = chatAreaRef.current;
@@ -584,189 +760,136 @@ export default function PlaygroundPage() {
 
   // ── Render ─────────────────────────────────────────────────────────
 
-  const activePalette = THEMES[themeKey].palette;
-
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
         height: "100dvh",
-        background: "var(--pg-bg)",
-        color: "var(--pg-text-primary)",
-        ...paletteToCssVars(activePalette),
       }}
     >
-      <header
-        className="pg-header"
+      <SiteNav activePage="playground" />
+
+      <ScenarioStrip
+        active={activeKey}
+        onSelect={switchScenario}
+        scenarios={SCENARIO_LIST}
+        disabled={isStreaming}
+      />
+
+      {/* Page-scoped controls. Two columns that mirror the sidebar/main
+          split below so the vertical divider between "typography" and
+          "plugins" lines up with the sidebar's right edge. Mobile
+          collapses to a single "options" chip that opens the overlay. */}
+      <div
+        className="pg-playground-controls"
         style={{
-          padding: "12px 20px",
-          borderBottom: "1px solid var(--pg-border-subtle)",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexShrink: 0,
+          borderBottom: "1px solid var(--pg-border-subtle)",
           background: "var(--pg-bg)",
-          gap: 10,
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 18,
-              fontWeight: 600,
-              letterSpacing: "-0.015em",
-              fontFeatureSettings: '"ss01"',
-            }}
-          >
-            inkset
-          </h1>
-          <span className="pg-playground-label" style={{ ...SMALL_CAPS_LABEL, opacity: 0.55 }}>
-            playground
-          </span>
-          <Link
-            href="/compare"
-            className="pg-compare-link"
-            style={{
-              fontSize: 13,
-              color: "var(--pg-text-muted)",
-              textDecoration: "none",
-              padding: "3px 9px",
-              border: "1px solid var(--pg-border-default)",
-              borderRadius: 999,
-              marginLeft: 4,
-            }}
-          >
-            compare →
-          </Link>
-        </div>
-
-        <button
-          className="pg-menu-btn"
-          onClick={() => setMenuOpen(true)}
-          aria-label="Open menu"
+        <div
+          className="pg-playground-controls-desktop pg-playground-controls-typography"
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            border: "1px solid var(--pg-border-default)",
-            background: "transparent",
-            color: "var(--pg-text-primary)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            // The aside below uses content-box width: 340, so its outer
+            // size is 340 content + 1 border = 341. Match that outer size
+            // here with border-box width 341 so the dividers land on the
+            // same pixel column.
+            width: MARKDOWN_PANEL_WIDTH + 1,
             flexShrink: 0,
+            boxSizing: "border-box",
+            borderRight: "1px solid var(--pg-border-subtle)",
+            padding: "8px 22px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
           }}
         >
-          <MenuIcon />
-        </button>
+          <span style={CHIP_SECTION_LABEL_STYLE}>typography</span>
+          <div style={{ ...CHIP_GROUP_STYLE, gap: 12, rowGap: 2 }}>
+            <BracketToggle
+              label="hyphens"
+              active={hyphenationEnabled}
+              onClick={() => setHyphenationEnabled((v) => !v)}
+              title="Insert soft hyphens so Pretext and the browser can break long words"
+            />
+            <BracketToggle
+              label="shrinkwrap"
+              active={shrinkwrapMode !== "off"}
+              stateLabel={{
+                on: shrinkwrapMode === "on" ? "on" : "headings",
+                off: "off",
+              }}
+              onClick={() =>
+                setShrinkwrapMode((m) =>
+                  m === "off" ? "headings" : m === "headings" ? "on" : "off",
+                )
+              }
+              title="Narrow each paragraph/heading to the width of its longest line"
+            />
+            <BracketToggle
+              label="reveal"
+              active={revealEnabled}
+              onClick={() => setRevealEnabled((v) => !v)}
+              title="Throttle token delivery and fade each word in as it streams"
+            />
+          </div>
+        </div>
 
         <div
-          className="pg-desktop-controls"
-          style={{ display: "flex", gap: 14, alignItems: "center", fontSize: 13 }}
+          className="pg-playground-controls-desktop pg-playground-controls-plugins"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: "8px 22px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ ...SMALL_CAPS_LABEL, opacity: 0.5, marginRight: 4 }}>theme</span>
-            {(Object.keys(THEMES) as ThemeKey[]).map((key) => (
-              <button
-                key={key}
-                onClick={() => setThemeKey(key)}
-                style={{
-                  padding: "3px 9px",
-                  fontSize: 13,
-                  border:
-                    themeKey === key
-                      ? "1px solid var(--pg-border-strong)"
-                      : "1px solid var(--pg-border-default)",
-                  borderRadius: 999,
-                  background: themeKey === key ? "var(--pg-chip-active-bg)" : "transparent",
-                  color: themeKey === key ? "var(--pg-chip-active-text)" : "var(--pg-text-muted)",
-                  cursor: "pointer",
-                }}
-              >
-                {THEMES[key].label}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ width: 1, height: 18, background: "var(--pg-divider)" }} />
-
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
-              opacity: hyphenationEnabled ? 1 : 0.45,
-            }}
-            title="Insert soft hyphens so Pretext and the browser can break long words"
-          >
-            <input
-              type="checkbox"
-              checked={hyphenationEnabled}
-              onChange={() => setHyphenationEnabled((v) => !v)}
-              style={{ accentColor: "#888" }}
-            />
-            hyphens
-          </label>
-
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
-              opacity: shrinkwrapMode !== "off" ? 1 : 0.45,
-            }}
-            title="Narrow each paragraph/heading to the width of its longest line"
-          >
-            <input
-              type="checkbox"
-              checked={shrinkwrapMode !== "off"}
-              onChange={() =>
-                setShrinkwrapMode((m) => (m === "off" ? "headings" : m === "headings" ? "on" : "off"))
-              }
-              style={{ accentColor: "#888" }}
-            />
-            shrinkwrap
-            {shrinkwrapMode !== "off" && (
-              <span style={{ opacity: 0.6, fontSize: 11 }}>
-                ({shrinkwrapMode})
-              </span>
-            )}
-          </label>
-
-          <div style={{ width: 1, height: 18, background: "var(--pg-divider)" }} />
-
-          {Object.entries(enabledPlugins).map(([name, enabled]) => (
-            <label
-              key={name}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-                opacity: enabled ? 1 : 0.45,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={() =>
+          <span style={CHIP_SECTION_LABEL_STYLE}>plugins</span>
+          <div style={{ ...CHIP_GROUP_STYLE, gap: 12, rowGap: 2 }}>
+            {Object.entries(enabledPlugins).map(([name, enabled]) => (
+              <BracketToggle
+                key={name}
+                label={name}
+                active={enabled}
+                onClick={() =>
                   setEnabledPlugins((prev) => ({
                     ...prev,
                     [name]: !prev[name as keyof typeof prev],
                   }))
                 }
-                style={{ accentColor: "#888" }}
               />
-              {name}
-            </label>
-          ))}
+            ))}
+          </div>
         </div>
-      </header>
+
+        <button
+          className="pg-playground-mobile-options"
+          onClick={() => setMenuOpen(true)}
+          style={{
+            display: "none",
+            padding: "5px 12px",
+            fontSize: 13,
+            border: "1px solid var(--pg-border-default)",
+            borderRadius: 999,
+            background: "transparent",
+            color: "var(--pg-text-primary)",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            alignItems: "center",
+            gap: 8,
+            margin: "8px 14px 8px auto",
+          }}
+          aria-label="Open options menu"
+        >
+          Options
+          <MenuIcon />
+        </button>
+      </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* ── Left sidebar: raw markdown the assistant "replied with" ── */}
@@ -783,17 +906,20 @@ export default function PlaygroundPage() {
         >
           <div
             style={{
-              padding: "10px 14px",
-              ...SMALL_CAPS_LABEL,
-              opacity: 0.55,
+              padding: "10px 22px",
+              fontSize: 13,
+              color: "var(--pg-text-primary)",
               borderBottom: "1px solid var(--pg-border-subtle)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              gap: 8,
             }}
           >
             <span>assistant markdown</span>
-            <span style={{ opacity: 0.7 }}>edit to rerender</span>
+            <span style={{ color: "var(--pg-text-muted)", fontSize: 12 }}>
+              edit to rerender
+            </span>
           </div>
           <textarea
             value={isStreaming ? streamedContent : editedContent}
@@ -805,7 +931,7 @@ export default function PlaygroundPage() {
             spellCheck={false}
             style={{
               flex: 1,
-              padding: 14,
+              padding: "14px 22px",
               fontFamily: READING_MONO_FAMILY,
               fontSize: 13,
               lineHeight: 1.6,
@@ -852,17 +978,10 @@ export default function PlaygroundPage() {
                 gap: 20,
               }}
             >
-              <ScenarioStrip
-                active={activeKey}
-                onSelect={switchScenario}
-                scenarios={SCENARIO_LIST}
-                disabled={isStreaming}
-              />
-
               <UserBubble text={activeScenario.userPrompt} />
 
               <AssistantMessage
-                key={`${activeKey}-${isStreaming ? "streaming" : "settled"}`}
+                key={activeKey}
                 content={displayedAssistantContent}
                 streaming={isStreaming}
                 plugins={plugins}
@@ -876,6 +995,7 @@ export default function PlaygroundPage() {
                       : true
                 }
                 theme={THEMES[themeKey].theme}
+                reveal={effectiveReveal}
                 onRegenerate={regenerate}
               />
             </div>
@@ -894,6 +1014,8 @@ export default function PlaygroundPage() {
           />
         </main>
       </div>
+
+      <Footer />
 
       {menuOpen && (
         <MobileMenu
@@ -923,11 +1045,11 @@ export default function PlaygroundPage() {
       )}
     </div>
   );
-}
+};
 
 // ── Scenario strip ────────────────────────────────────────────────
 
-function ScenarioStrip({
+const ScenarioStrip = ({
   active,
   onSelect,
   scenarios,
@@ -937,55 +1059,141 @@ function ScenarioStrip({
   onSelect: (key: string) => void;
   scenarios: Scenario[];
   disabled: boolean;
-}) {
+}) => {
+  const groupedScenarios = [
+    {
+      key: "plugins",
+      label: "content",
+      items: scenarios.filter((scenario) => scenario.group === "plugins"),
+    },
+    {
+      key: "animations",
+      label: "motion",
+      items: scenarios.filter((scenario) => scenario.group === "animations"),
+    },
+  ] as const;
+
   return (
     <div
       className="pg-scenario-strip"
       style={{
         display: "flex",
-        gap: 6,
+        alignItems: "center",
         flexWrap: "wrap",
+        gap: 18,
+        rowGap: 6,
+        padding: "7px 22px",
+        borderBottom: "1px solid var(--pg-border-subtle)",
+        background: "var(--pg-bg)",
+        flexShrink: 0,
         opacity: disabled ? 0.5 : 1,
         pointerEvents: disabled ? "none" : undefined,
       }}
     >
-      <span
-        style={{
-          ...SMALL_CAPS_LABEL,
-          opacity: 0.5,
-          alignSelf: "center",
-          marginRight: 4,
-        }}
-      >
-        try:
-      </span>
-      {scenarios.map((s) => (
-        <button
-          key={s.key}
-          onClick={() => onSelect(s.key)}
-          style={{
-            padding: "4px 10px",
-            fontSize: 13,
-            border:
-              active === s.key
-                ? "1px solid var(--pg-border-strong)"
-                : "1px solid var(--pg-border-default)",
-            borderRadius: 999,
-            background: active === s.key ? "var(--pg-chip-active-bg)" : "transparent",
-            color: active === s.key ? "var(--pg-chip-active-text)" : "var(--pg-text-muted)",
-            cursor: "pointer",
-          }}
-        >
-          {s.label}
-        </button>
+      {groupedScenarios.map((group, idx) => (
+        <React.Fragment key={group.key}>
+          {idx > 0 ? (
+            <span
+              aria-hidden
+              style={{
+                width: 1,
+                height: 14,
+                background: "var(--pg-divider)",
+                flexShrink: 0,
+              }}
+            />
+          ) : null}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              columnGap: 16,
+              rowGap: 2,
+              flexWrap: "wrap",
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                fontSize: 11,
+                color: "var(--pg-text-muted)",
+                letterSpacing: "0.01em",
+                lineHeight: 1.2,
+                marginRight: 4,
+                whiteSpace: "nowrap",
+              }}
+            >
+              [ {group.label} ]
+            </span>
+            {group.items.map((scenario) => (
+              <ScenarioButton
+                key={scenario.key}
+                scenario={scenario}
+                active={active === scenario.key}
+                onSelect={() => onSelect(scenario.key)}
+              />
+            ))}
+          </div>
+        </React.Fragment>
       ))}
     </div>
   );
-}
+};
+
+const ScenarioButton = ({
+  scenario,
+  active,
+  onSelect,
+}: {
+  scenario: Scenario;
+  active: boolean;
+  onSelect: () => void;
+}) => {
+  const [hover, setHover] = useState(false);
+  const emphasized = active || hover;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={scenario.description}
+      style={{
+        position: "relative",
+        padding: "3px 2px 5px",
+        border: "none",
+        background: "transparent",
+        color: emphasized ? "var(--pg-text-primary)" : "var(--pg-text-muted)",
+        fontFamily: "inherit",
+        fontSize: 13,
+        lineHeight: 1.4,
+        letterSpacing: "-0.005em",
+        cursor: "pointer",
+        transition: "color 120ms ease",
+      }}
+    >
+      {scenario.label}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: 2,
+          right: 2,
+          bottom: 0,
+          height: 1.5,
+          background: active ? "var(--pg-text-primary)" : "transparent",
+          transition: "background-color 160ms ease",
+        }}
+      />
+    </button>
+  );
+};
 
 // ── User bubble ────────────────────────────────────────────────────
 
-function UserBubble({ text }: { text: string }) {
+const UserBubble = ({ text }: { text: string }) => {
   return (
     <div style={{ display: "flex", justifyContent: "flex-end" }}>
       <div
@@ -1004,7 +1212,7 @@ function UserBubble({ text }: { text: string }) {
       </div>
     </div>
   );
-}
+};
 
 // ── Assistant message ──────────────────────────────────────────────
 
@@ -1016,10 +1224,11 @@ type AssistantMessageProps = {
   hyphenation: boolean;
   shrinkwrap: boolean | "headings" | "paragraphs";
   theme: InksetTheme | undefined;
+  reveal: RevealProp | undefined;
   onRegenerate: () => void;
 };
 
-function AssistantMessage({
+const AssistantMessage = ({
   content,
   streaming,
   plugins,
@@ -1027,8 +1236,9 @@ function AssistantMessage({
   hyphenation,
   shrinkwrap,
   theme,
+  reveal,
   onRegenerate,
-}: AssistantMessageProps) {
+}: AssistantMessageProps) => {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
@@ -1041,6 +1251,7 @@ function AssistantMessage({
 
   return (
     <div
+      className="pg-assistant-mount"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -1058,9 +1269,11 @@ function AssistantMessage({
           fontSize={15}
           lineHeight={24}
           blockMargin={12}
+          headingSizes={[2, 1.5, 1.2, 1]}
           hyphenation={hyphenation}
           shrinkwrap={shrinkwrap}
           theme={theme}
+          reveal={reveal}
           loadingFallback={<ThinkingFallback />}
         />
       </div>
@@ -1098,11 +1311,11 @@ function AssistantMessage({
       </div>
     </div>
   );
-}
+};
 
 // ── Chat input with live Inkset preview ────────────────────────────
 
-function ChatInput({
+const ChatInput = ({
   value,
   onChange,
   focused,
@@ -1120,7 +1333,7 @@ function ChatInput({
   hyphenation: boolean;
   theme: InksetTheme | undefined;
   width: number;
-}) {
+}) => {
   const [justSent, setJustSent] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const showPreview = focused && value.trim().length > 0;
@@ -1279,11 +1492,11 @@ function ChatInput({
       </div>
     </div>
   );
-}
+};
 
 // ── Small icon primitives ──────────────────────────────────────────
 
-function IconButton({
+const IconButton = ({
   onClick,
   label,
   active,
@@ -1293,7 +1506,7 @@ function IconButton({
   label: string;
   active?: boolean;
   children: React.ReactNode;
-}) {
+}) => {
   return (
     <button
       onClick={onClick}
@@ -1322,36 +1535,36 @@ function IconButton({
       {children}
     </button>
   );
-}
+};
 
-function CopyIcon() {
+const CopyIcon = () => {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
     </svg>
   );
-}
+};
 
-function ThumbUpIcon() {
+const ThumbUpIcon = () => {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M7 10v12" />
       <path d="M15 5.88 14 10h5.83a2 2 0 011.92 2.56l-2.33 8A2 2 0 0117.5 22H7V10l4-7a2 2 0 012 1.46z" />
     </svg>
   );
-}
+};
 
-function ThumbDownIcon() {
+const ThumbDownIcon = () => {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17 14V2" />
       <path d="M9 18.12 10 14H4.17a2 2 0 01-1.92-2.56l2.33-8A2 2 0 016.5 2H17v12l-4 7a2 2 0 01-2-1.46z" />
     </svg>
   );
-}
+};
 
-function RegenerateIcon() {
+const RegenerateIcon = () => {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
@@ -1360,18 +1573,18 @@ function RegenerateIcon() {
       <path d="M3 21v-5h5" />
     </svg>
   );
-}
+};
 
-function SendIcon() {
+const SendIcon = () => {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 19V5" />
       <path d="M5 12l7-7 7 7" />
     </svg>
   );
-}
+};
 
-function ThinkingFallback() {
+const ThinkingFallback = () => {
   return (
     <div
       role="status"
@@ -1381,9 +1594,9 @@ function ThinkingFallback() {
       <span className="pg-shimmer">Thinking…</span>
     </div>
   );
-}
+};
 
-function MenuIcon() {
+const MenuIcon = () => {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <line x1="4" y1="7" x2="20" y2="7" />
@@ -1391,16 +1604,16 @@ function MenuIcon() {
       <line x1="4" y1="17" x2="20" y2="17" />
     </svg>
   );
-}
+};
 
-function CloseIcon() {
+const CloseIcon = () => {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <line x1="6" y1="6" x2="18" y2="18" />
       <line x1="6" y1="18" x2="18" y2="6" />
     </svg>
   );
-}
+};
 
 // ── Mobile menu ────────────────────────────────────────────────────
 
@@ -1419,7 +1632,7 @@ type MobileMenuProps = {
   onToggleShrinkwrap: () => void;
 };
 
-function MobileMenu({
+const MobileMenu = ({
   onClose,
   activeScenario,
   onSelectScenario,
@@ -1432,7 +1645,20 @@ function MobileMenu({
   onToggleHyphenation,
   shrinkwrapMode,
   onToggleShrinkwrap,
-}: MobileMenuProps) {
+}: MobileMenuProps) => {
+  const groupedScenarios = [
+    {
+      key: "plugins",
+      label: "content",
+      items: scenarios.filter((scenario) => scenario.group === "plugins"),
+    },
+    {
+      key: "animations",
+      label: "motion",
+      items: scenarios.filter((scenario) => scenario.group === "animations"),
+    },
+  ] as const;
+
   return (
     <div
       className="pg-mobile-menu"
@@ -1488,31 +1714,44 @@ function MobileMenu({
         </div>
 
         <Section label="examples">
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {scenarios.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => onSelectScenario(s.key)}
-                style={{
-                  padding: "10px 14px",
-                  fontSize: 15,
-                  textAlign: "left",
-                  border:
-                    activeScenario === s.key
-                      ? "1px solid var(--pg-border-strong)"
-                      : "1px solid var(--pg-border-default)",
-                  borderRadius: 10,
-                  background:
-                    activeScenario === s.key ? "var(--pg-chip-active-bg)" : "transparent",
-                  color:
-                    activeScenario === s.key
-                      ? "var(--pg-chip-active-text)"
-                      : "var(--pg-text-primary)",
-                  cursor: "pointer",
-                }}
-              >
-                {s.label}
-              </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {groupedScenarios.map((group) => (
+              <div key={group.key}>
+                <div style={{ ...SMALL_CAPS_LABEL, marginBottom: 8 }}>{group.label}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {group.items.map((scenario) => {
+                    const isActive = activeScenario === scenario.key;
+                    return (
+                      <button
+                        key={scenario.key}
+                        onClick={() => onSelectScenario(scenario.key)}
+                        style={{
+                          padding: "10px 14px",
+                          fontSize: 15,
+                          textAlign: "left",
+                          border: isActive
+                            ? "1px solid var(--pg-border-strong)"
+                            : "1px solid var(--pg-border-default)",
+                          borderRadius: 10,
+                          background: isActive
+                            ? "var(--pg-chip-active-bg)"
+                            : "transparent",
+                          color: "var(--pg-text-primary)",
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 3,
+                        }}
+                      >
+                        <span>{scenario.label}</span>
+                        <span style={{ fontSize: 12.5, color: "var(--pg-text-muted)" }}>
+                          {scenario.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         </Section>
@@ -1632,13 +1871,15 @@ function MobileMenu({
       </div>
     </div>
   );
-}
+};
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+const Section = ({ label, children }: { label: string; children: React.ReactNode }) => {
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ ...SMALL_CAPS_LABEL, opacity: 0.5, marginBottom: 8 }}>{label}</div>
       {children}
     </div>
   );
-}
+};
+
+export default PlaygroundPage;

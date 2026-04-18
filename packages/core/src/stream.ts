@@ -14,6 +14,7 @@ import { MeasureLayer } from "./measure";
 import { computeLayout, getLayoutHeight } from "./layout";
 import { PluginRegistry } from "./plugin";
 import { hyphenateBlock, loadHyphenator, type Hyphenator, type SupportedLanguage } from "./hyphenate";
+import type { GlyphPositionLookup } from "./glyph-positions";
 
 const DEFAULT_FONT = "system-ui, sans-serif";
 const DEFAULT_FONT_SIZE = 16;
@@ -29,6 +30,13 @@ export type PipelineState = {
   isStreaming: boolean;
   blockCount: number;
   metrics: PipelineMetrics;
+  /**
+   * Monotonic tick counter, incremented once per `runPipeline()`. The reveal
+   * layer threads this onto newly-wrapped tokens so React can distinguish
+   * "spans from this frame" from "spans carried over from the previous frame"
+   * without diffing the AST.
+   */
+  tick: number;
 };
 
 export type PipelineMetrics = {
@@ -90,6 +98,7 @@ export class StreamingPipeline {
     totalPipelineMs: 0,
     cacheHitRate: 0,
   };
+  private tick = 0;
 
   private listeners: Set<(state: PipelineState) => void> = new Set();
 
@@ -243,11 +252,25 @@ export class StreamingPipeline {
       isStreaming: this.ingest.isStreaming,
       blockCount: this.currentNodes.length,
       metrics: { ...this.metrics },
+      tick: this.tick,
     };
   }
 
   getRegistry(): PluginRegistry {
     return this.registry;
+  }
+
+  /**
+   * Expose a glyph-position lookup for a given block at a given container
+   * width. Used by the reveal layer (`@inkset/animate` + `@inkset/react`) to
+   * sort new tokens in layout order and to pass pixel coords to consumer
+   * `RevealComponent` props. Returns null when pretext is unavailable.
+   */
+  buildGlyphLookupForBlock(
+    node: EnrichedNode,
+    maxWidth: number,
+  ): GlyphPositionLookup | null {
+    return this.measureLayer.buildGlyphLookupForBlock(node, maxWidth);
   }
 
   destroy(): void {
@@ -316,6 +339,7 @@ export class StreamingPipeline {
   private async runPipeline(): Promise<void> {
     if (!this.initialized) await this.init();
 
+    this.tick += 1;
     const pipelineStart = performance.now();
 
     const repaired = this.ingest.getRepaired();

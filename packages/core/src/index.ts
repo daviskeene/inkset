@@ -33,7 +33,15 @@ export {
   DEFAULT_HEADING_SIZES,
   DEFAULT_HEADING_WEIGHTS,
   DEFAULT_HEADING_LINE_HEIGHTS,
+  getPretextSync,
 } from "./measure";
+export { buildGlyphLookup } from "./glyph-positions";
+export type {
+  TokenCoord,
+  GlyphPositionLookup,
+  BuildGlyphLookupOptions,
+  GlyphPretextModule,
+} from "./glyph-positions";
 export { escapeHtml, nodeToHtml, propsToAttrs } from "./html";
 export { computeLayout, getLayoutHeight, getVisibleBlocks } from "./layout";
 export { StreamingPipeline } from "./stream";

@@ -1,7 +1,7 @@
 // Code block plugin: syntax highlighting via shiki with streaming support.
 declare const process: { env: { NODE_ENV?: string } };
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import {
   extractText,
   type InksetPlugin,
@@ -87,7 +87,7 @@ export interface CodeBlockProps extends PluginComponentProps {
   theme?: string;
 }
 
-function CodeBlock({ node, isStreaming }: PluginComponentProps) {
+const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps) => {
   const [htmlDark, setHtmlDark] = useState<string | null>(null);
   const [htmlLight, setHtmlLight] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -127,6 +127,12 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
 
     return () => { cancelled = true; };
   }, [code, lang, theme, lightTheme]);
+
+  useLayoutEffect(() => {
+    if (isStreaming) return;
+    if (htmlDark === null && htmlLight === null) return;
+    onContentSettled?.();
+  }, [htmlDark, htmlLight, isStreaming, onContentSettled]);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code).then(() => {
@@ -181,7 +187,7 @@ function CodeBlock({ node, isStreaming }: PluginComponentProps) {
       {isStreaming && <div className="inkset-code-streaming">...</div>}
     </div>
   );
-}
+};
 
 // ── Plugin definition ─────────────────────────────────────────────
 

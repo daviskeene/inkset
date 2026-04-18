@@ -126,6 +126,12 @@ export interface InksetPlugin {
 export interface PluginComponentProps {
   node: EnrichedNode;
   isStreaming?: boolean;
+  /**
+   * Optional callback for plugins whose rendered DOM can settle after the
+   * first paint (e.g. async syntax highlight / KaTeX render). Calling this
+   * asks the host renderer to re-read the block's actual height immediately.
+   */
+  onContentSettled?: () => void;
 }
 
 // ── Stream event types ─────────────────────────────────────────────

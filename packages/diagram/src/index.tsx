@@ -151,7 +151,7 @@ const isMermaidNode = (node: ASTNode): boolean =>
 
 // ── Diagram component ─────────────────────────────────────────────
 
-function DiagramBlock({ node, isStreaming }: PluginComponentProps) {
+const DiagramBlock = ({ node, isStreaming }: PluginComponentProps) => {
   const source = (node.pluginData?.source as string) ?? "";
   const theme = (node.pluginData?.theme as string) ?? "dark";
   const showHeader = (node.pluginData?.showHeader as boolean) ?? true;
@@ -271,7 +271,7 @@ function DiagramBlock({ node, isStreaming }: PluginComponentProps) {
       )}
     </div>
   );
-}
+};
 
 // ── Plugin definition ─────────────────────────────────────────────
 

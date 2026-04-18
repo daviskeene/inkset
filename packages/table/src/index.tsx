@@ -37,7 +37,7 @@ export type TablePluginOptions = {
 
 // ── Table component ───────────────────────────────────────────────
 
-function TableBlock({ node }: PluginComponentProps) {
+const TableBlock = ({ node }: PluginComponentProps) => {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tableHtml = (node.pluginData?.html as string) ?? "";
@@ -82,7 +82,7 @@ function TableBlock({ node }: PluginComponentProps) {
       </div>
     </div>
   );
-}
+};
 
 // ── Plugin definition ─────────────────────────────────────────────
 
