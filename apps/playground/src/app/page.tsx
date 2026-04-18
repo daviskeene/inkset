@@ -649,7 +649,7 @@ const PlaygroundPage = () => {
   const [streamedContent, setStreamedContent] = useState("");
   const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [chatAreaWidth, setChatAreaWidth] = useState(0);
+  const [chatAreaWidth, setChatAreaWidth] = useState<number | null>(null);
   const chatAreaRef = useRef<HTMLDivElement>(null);
 
   const [inputValue, setInputValue] = useState("");
@@ -738,13 +738,24 @@ const PlaygroundPage = () => {
     runStream,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = chatAreaRef.current;
     if (!container) return;
 
+    const measure = () => {
+      const width = Math.floor(container.getBoundingClientRect().width);
+      if (width > 0) {
+        setChatAreaWidth((prev) => (prev === width ? prev : width));
+      }
+    };
+
+    measure();
+
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0;
-      if (width > 0) setChatAreaWidth(width);
+      const width = Math.floor(entries[0]?.contentRect.width ?? 0);
+      if (width > 0) {
+        setChatAreaWidth((prev) => (prev === width ? prev : width));
+      }
     });
 
     observer.observe(container);
@@ -755,10 +766,10 @@ const PlaygroundPage = () => {
 
   // The assistant message width: chat area width minus the side padding, but
   // capped to CHAT_MAX_WIDTH so long lines don't become unreadable.
-  const assistantWidth = Math.max(
-    0,
-    Math.min(chatAreaWidth - CHAT_SIDE_PADDING * 2, CHAT_MAX_WIDTH),
-  );
+  const assistantWidth =
+    chatAreaWidth == null
+      ? undefined
+      : Math.max(0, Math.min(chatAreaWidth - CHAT_SIDE_PADDING * 2, CHAT_MAX_WIDTH));
 
   const displayedAssistantContent = isStreaming ? streamedContent : editedContent;
 
@@ -1194,7 +1205,7 @@ type AssistantMessageProps = {
   content: string;
   streaming: boolean;
   plugins: ReturnType<typeof createCodePlugin>[];
-  width: number;
+  width?: number;
   hyphenation: boolean;
   shrinkwrap: boolean | "headings" | "paragraphs";
   theme: InksetTheme | undefined;
@@ -1235,7 +1246,12 @@ const AssistantMessage = ({
         paddingTop: 4,
       }}
     >
-      <div style={{ width }}>
+      <div
+        style={{
+          width: width ?? "100%",
+          visibility: width == null ? "hidden" : "visible",
+        }}
+      >
         <Inkset
           content={content}
           streaming={streaming}
