@@ -503,7 +503,7 @@ const ComparePage = () => {
                 width={effectiveWidth}
                 fontSize={14}
                 lineHeight={21}
-                blockMargin={12}
+                blockSpacing={{ default: 12 }}
                 headingSizes={[1.5, 1.25, 1.1, 1]}
                 headingWeights={[700, 700, 600, 600]}
                 headingLineHeights={[1.2, 1.22, 1.25, 1.3]}

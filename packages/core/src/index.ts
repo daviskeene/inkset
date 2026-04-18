@@ -1,8 +1,12 @@
 // Public API surface for @inkset/core.
 export type {
   ASTNode,
+  BlockSpacing,
+  BlockSpacingPairRule,
+  BlockSpacingValue,
   Block,
   BlockType,
+  BuiltinBlockKind,
   Dimensions,
   EnrichedNode,
   HeadingLineHeightTuple,
@@ -23,6 +27,7 @@ export type {
 } from "./types";
 
 export { InksetError } from "./types";
+export { DEFAULT_BLOCK_SPACING, getNodeBlockKind, resolveBlockGap } from "./block-spacing";
 export { PluginRegistry } from "./plugin";
 export { Ingest, splitBlocks, repair } from "./ingest";
 export { createBlocks, parseBlock, parseBlocks, extractText } from "./parse";

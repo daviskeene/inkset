@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Inkset, type InksetTheme } from "@inkset/react";
+import { Inkset, type BlockSpacing, type InksetTheme } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
@@ -62,6 +62,34 @@ const LEDE_THEME: InksetTheme = {
 };
 
 const BODY_FONT = '"Libre Franklin", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif';
+const ZERO_BLOCK_SPACING: BlockSpacing = { default: 0 };
+const DOCS_BLOCK_SPACING: BlockSpacing = {
+  default: 8,
+  blocks: {
+    heading1: { top: 4, bottom: 8 },
+    heading2: { top: 18, bottom: 6 },
+    heading3: { top: 14, bottom: 6 },
+    paragraph: { bottom: 4 },
+    "unordered-list": { top: 2, bottom: 6 },
+    "ordered-list": { top: 2, bottom: 6 },
+    blockquote: { top: 4, bottom: 6 },
+    code: { top: 8, bottom: 8 },
+    table: { top: 8, bottom: 8 },
+    math: { top: 8, bottom: 8 },
+    hr: { top: 12, bottom: 12 },
+  },
+  pairs: [
+    { from: ["heading1", "heading2", "heading3"], to: "paragraph", gap: 8 },
+    {
+      from: ["heading1", "heading2", "heading3"],
+      to: ["unordered-list", "ordered-list", "code", "table", "math", "blockquote"],
+      gap: 10,
+    },
+    { from: "paragraph", to: "heading2", gap: 20 },
+    { from: "paragraph", to: "heading3", gap: 16 },
+    { from: ["unordered-list", "ordered-list"], to: "paragraph", gap: 8 },
+  ],
+};
 
 export const DocsArticle = ({
   page,
@@ -213,7 +241,7 @@ export const DocsArticle = ({
           className="pg-docs-lede"
           style={{
             maxWidth: 640,
-            margin: "0 0 32px",
+            margin: "0 0 36px",
             color: "var(--pg-text-muted)",
           }}
         >
@@ -225,8 +253,8 @@ export const DocsArticle = ({
             width={Math.min(width, 640)}
             font={BODY_FONT}
             fontSize={17}
-            lineHeight={27}
-            blockMargin={0}
+            lineHeight={28}
+            blockSpacing={ZERO_BLOCK_SPACING}
           />
         </div>
       ) : (
@@ -242,8 +270,8 @@ export const DocsArticle = ({
           width={width}
           font={BODY_FONT}
           fontSize={15}
-          lineHeight={25}
-          blockMargin={12}
+          lineHeight={26}
+          blockSpacing={DOCS_BLOCK_SPACING}
           headingSizes={[2, 1.6, 1.15, 1]}
           headingWeights={[600, 600, 600, 600]}
           headingLineHeights={[1.15, 1.2, 1.25, 1.35]}

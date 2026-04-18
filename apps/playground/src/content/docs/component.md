@@ -26,13 +26,28 @@ export function Message({ text, streaming }) {
 | `font`           | `string`             | system default         | Font-family stack to measure against.                                      |
 | `fontSize`       | `number`             | `16`                   | Base font size in px.                                                      |
 | `lineHeight`     | `number`             | `1.55 × fontSize`      | Line height in px.                                                         |
-| `blockMargin`    | `number`             | `12`                   | Space between frozen blocks in px.                                         |
+| `blockSpacing`   | `BlockSpacing`       | `{ default: 16 }`      | Semantic spacing policy between frozen blocks.                             |
 | `headingSizes`   | `HeadingSizeTuple`   | `[2, 1.5, 1.2, 1]`     | Em-scale for h1–h4.                                                        |
 | `headingWeights` | `HeadingWeightTuple` | `[700, 600, 600, 600]` | Weight for h1–h4.                                                          |
 | `hyphenation`    | `HyphenationOption`  | `"auto"`               | Whether pretext breaks long words.                                         |
 | `shrinkwrap`     | `ShrinkwrapOption`   | `"off"`                | Widen narrow lines to fill the container.                                  |
 | `theme`          | `InksetTheme`        | —                      | Color tokens; see [Theming](/docs/theming).                                |
 | `reveal`         | `RevealProp`         | —                      | Token animation config; see [@inkset/animate](/docs/plugin-animate).       |
+
+`blockSpacing` is the layout-native way to tune rhythm. Set a default gap, then refine it per block kind or per adjacent pair:
+
+```tsx
+<Inkset
+  blockSpacing={{
+    default: 8,
+    blocks: {
+      heading2: { top: 18, bottom: 6 },
+      paragraph: { bottom: 4 },
+    },
+    pairs: [{ from: "paragraph", to: "heading2", gap: 20 }],
+  }}
+/>
+```
 
 ## Fixed vs. flexible width
 

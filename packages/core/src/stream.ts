@@ -12,6 +12,7 @@ import { createBlocks, parseBlocks, extractText } from "./parse";
 import { transformBlocks, retransformWidthSensitive } from "./transform";
 import { MeasureLayer } from "./measure";
 import { computeLayout, getLayoutHeight } from "./layout";
+import { DEFAULT_BLOCK_SPACING } from "./block-spacing";
 import { PluginRegistry } from "./plugin";
 import {
   hyphenateBlock,
@@ -24,7 +25,6 @@ import type { GlyphPositionLookup } from "./glyph-positions";
 const DEFAULT_FONT = "system-ui, sans-serif";
 const DEFAULT_FONT_SIZE = 16;
 const DEFAULT_LINE_HEIGHT = 24;
-const DEFAULT_BLOCK_MARGIN = 16;
 const DEFAULT_CACHE_SIZE = 500;
 
 // ── Pipeline state ─────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export class StreamingPipeline {
       font: options?.font ?? DEFAULT_FONT,
       fontSize: options?.fontSize ?? DEFAULT_FONT_SIZE,
       lineHeight: options?.lineHeight ?? DEFAULT_LINE_HEIGHT,
-      blockMargin: options?.blockMargin ?? DEFAULT_BLOCK_MARGIN,
+      blockSpacing: options?.blockSpacing ?? DEFAULT_BLOCK_SPACING,
       cacheSize: options?.cacheSize ?? DEFAULT_CACHE_SIZE,
       hyphenation: options?.hyphenation,
       textWrap: options?.textWrap,
@@ -253,7 +253,7 @@ export class StreamingPipeline {
   getState(): PipelineState {
     return {
       layout: this.currentLayout,
-      totalHeight: getLayoutHeight(this.currentLayout, this.options.blockMargin),
+      totalHeight: getLayoutHeight(this.currentLayout),
       isStreaming: this.ingest.isStreaming,
       blockCount: this.currentNodes.length,
       metrics: { ...this.metrics },
@@ -384,7 +384,7 @@ export class StreamingPipeline {
     const layoutStart = performance.now();
     this.currentLayout = computeLayout(this.currentMeasured, {
       containerWidth: this.containerWidth,
-      blockMargin: this.options.blockMargin,
+      blockSpacing: this.options.blockSpacing,
     });
     this.metrics.lastLayoutMs = performance.now() - layoutStart;
 
@@ -437,7 +437,7 @@ export class StreamingPipeline {
     this.currentMeasured = nextMeasured;
     this.currentLayout = computeLayout(nextMeasured, {
       containerWidth: targetWidth,
-      blockMargin: this.options.blockMargin,
+      blockSpacing: this.options.blockSpacing,
     });
     this.metrics.lastLayoutMs = performance.now() - layoutStart;
 

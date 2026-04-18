@@ -1,6 +1,7 @@
-// Tests for the LRU cache used by the measure layer.
+// Tests for the LRU cache and measure layer helpers.
 import { describe, it, expect } from "vitest";
-import { LRUCache } from "../src/measure.js";
+import { LRUCache, MeasureLayer } from "../src/measure.js";
+import type { EnrichedNode } from "../src/types.js";
 
 describe("LRUCache", () => {
   it("stores and retrieves values", () => {
@@ -74,5 +75,31 @@ describe("LRUCache", () => {
     cache.set("a", 2);
     expect(cache.get("a")).toBe(2);
     expect(cache.size).toBe(1);
+  });
+});
+
+const makeListNode = (text: string): EnrichedNode => {
+  return {
+    type: "element",
+    tagName: "ul",
+    blockId: 0,
+    blockType: "list",
+    children: [{ type: "text", value: text, blockId: 0, blockType: "list" }],
+  };
+};
+
+describe("MeasureLayer", () => {
+  it("does not add trailing padding after the final list item", async () => {
+    const layer = new MeasureLayer({
+      font: "system-ui, sans-serif",
+      fontSize: 16,
+      lineHeight: 24,
+    });
+
+    const single = await layer.measureBlock(makeListNode("Alpha"), 1000);
+    const double = await layer.measureBlock(makeListNode("Alpha\nBeta"), 1000);
+
+    expect(single.dimensions.height).toBe(24);
+    expect(double.dimensions.height).toBe(24 + 24 + 4);
   });
 });

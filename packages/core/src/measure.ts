@@ -8,6 +8,7 @@ import type {
   HeadingWeightTuple,
   HeadingLineHeightTuple,
 } from "./types";
+import { getNodeBlockKind } from "./block-spacing";
 import { extractText } from "./parse";
 import {
   buildGlyphLookup,
@@ -235,7 +236,7 @@ export class MeasureLayer {
     if (plugin?.measure) {
       try {
         const dimensions = plugin.measure(node, maxWidth);
-        return { blockId: node.blockId, node, dimensions };
+        return { blockId: node.blockId, node, kind: getNodeBlockKind(node), dimensions };
       } catch (err) {
         console.warn(`[inkset] Plugin measure() failed for block ${node.blockId}:`, err);
       }
@@ -246,13 +247,14 @@ export class MeasureLayer {
       return {
         blockId: node.blockId,
         node,
+        kind: getNodeBlockKind(node),
         dimensions: { width: maxWidth, height: 0 },
       };
     }
 
     // Use block-type-aware measurement
     const dimensions = await this.measureBlockByType(node, text, maxWidth);
-    return { blockId: node.blockId, node, dimensions };
+    return { blockId: node.blockId, node, kind: getNodeBlockKind(node), dimensions };
   }
 
   /**
@@ -308,7 +310,8 @@ export class MeasureLayer {
           const d = await this.measureTextWithTypography(item, innerWidth, baseTypography);
           total += d.height;
         }
-        total += items.length * LIST_ITEM_PADDING;
+        // The list gap belongs between items, not after the final bullet.
+        total += Math.max(0, items.length - 1) * LIST_ITEM_PADDING;
         return {
           width: maxWidth,
           height: Math.max(total, this.options.lineHeight),

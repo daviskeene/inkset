@@ -5,12 +5,27 @@ export const DOCS_SHELL_STYLES = `
 /* ────────────────────────────────────────────────────────────────
    TOC + outline hover and active styles
    ──────────────────────────────────────────────────────────────── */
+.pg-docs-toc-link {
+  position: relative;
+  transition: color 120ms ease;
+}
 .pg-docs-toc-link:hover {
   color: var(--pg-text-primary) !important;
-  background: var(--pg-surface-raised);
 }
 .pg-docs-toc-link[data-active] {
   background: transparent !important;
+}
+.pg-docs-toc-link[data-active]::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--pg-text-primary);
 }
 
 .pg-docs-outline-link:hover {
@@ -87,7 +102,6 @@ export const DOCS_SHELL_STYLES = `
      the drawer — swap it for a filled highlight that matches the hover
      state's hit region. */
   .pg-docs-toc-link[data-active] {
-    box-shadow: none !important;
     background: var(--pg-surface-raised) !important;
   }
   .pg-docs-toc {

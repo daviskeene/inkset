@@ -17,6 +17,41 @@ export type BlockType =
 
 export type Properties = Record<string, unknown>;
 
+export type BuiltinBlockKind =
+  | "paragraph"
+  | "heading1"
+  | "heading2"
+  | "heading3"
+  | "heading4"
+  | "heading5"
+  | "heading6"
+  | "blockquote"
+  | "unordered-list"
+  | "ordered-list"
+  | "code"
+  | "table"
+  | "math"
+  | "hr"
+  | "html"
+  | "unknown";
+
+export type BlockSpacingValue = {
+  top?: number;
+  bottom?: number;
+};
+
+export type BlockSpacingPairRule = {
+  from: BuiltinBlockKind | BuiltinBlockKind[];
+  to: BuiltinBlockKind | BuiltinBlockKind[];
+  gap: number;
+};
+
+export interface BlockSpacing {
+  default?: number;
+  blocks?: Partial<Record<BuiltinBlockKind, BlockSpacingValue>>;
+  pairs?: BlockSpacingPairRule[];
+}
+
 export type Block = {
   id: number;
   raw: string;
@@ -56,6 +91,7 @@ export type Dimensions = {
 export type MeasuredBlock = {
   blockId: number;
   node: EnrichedNode;
+  kind: BuiltinBlockKind;
   dimensions: Dimensions;
   preparedHandle?: unknown;
   /** Narrowest width that preserves greedy line count. Set when shrinkwrap is enabled. */
@@ -71,6 +107,7 @@ export type LayoutBlock = {
   width: number;
   height: number;
   node: EnrichedNode;
+  kind: BuiltinBlockKind;
   /** Carried through from MeasuredBlock so renderers can apply `max-width`. */
   shrinkwrapWidth?: number;
 };
@@ -189,7 +226,7 @@ export interface InksetOptions {
   font?: string;
   fontSize?: number;
   lineHeight?: number;
-  blockMargin?: number;
+  blockSpacing?: BlockSpacing;
   cacheSize?: number;
   /**
    * Insert soft hyphens so Pretext and the browser can break long words on

@@ -1244,7 +1244,7 @@ const AssistantMessage = ({
           font={READING_FONT_FAMILY}
           fontSize={15}
           lineHeight={24}
-          blockMargin={12}
+          blockSpacing={{ default: 12 }}
           headingSizes={[2, 1.5, 1.2, 1]}
           hyphenation={hyphenation}
           shrinkwrap={shrinkwrap}
@@ -1373,7 +1373,7 @@ const ChatInput = ({
               font={READING_FONT_FAMILY}
               fontSize={15}
               lineHeight={22}
-              blockMargin={8}
+              blockSpacing={{ default: 8 }}
               hyphenation={hyphenation}
               theme={theme}
             />

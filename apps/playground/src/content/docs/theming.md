@@ -1,6 +1,6 @@
 # Theming
 
-Inkset ships unstyled. Colors, fonts, and spacing all come from CSS custom properties on the `<Inkset>` root — set them inline, in your stylesheet, or wire them to your app's theme tokens.
+Inkset ships unstyled. Colors and fonts come from CSS custom properties on the `<Inkset>` root — set them inline, in your stylesheet, or wire them to your app's theme tokens.
 
 ## The `theme` prop
 
@@ -54,6 +54,25 @@ Heading sizes, weights, and line-heights can be tuples that cover h1 through h4.
   headingLineHeights={[1.1, 1.15, 1.2, 1.3]}
 />
 ```
+
+## Spacing
+
+Inter-block rhythm is controlled by `blockSpacing`, not DOM margins. This is intentional: Inkset lays out frozen blocks with arithmetic before it writes them to the DOM, so spacing has to live in the layout config rather than sibling selectors like `p + p` or `h2 + p`.
+
+```tsx
+<Inkset
+  blockSpacing={{
+    default: 8,
+    blocks: {
+      heading2: { top: 18, bottom: 6 },
+      paragraph: { bottom: 4 },
+    },
+    pairs: [{ from: "paragraph", to: "heading2", gap: 20 }],
+  }}
+/>
+```
+
+Use `theme` and CSS vars for colors and typography. Use `blockSpacing` when you want the document's rhythm to change.
 
 ## Dark / light / anything
 

@@ -197,7 +197,13 @@ describe("Inkset observed height cache", () => {
     const renderAtWidth = async (width: number) => {
       await act(async () => {
         root.render(
-          <Inkset content={content} streaming width={width} blockMargin={12} plugins={[plugin]} />,
+          <Inkset
+            content={content}
+            streaming
+            width={width}
+            blockSpacing={{ default: 12 }}
+            plugins={[plugin]}
+          />,
         );
       });
       await flushMicrotasks();

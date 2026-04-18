@@ -10,9 +10,11 @@ import React, {
   type ReactNode,
 } from "react";
 import {
+  DEFAULT_BLOCK_SPACING,
   StreamingPipeline,
   PluginRegistry,
   extractText,
+  resolveBlockGap,
   type PipelineState,
   type InksetOptions,
   type HyphenationOption,
@@ -25,6 +27,7 @@ import {
   type HeadingLineHeightTuple,
   type ShrinkwrapOption,
   type GlyphPositionLookup,
+  type BlockSpacing,
 } from "@inkset/core";
 import {
   createTokenGate,
@@ -47,7 +50,6 @@ import {
 import { createCopyHandler } from "./copy";
 import { themeToCssVars, type InksetTheme } from "./theme";
 
-const DEFAULT_BLOCK_MARGIN = 16;
 const DEFAULT_FONT_SIZE = 16;
 const DEFAULT_LINE_HEIGHT = 24;
 const DEFAULT_LINE_HEIGHT_RATIO = 1.5;
@@ -609,7 +611,7 @@ const resolveLayout = (
   layout: readonly LayoutBlock[],
   heightMap: ReadonlyMap<number, ResolvedBlockHeight>,
   observedHeightCache: Readonly<ObservedHeightCache>,
-  blockMargin: number,
+  blockSpacing: BlockSpacing | undefined,
 ): LayoutBlock[] => {
   if (layout.length === 0) return [];
 
@@ -641,7 +643,9 @@ const resolveLayout = (
       height,
     };
 
-    currentY += height + (index < layout.length - 1 ? blockMargin : 0);
+    if (index < layout.length - 1) {
+      currentY += height + resolveBlockGap(block.kind, layout[index + 1].kind, blockSpacing);
+    }
     return nextBlock;
   });
 };
@@ -800,6 +804,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     options?.plugins?.map((plugin) => `${plugin.name}:${plugin.key ?? ""}`).join("|") ?? "";
   const hyphenationKey = hyphenationSignature(options?.hyphenation);
   const shrinkwrapKey = String(options?.shrinkwrap ?? false);
+  const blockSpacingKey = JSON.stringify(options?.blockSpacing ?? null);
   const headingSizesKey = options?.headingSizes?.join(",") ?? "";
   const headingWeightsKey = options?.headingWeights?.join(",") ?? "";
   const headingLineHeightsKey = options?.headingLineHeights?.join(",") ?? "";
@@ -841,7 +846,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     options?.font,
     options?.fontSize,
     options?.lineHeight,
-    options?.blockMargin,
+    blockSpacingKey,
     options?.cacheSize,
     hyphenationKey,
     shrinkwrapKey,
@@ -1408,7 +1413,7 @@ export type InksetProps = {
   font?: string;
   fontSize?: number;
   lineHeight?: number;
-  blockMargin?: number;
+  blockSpacing?: BlockSpacing;
   /**
    * Insert soft hyphens for word-level line breaking. Also sets
    * `hyphens: manual` on the root so browsers honour the breaks.
@@ -1481,7 +1486,7 @@ export const Inkset = ({
   font,
   fontSize,
   lineHeight,
-  blockMargin,
+  blockSpacing,
   hyphenation,
   textWrap,
   shrinkwrap,
@@ -1504,7 +1509,7 @@ export const Inkset = ({
       font,
       fontSize,
       lineHeight,
-      blockMargin,
+      blockSpacing,
       hyphenation,
       shrinkwrap,
       headingSizes,
@@ -1940,9 +1945,9 @@ export const Inkset = ({
     [scheduleHeightFlush],
   );
 
-  const margin = blockMargin ?? DEFAULT_BLOCK_MARGIN;
+  const spacing = blockSpacing ?? DEFAULT_BLOCK_SPACING;
   const resolvedLayout = state
-    ? resolveLayout(state.layout, resolvedHeights, observedHeightsRef.current, margin)
+    ? resolveLayout(state.layout, resolvedHeights, observedHeightsRef.current, spacing)
     : [];
   const resolvedHeight =
     resolvedLayout.length > 0 ? getLayoutHeight(resolvedLayout) : state?.totalHeight ?? 0;
@@ -2310,6 +2315,9 @@ export const Inkset = ({
 export type {
   InksetPlugin,
   InksetOptions,
+  BlockSpacing,
+  BlockSpacingPairRule,
+  BlockSpacingValue,
   HyphenationOption,
   TextWrapOption,
   PluginComponentProps,
@@ -2317,6 +2325,7 @@ export type {
   PipelineMetrics,
   EnrichedNode,
   ASTNode,
+  BuiltinBlockKind,
   LayoutBlock,
   LayoutTree,
 } from "@inkset/core";

@@ -1,17 +1,17 @@
 // Layout layer: pure arithmetic to compute a vertical-stack layout from measured blocks.
-import type { LayoutBlock, LayoutTree, MeasuredBlock } from "./types";
+import { DEFAULT_BLOCK_SPACING, resolveBlockGap } from "./block-spacing";
+import type { BlockSpacing, LayoutBlock, LayoutTree, MeasuredBlock } from "./types";
 
 export type LayoutOptions = {
-  blockMargin: number;
+  blockSpacing: BlockSpacing;
   containerWidth: number;
   padding: number;
 };
 
-const DEFAULT_BLOCK_MARGIN = 16;
 const DEFAULT_CONTAINER_WIDTH = 800;
 
 const DEFAULT_LAYOUT_OPTIONS: LayoutOptions = {
-  blockMargin: DEFAULT_BLOCK_MARGIN,
+  blockSpacing: DEFAULT_BLOCK_SPACING,
   containerWidth: DEFAULT_CONTAINER_WIDTH,
   padding: 0,
 };
@@ -21,7 +21,7 @@ export const computeLayout = (
   options?: Partial<LayoutOptions>,
 ): LayoutTree => {
   const opts = { ...DEFAULT_LAYOUT_OPTIONS, ...options };
-  const { blockMargin, containerWidth, padding } = opts;
+  const { blockSpacing, containerWidth, padding } = opts;
 
   if (containerWidth <= 0 || measured.length === 0) return [];
 
@@ -41,10 +41,13 @@ export const computeLayout = (
       width,
       height,
       node: block.node,
+      kind: block.kind,
       shrinkwrapWidth: block.shrinkwrapWidth,
     });
 
-    y += height + (i < measured.length - 1 ? blockMargin : 0);
+    if (i < measured.length - 1) {
+      y += height + resolveBlockGap(block.kind, measured[i + 1].kind, blockSpacing);
+    }
   }
 
   return layout;

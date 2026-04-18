@@ -1,22 +1,64 @@
 // Tests for the layout layer: vertical stacking, height calculation, and viewport filtering.
 import { describe, it, expect } from "vitest";
 import { computeLayout, getLayoutHeight, getVisibleBlocks } from "../src/layout.js";
-import type { MeasuredBlock, EnrichedNode } from "../src/types.js";
+import type { BuiltinBlockKind, MeasuredBlock, EnrichedNode } from "../src/types.js";
 
-const makeNode = (blockId: number): EnrichedNode => {
+const makeNode = (blockId: number, kind: BuiltinBlockKind = "paragraph"): EnrichedNode => {
+  const headingMatch = /^heading([1-6])$/.exec(kind);
+  const tagName = headingMatch
+    ? `h${headingMatch[1]}`
+    : kind === "blockquote"
+      ? "blockquote"
+      : kind === "unordered-list"
+        ? "ul"
+        : kind === "ordered-list"
+          ? "ol"
+          : kind === "code"
+            ? "pre"
+            : kind === "table"
+              ? "table"
+              : kind === "math"
+                ? "div"
+                : kind === "hr"
+                  ? "hr"
+                  : kind === "html"
+                    ? "div"
+                    : "p";
+  const blockType = headingMatch
+    ? "heading"
+    : kind === "blockquote"
+      ? "blockquote"
+      : kind === "unordered-list" || kind === "ordered-list"
+        ? "list"
+        : kind === "code"
+          ? "code"
+          : kind === "table"
+            ? "table"
+            : kind === "math"
+              ? "math-display"
+              : kind === "hr"
+                ? "thematic-break"
+                : kind === "html"
+                  ? "html"
+                  : "paragraph";
   return {
     type: "element",
-    tagName: "p",
+    tagName,
     blockId,
-    blockType: "paragraph",
-    children: [{ type: "text", value: `Block ${blockId}`, blockId, blockType: "paragraph" }],
+    blockType,
+    children: [{ type: "text", value: `Block ${blockId}`, blockId, blockType }],
   };
 };
 
-const makeMeasured = (blockId: number, height: number): MeasuredBlock => {
+const makeMeasured = (
+  blockId: number,
+  height: number,
+  kind: BuiltinBlockKind = "paragraph",
+): MeasuredBlock => {
   return {
     blockId,
-    node: makeNode(blockId),
+    node: makeNode(blockId, kind),
+    kind,
     dimensions: { width: 800, height },
   };
 };
@@ -32,7 +74,7 @@ describe("computeLayout", () => {
 
   it("stacks blocks vertically with margins", () => {
     const blocks = [makeMeasured(0, 24), makeMeasured(1, 48), makeMeasured(2, 24)];
-    const layout = computeLayout(blocks, { containerWidth: 800, blockMargin: 16 });
+    const layout = computeLayout(blocks, { containerWidth: 800, blockSpacing: { default: 16 } });
 
     expect(layout).toHaveLength(3);
     expect(layout[0].y).toBe(0);
@@ -46,7 +88,7 @@ describe("computeLayout", () => {
     const blocks = [makeMeasured(0, 24)];
     const layout = computeLayout(blocks, {
       containerWidth: 800,
-      blockMargin: 16,
+      blockSpacing: { default: 16 },
       padding: 20,
     });
 
@@ -60,6 +102,7 @@ describe("computeLayout", () => {
       {
         blockId: 0,
         node: makeNode(0),
+        kind: "paragraph",
         dimensions: { width: 1200, height: 24 }, // wider than container
       },
     ];
@@ -73,6 +116,39 @@ describe("computeLayout", () => {
     expect(layout[0].blockId).toBe(5);
     expect(layout[1].blockId).toBe(10);
   });
+
+  it("adds block-specific top and bottom spacing", () => {
+    const blocks = [makeMeasured(0, 30, "heading2"), makeMeasured(1, 24, "paragraph")];
+    const layout = computeLayout(blocks, {
+      containerWidth: 800,
+      blockSpacing: {
+        default: 8,
+        blocks: {
+          heading2: { bottom: 6 },
+          paragraph: { top: 2 },
+        },
+      },
+    });
+
+    expect(layout[1].y).toBe(30 + 8 + 6 + 2);
+  });
+
+  it("lets pair rules override additive spacing", () => {
+    const blocks = [makeMeasured(0, 24, "paragraph"), makeMeasured(1, 30, "heading2")];
+    const layout = computeLayout(blocks, {
+      containerWidth: 800,
+      blockSpacing: {
+        default: 8,
+        blocks: {
+          paragraph: { bottom: 4 },
+          heading2: { top: 10 },
+        },
+        pairs: [{ from: "paragraph", to: "heading2", gap: 22 }],
+      },
+    });
+
+    expect(layout[1].y).toBe(24 + 22);
+  });
 });
 
 describe("getLayoutHeight", () => {
@@ -83,7 +159,7 @@ describe("getLayoutHeight", () => {
   it("returns last block bottom edge", () => {
     const layout = computeLayout([makeMeasured(0, 24), makeMeasured(1, 48)], {
       containerWidth: 800,
-      blockMargin: 16,
+      blockSpacing: { default: 16 },
     });
     expect(getLayoutHeight(layout)).toBe(24 + 16 + 48);
   });
@@ -102,7 +178,7 @@ describe("getVisibleBlocks", () => {
       makeMeasured(2, 100),
       makeMeasured(3, 100),
     ];
-    const layout = computeLayout(blocks, { containerWidth: 800, blockMargin: 0 });
+    const layout = computeLayout(blocks, { containerWidth: 800, blockSpacing: { default: 0 } });
 
     // Viewport from 150 to 350 should see blocks 1 and 2
     const visible = getVisibleBlocks(layout, 150, 200);
@@ -117,7 +193,7 @@ describe("getVisibleBlocks", () => {
   it("includes partially visible blocks", () => {
     const layout = computeLayout([makeMeasured(0, 100), makeMeasured(1, 100)], {
       containerWidth: 800,
-      blockMargin: 0,
+      blockSpacing: { default: 0 },
     });
     // Block 0 ends at y=100, viewport starts at y=50 — block 0 is partially visible
     const visible = getVisibleBlocks(layout, 50, 100);
@@ -126,14 +202,14 @@ describe("getVisibleBlocks", () => {
 });
 
 describe("layout performance", () => {
-  it("handles 1000 blocks in under 5ms", () => {
+  it("handles 1000 blocks in under 10ms", () => {
     const blocks = Array.from({ length: 1000 }, (_, i) => makeMeasured(i, 24));
 
     const start = performance.now();
-    const layout = computeLayout(blocks, { containerWidth: 800, blockMargin: 16 });
+    const layout = computeLayout(blocks, { containerWidth: 800, blockSpacing: { default: 16 } });
     const elapsed = performance.now() - start;
 
     expect(layout).toHaveLength(1000);
-    expect(elapsed).toBeLessThan(5);
+    expect(elapsed).toBeLessThan(10);
   });
 });

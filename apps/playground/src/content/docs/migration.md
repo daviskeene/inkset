@@ -54,7 +54,7 @@ If you're doing anything exotic — rendering a custom block type, injecting inl
 
 ## What will need changing in your styles
 
-Inkset renders frozen blocks with `position: absolute`, which means sibling-selector CSS (`p + p`, `h2 ~ p`) won't match the way it used to. The equivalents are block margin props (`blockMargin`) and the heading tuples (`headingSizes`, `headingWeights`). See [Theming](/docs/theming).
+Inkset renders frozen blocks with `position: absolute`, which means sibling-selector CSS (`p + p`, `h2 ~ p`) won't match the way it used to. The equivalents are the layout-native `blockSpacing` prop and the heading tuples (`headingSizes`, `headingWeights`). See [Theming](/docs/theming).
 
 ## See also
 

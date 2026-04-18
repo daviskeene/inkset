@@ -51,15 +51,15 @@ export const DocsTocSidebar = ({ activeSlug }: { activeSlug: string }) => {
                     data-active={isActive || undefined}
                     style={{
                       display: "block",
-                      padding: "9px 14px",
-                      marginLeft: -14,
+                      padding: "10px 18px 10px 22px",
+                      marginLeft: -22,
+                      marginRight: 10,
                       fontSize: 13,
                       lineHeight: 1.45,
                       color: isActive ? "var(--pg-text-primary)" : "var(--pg-text-muted)",
                       textDecoration: "none",
-                      borderRadius: 4,
+                      borderRadius: 10,
                       fontWeight: isActive ? 500 : 400,
-                      boxShadow: isActive ? "inset 2px 0 0 var(--pg-text-primary)" : "none",
                     }}
                   >
                     {entry.title}
