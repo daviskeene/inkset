@@ -1,0 +1,46 @@
+{
+  "name": "inkset",
+  "private": true,
+  "type": "module",
+  "author": "Davis Keene",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daviskeene/inkset.git"
+  },
+  "homepage": "https://github.com/daviskeene/inkset",
+  "bugs": {
+    "url": "https://github.com/daviskeene/inkset/issues"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "turbo typecheck",
+    "pack:dry-run": "npm_config_cache=.npm-cache pnpm -r exec npm pack --json --dry-run",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7",
+    "@eslint/js": "^9.39.4",
+    "@next/eslint-plugin-next": "^16.2.4",
+    "@vitest/coverage-v8": "^3.1.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.5.0",
+    "prettier": "^3.8.3",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.58.2",
+    "vitest": "^3.1.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

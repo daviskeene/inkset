@@ -1,0 +1,74 @@
+{
+  "name": "@inkset/core",
+  "version": "0.1.0",
+  "description": "Core parsing, measurement, layout, and streaming pipeline for Inkset.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "author": "Davis Keene",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daviskeene/inkset.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/daviskeene/inkset/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/daviskeene/inkset/issues"
+  },
+  "keywords": [
+    "inkset",
+    "markdown",
+    "streaming",
+    "renderer",
+    "layout",
+    "measurement",
+    "pretext"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "^0.0.5",
+    "hast-util-to-jsx-runtime": "^2.3.0",
+    "hyphenation.en-us": "^0.2.1",
+    "hypher": "^0.2.5",
+    "marked": "^15.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.0.0",
+    "unified": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}
