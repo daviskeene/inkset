@@ -1,6 +1,6 @@
 {
   "name": "@inkset/react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React bindings for Inkset, including the Inkset component and useInkset hook.",
   "type": "module",
   "sideEffects": false,
