@@ -995,7 +995,11 @@ const PlaygroundPage = () => {
             plugins={plugins}
             hyphenation={hyphenationEnabled}
             theme={THEMES[themeKey].theme}
-            width={Math.max(0, Math.min(chatAreaWidth - CHAT_SIDE_PADDING * 2, CHAT_MAX_WIDTH) - 2)}
+            width={
+              chatAreaWidth == null
+                ? 0
+                : Math.max(0, Math.min(chatAreaWidth - CHAT_SIDE_PADDING * 2, CHAT_MAX_WIDTH) - 2)
+            }
           />
         </main>
       </div>
