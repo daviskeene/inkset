@@ -63,6 +63,12 @@ const makeMeasured = (
   };
 };
 
+const median = (values: readonly number[]): number => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+};
+
 describe("computeLayout", () => {
   it("returns empty array for no blocks", () => {
     expect(computeLayout([])).toEqual([]);
@@ -202,14 +208,27 @@ describe("getVisibleBlocks", () => {
 });
 
 describe("layout performance", () => {
-  it("handles 1000 blocks in under 10ms", () => {
+  it("handles 1000 blocks in under 10ms at median runtime", () => {
     const blocks = Array.from({ length: 1000 }, (_, i) => makeMeasured(i, 24));
+    const options = { containerWidth: 800, blockSpacing: { default: 16 } };
 
-    const start = performance.now();
-    const layout = computeLayout(blocks, { containerWidth: 800, blockSpacing: { default: 16 } });
-    const elapsed = performance.now() - start;
+    // Warm up the JIT and avoid failing CI on a single noisy timer sample.
+    for (let i = 0; i < 5; i++) {
+      computeLayout(blocks, options);
+    }
+
+    const samples: number[] = [];
+    let layout = computeLayout(blocks, options);
+
+    for (let i = 0; i < 9; i++) {
+      const start = performance.now();
+      layout = computeLayout(blocks, options);
+      samples.push(performance.now() - start);
+    }
+
+    const elapsedMedian = median(samples);
 
     expect(layout).toHaveLength(1000);
-    expect(elapsed).toBeLessThan(10);
+    expect(elapsedMedian).toBeLessThan(10);
   });
 });
