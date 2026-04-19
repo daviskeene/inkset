@@ -9,6 +9,10 @@ import { FOOTER_STYLES } from "./footer";
 const GLOBAL_STYLES = `
 /* Smooth palette transitions only on color-ish props so layout never
    reflows on theme swap. */
+.pg-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
 .pg-root,
 .pg-root * {
   transition-property: background-color, border-color, color, fill, stroke;
@@ -37,7 +41,6 @@ const PaletteApplier = ({ children }: { children: React.ReactNode }) => {
         ...paletteToCssVars(palette),
         background: "var(--pg-bg)",
         color: "var(--pg-text-primary)",
-        minHeight: "100vh",
       }}
     >
       {children}

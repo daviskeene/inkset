@@ -877,7 +877,14 @@ const PlaygroundPage = () => {
         </div>
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div
+        style={{
+          display: "flex",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
         {/* ── Left sidebar: raw markdown the assistant "replied with" ── */}
         <aside
           className="pg-aside"
@@ -935,9 +942,11 @@ const PlaygroundPage = () => {
           style={{
             flex: 1,
             minWidth: 0,
+            minHeight: 0,
             display: "flex",
             flexDirection: "column",
             background: "var(--pg-bg)",
+            overflow: "hidden",
           }}
         >
           {/* Scrollable transcript */}
@@ -945,7 +954,9 @@ const PlaygroundPage = () => {
             className="pg-chat-scroll"
             style={{
               flex: 1,
+              minHeight: 0,
               overflowY: "auto",
+              overscrollBehaviorY: "contain",
               padding: `28px ${CHAT_SIDE_PADDING}px 24px`,
               display: "flex",
               flexDirection: "column",
