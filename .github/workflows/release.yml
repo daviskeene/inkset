@@ -38,6 +38,18 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Check npm identity
+        run: |
+          echo "registry=$(npm config get registry)"
+          npm whoami --registry=https://registry.npmjs.org/
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Check inkset org membership
+        run: npm org ls inkset
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Create release PR or publish
         uses: changesets/action@v1
         with:
