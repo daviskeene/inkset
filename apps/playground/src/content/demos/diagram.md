@@ -19,17 +19,14 @@ sequenceDiagram
 
 The UI renders each chunk the moment it arrives. Inkset measures the block once via pretext, then lays out with arithmetic, so the mid-stream reflow cost stays near zero.
 
-And here's a rougher state view of what the UI is actually tracking per message:
+And here is the simpler per-message lifecycle the UI is really tracking:
 
 ```mermaid
-stateDiagram-v2
-  [*] --> Idle
-  Idle --> Streaming: user submits
-  Streaming --> Streaming: token arrives
-  Streaming --> Settled: stream closes
-  Streaming --> Error: network/parse failure
-  Error --> Idle: retry
-  Settled --> Idle: new turn
+flowchart LR
+  Submit[User submits] --> Streaming[Streaming]
+  Streaming -->|stream closes| Done[Settled]
+  Streaming -->|network or parse failure| Error[Error]
+  Error -->|retry| Streaming
 ```
 
 Every ` ```mermaid ` fence gets promoted to a real SVG diagram. The mermaid library is dynamic-imported on the first diagram seen, so your base bundle stays lean if your app never emits one.
