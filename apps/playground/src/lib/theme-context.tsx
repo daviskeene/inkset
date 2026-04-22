@@ -13,27 +13,61 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const STORAGE_KEY = "inkset:theme";
 
-const readStoredTheme = (): ThemeKey => {
-  if (typeof window === "undefined") return "light";
+const getSystemTheme = (): ThemeKey => {
+  if (typeof window === "undefined" || !window.matchMedia) {
+    return "light";
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+};
+
+const readStoredTheme = (): ThemeKey | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (raw && (THEME_ORDER as string[]).includes(raw)) {
     return raw as ThemeKey;
   }
-  return "light";
+  return null;
 };
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   // Server renders with "light"; the client effect below reconciles to the
-  // stored preference without a layout jump — palette CSS vars are applied
-  // via useLayoutEffect so the first paint after hydration is already themed.
+  // stored preference (or system preference when unset) without a layout jump
+  // — palette CSS vars are applied via useLayoutEffect so the first paint
+  // after hydration is already themed.
   const [themeKey, setThemeKeyState] = useState<ThemeKey>("light");
+  const [hasStoredPreference, setHasStoredPreference] = useState(false);
 
   useEffect(() => {
-    setThemeKeyState(readStoredTheme());
+    const stored = readStoredTheme();
+    if (stored) {
+      setThemeKeyState(stored);
+      setHasStoredPreference(true);
+    } else {
+      setThemeKeyState(getSystemTheme());
+    }
   }, []);
+
+  // While the user has no explicit preference, follow OS light/dark changes.
+  useEffect(() => {
+    if (hasStoredPreference) {
+      return;
+    }
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => {
+      setThemeKeyState(e.matches ? "dark" : "light");
+    };
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [hasStoredPreference]);
 
   const setThemeKey = useCallback((key: ThemeKey) => {
     setThemeKeyState(key);
+    setHasStoredPreference(true);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(STORAGE_KEY, key);
     }
@@ -48,6 +82,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
       }
       return next;
     });
+    setHasStoredPreference(true);
   }, []);
 
   const value = useMemo<ThemeContextValue>(
