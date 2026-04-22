@@ -1,5 +1,17 @@
 # @inkset/react
 
+## 0.1.2
+
+### Patch Changes
+
+- Patch release for the latest playground and package updates.
+  - `@inkset/react` adds the `cacheSize` prop and improves reveal/shader overlay behavior for long transcripts and dither-style reveals.
+  - `@inkset/animate` adds the `ink-dither` built-in shader while preserving `ink-bleed` as a backward-compatible alias.
+  - `@inkset/diagram` notifies Inkset when Mermaid content has settled so frozen block layout can update cleanly.
+
+- Updated dependencies
+  - @inkset/animate@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
