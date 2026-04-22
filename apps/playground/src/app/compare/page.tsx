@@ -651,11 +651,11 @@ const Column = ({
               marginTop: 4,
               fontSize: 10.5,
               lineHeight: 1.45,
-              padding: "6px 8px",
-              borderRadius: 6,
-              background: "rgba(180, 140, 60, 0.08)",
-              border: "1px solid rgba(180, 140, 60, 0.2)",
-              color: "rgba(255, 210, 140, 0.85)",
+              padding: "8px 10px",
+              borderRadius: 8,
+              background: "var(--pg-surface-raised)",
+              border: "1px solid var(--pg-border-default)",
+              color: "var(--pg-text-primary)",
             }}
           >
             {note}
