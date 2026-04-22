@@ -5,9 +5,16 @@ type CreateShaderRegistryOptions = {
 };
 
 const registerBuiltIns = (registry: ShaderRegistry): void => {
+  registry.register("ink-dither", async () => {
+    const mod = await import("./shaders/ink-dither");
+    return mod.inkDitherShader;
+  });
+
+  // Back-compat alias. Keep old user code working while docs and the
+  // playground move to the newer technological dither aesthetic.
   registry.register("ink-bleed", async () => {
-    const mod = await import("./shaders/ink-bleed");
-    return mod.inkBleedShader;
+    const mod = await import("./shaders/ink-dither");
+    return mod.inkDitherShader;
   });
 
   registry.register("dissolve", async () => {

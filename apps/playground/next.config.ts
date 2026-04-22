@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@inkset/core",
     "@inkset/react",
+    "@inkset/animate",
     "@inkset/code",
     "@inkset/math",
     "@inkset/table",

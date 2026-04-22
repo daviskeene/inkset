@@ -974,7 +974,11 @@ const BlockRenderer = memo(
       (priority: "sync" | "deferred") => {
         const element = blockRef.current;
         if (!element) return;
-        const nextHeight = Math.ceil(element.getBoundingClientRect().height);
+        const measureTarget =
+          priority === "sync" && element.firstElementChild instanceof HTMLElement
+            ? element.firstElementChild
+            : element;
+        const nextHeight = Math.ceil(measureTarget.getBoundingClientRect().height);
         if (nextHeight > 0) {
           onHeightChange(block.blockId, node, width, nextHeight, priority);
         }
@@ -1473,6 +1477,12 @@ export type InksetProps = {
   reveal?: RevealProp;
   /** Optional shader registry used to resolve string shader sources. */
   shaderRegistry?: ShaderRegistry;
+  /**
+   * Maximum number of prepared-text handles to keep in the pretext LRU.
+   * Default 500. Raise for long transcripts where the same instance
+   * renders many unique text segments over its lifetime.
+   */
+  cacheSize?: number;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -1498,6 +1508,7 @@ export const Inkset = ({
   loadingFallback,
   reveal,
   shaderRegistry,
+  cacheSize,
   className,
   style,
   children,
@@ -1515,6 +1526,7 @@ export const Inkset = ({
       headingSizes,
       headingWeights,
       headingLineHeights,
+      cacheSize,
     });
 
   // Reveal config — memoized so stable refs feed the rendering + effect deps.
@@ -2081,7 +2093,9 @@ export const Inkset = ({
     ...(timelineConfig && cssRevealConfig
       ? {
           "--inkset-reveal-display":
-            cssRevealConfig.preset === "fadeIn" ? "inline" : "inline-block",
+            cssRevealConfig.preset === "fadeIn" || cssRevealConfig.preset === "pg-reveal-dither-in"
+              ? "inline"
+              : "inline-block",
           "--inkset-reveal-name": presetToKeyframeName(cssRevealConfig.preset),
           "--inkset-reveal-duration": `${timelineConfig.durationMs}ms`,
           "--inkset-reveal-easing": cssRevealConfig.easing,
@@ -2257,7 +2271,7 @@ export const Inkset = ({
             width: "100%",
             height: Math.max(1, resolvedHeight || state?.totalHeight || 0),
             pointerEvents: "none",
-            zIndex: 0,
+            zIndex: 2,
           }}
         />
       )}

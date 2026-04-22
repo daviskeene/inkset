@@ -51,7 +51,7 @@ export interface ShaderInstance {
 }
 
 export interface ShaderPreset {
-  /** Registry name, e.g. "ink-bleed". */
+  /** Registry name, e.g. "ink-dither". */
   name: string;
   /** Initialize against the root container + overlay canvas. */
   init(container: HTMLElement, options: ShaderInitOptions): Promise<ShaderInstance>;

@@ -16,6 +16,7 @@
     "paths": {
       "@inkset/core": ["../../packages/core/src/index.ts"],
       "@inkset/react": ["../../packages/react/src/index.tsx"],
+      "@inkset/animate": ["../../packages/animate/src/index.ts"],
       "@inkset/code": ["../../packages/code/src/index.tsx"],
       "@inkset/math": ["../../packages/math/src/index.tsx"],
       "@inkset/table": ["../../packages/table/src/index.tsx"],

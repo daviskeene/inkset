@@ -168,6 +168,10 @@ describe("Inkset shader overlay", () => {
     expect(emittedBatches[0]?.every((token) => token.width > 0 && token.height > 0)).toBe(true);
     expect(emittedBatches[1]?.map((token) => token.tokenIndex)).toEqual([0]);
     expect(emittedBatches[1]?.[0]?.tickId).toBeGreaterThan(emittedBatches[0]?.[0]?.tickId ?? -1);
+
+    const overlay = container.querySelector<HTMLCanvasElement>("[data-inkset-shader-overlay]");
+    expect(overlay).not.toBeNull();
+    expect(overlay?.style.zIndex).toBe("2");
   });
 
   it("preserves shader token batches across same-tick rerenders", async () => {
@@ -214,5 +218,27 @@ describe("Inkset shader overlay", () => {
 
     expect(emittedBatches[0]?.map((token) => token.tokenIndex)).toEqual([0, 1]);
     expect(emittedBatches[0]?.every((token) => token.width > 0 && token.height > 0)).toBe(true);
+  });
+
+  it("uses inline token display for the dither preset to avoid line-wrap jitter", async () => {
+    await act(async () => {
+      root.render(
+        <Inkset
+          content="Alpha beta gamma"
+          streaming
+          width={320}
+          reveal={{
+            throttle: false,
+            timeline: { durationMs: 120, stagger: 30, sep: "word" },
+            css: { preset: "pg-reveal-dither-in" },
+          }}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    const inksetRoot = container.querySelector<HTMLElement>(".inkset-root");
+    expect(inksetRoot).not.toBeNull();
+    expect(inksetRoot?.style.getPropertyValue("--inkset-reveal-display")).toBe("inline");
   });
 });

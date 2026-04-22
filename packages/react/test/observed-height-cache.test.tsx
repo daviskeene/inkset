@@ -11,6 +11,8 @@ import {
 } from "../src/index.js";
 
 const HEURISTIC_HEIGHT = 20;
+const SHRINKING_HEURISTIC_HEIGHT = 120;
+const SHRINKING_SETTLED_HEIGHT = 40;
 
 const getSettledHeight = (width: number): number => {
   if (width >= 280) return 80;
@@ -73,6 +75,54 @@ const createAsyncMathPlugin = (): InksetPlugin => {
       };
     },
     component: AsyncMeasuredMathBlock,
+  };
+};
+
+const ShrinkingAsyncBlock = ({ onContentSettled }: PluginComponentProps) => {
+  const [settled, setSettled] = useState(false);
+  const renderedHeight = settled ? SHRINKING_SETTLED_HEIGHT : SHRINKING_HEURISTIC_HEIGHT;
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setSettled(true);
+    }, 10);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (settled) {
+      onContentSettled?.();
+    }
+  }, [settled, onContentSettled]);
+
+  return (
+    <div
+      data-testid="shrinking-block"
+      data-measured-height={renderedHeight}
+      style={{ height: `${renderedHeight}px` }}
+    >
+      shrinking block
+    </div>
+  );
+};
+
+const createShrinkingAsyncPlugin = (): InksetPlugin => {
+  return {
+    name: "shrinking-async",
+    handles: ["math-display"],
+    transform(node: ASTNode): EnrichedNode {
+      return {
+        ...node,
+        transformedBy: "shrinking-async",
+      };
+    },
+    measure(node, maxWidth) {
+      return {
+        width: maxWidth,
+        height: SHRINKING_HEURISTIC_HEIGHT,
+      };
+    },
+    component: ShrinkingAsyncBlock,
   };
 };
 
@@ -147,11 +197,12 @@ describe("Inkset observed height cache", () => {
 
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
       const selfHeight = Number((this as HTMLElement).dataset.measuredHeight ?? 0);
+      const minHeight = Number.parseInt((this as HTMLElement).style.minHeight || "0", 10) || 0;
       const descendantHeight = Number(
         (this as HTMLElement).querySelector<HTMLElement>("[data-measured-height]")?.dataset
           .measuredHeight ?? 0,
       );
-      const height = Math.max(selfHeight, descendantHeight);
+      const height = Math.max(selfHeight, descendantHeight, minHeight);
       const width = Number.parseInt((this as HTMLElement).style.width || "0", 10) || 0;
 
       return {
@@ -239,5 +290,31 @@ describe("Inkset observed height cache", () => {
       "expected the frozen math block to relayout back to width 300px",
     );
     expect(getFrozenMathBlock().style.minHeight).toBe("80px");
+  });
+
+  it("allows sync-settled frozen blocks to shrink below their provisional minHeight", async () => {
+    const plugin = createShrinkingAsyncPlugin();
+    const content = "$$x$$\n\nTail paragraph.";
+
+    await act(async () => {
+      root.render(
+        <Inkset
+          content={content}
+          streaming
+          width={300}
+          blockSpacing={{ default: 12 }}
+          plugins={[plugin]}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    const frozenBlock = container.querySelector<HTMLElement>('[data-block-id="0"]');
+    expect(frozenBlock).not.toBeNull();
+    expect(frozenBlock!.style.minHeight).toBe("120px");
+
+    await runPendingTimers();
+
+    expect(frozenBlock!.style.minHeight).toBe("40px");
   });
 });

@@ -8,13 +8,16 @@ import {
 
 describe("shader registry", () => {
   it("pre-registers the built-in shader presets", async () => {
+    expect(defaultShaderRegistry.has("ink-dither")).toBe(true);
     expect(defaultShaderRegistry.has("ink-bleed")).toBe(true);
     expect(defaultShaderRegistry.has("dissolve")).toBe(true);
 
+    const dither = await defaultShaderRegistry.load("ink-dither");
     const bleed = await defaultShaderRegistry.load("ink-bleed");
     const dissolve = await defaultShaderRegistry.load("dissolve");
 
-    expect(bleed?.name).toBe("ink-bleed");
+    expect(dither?.name).toBe("ink-dither");
+    expect(bleed?.name).toBe("ink-dither");
     expect(dissolve?.name).toBe("dissolve");
   });
 

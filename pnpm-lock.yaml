@@ -100,6 +100,9 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.14)(react@19.2.5)
+      react-virtuoso:
+        specifier: ^4.18.5
+        version: 4.18.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       rehype-highlight:
         specifier: ^7.0.2
         version: 7.0.2
@@ -240,6 +243,9 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
       tsup:
         specifier: ^8.4.0
         version: 8.5.1(postcss@8.5.10)(typescript@5.9.3)
@@ -5273,6 +5279,15 @@ packages:
       "@types/react": ">=18"
       react: ">=18"
 
+  react-virtuoso@4.18.5:
+    resolution:
+      {
+        integrity: sha512-QDyNjyNEuurZG67SOmzYyxEkQYSyGmAMixOI6M15L/Q4CF39EgG+88y6DgZRo0q7rmy0HPx3Fj90I8/tPdnRCQ==,
+      }
+    peerDependencies:
+      react: ">=16 || >=17 || >= 18 || >= 19"
+      react-dom: ">=16 || >=17 || >= 18 || >=19"
+
   react@19.2.5:
     resolution:
       {
@@ -9802,6 +9817,11 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  react-virtuoso@4.18.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
+    dependencies:
+      react: 19.2.5
+      react-dom: 19.2.5(react@19.2.5)
 
   react@19.2.5: {}
 

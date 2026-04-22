@@ -25,7 +25,7 @@ const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });
     throttle: { delayInMs: 30, chunking: "word" },
     timeline: { durationMs: 320, stagger: 30, sep: "word" },
     css: { preset: "fadeIn" },
-    shader: "ink-bleed",
+    shader: "ink-dither",
   }}
   shaderRegistry={shaderRegistry}
 />;
@@ -42,10 +42,10 @@ const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });
 
 ## Built-in shaders
 
-- **ink-bleed** — characters bleed into place like wet ink.
+- **ink-dither** — fresh tokens arrive through a cool ordered-dither haze before sharpening.
 - **dissolve** — characters fade from a scatter pattern.
 
-Pick one with `reveal={{ shader: "ink-bleed" }}`; pass a `ShaderRegistry` if you're authoring your own.
+Pick one with `reveal={{ shader: "ink-dither" }}`; pass a `ShaderRegistry` if you're authoring your own.
 
 ## When to animate
 

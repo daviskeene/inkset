@@ -95,6 +95,58 @@ html, body, .pg-root {
   }
 }
 
+.pg-playground-markdown a,
+.pg-playground-markdown a:visited {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--pg-border-default);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.pg-playground-markdown a:hover {
+  text-decoration-color: currentColor;
+}
+
+@keyframes pg-reveal-dither-in {
+  0% {
+    opacity: 0.06;
+    filter: blur(2.6px);
+    transform: translateY(0.028em);
+    text-shadow: 0 0 0.22em rgba(172, 204, 228, 0.1);
+  }
+  20% {
+    opacity: 0.42;
+    filter: blur(1.8px);
+    transform: translateY(0.018em);
+    text-shadow: 0 0 0.14em rgba(172, 204, 228, 0.08);
+  }
+  48% {
+    opacity: 0.78;
+    filter: blur(1px);
+    transform: translateY(0.01em);
+    text-shadow: none;
+  }
+  76% {
+    opacity: 0.94;
+    filter: blur(0.35px);
+    transform: translateY(0.003em);
+    text-shadow: none;
+  }
+  88% {
+    opacity: 0.98;
+    filter: blur(0.08px);
+    transform: none;
+    text-shadow: none;
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    text-shadow: none;
+  }
+}
+
 .pg-shimmer {
   background: linear-gradient(
     110deg,
@@ -124,8 +176,8 @@ html, body, .pg-root {
   .pg-assistant-mount { animation: none; }
 }
 
-/* Used by the custom-component scenario in SCENARIO_LIST. Radial glow
-   animation anchored to each revealed token's pretext-computed origin. */
+/* Used by the ink-sweep-reveal scenario. Radial glow animation anchored
+   to each revealed token's pretext-computed origin. */
 @keyframes pg-particle-burst {
   0%   { opacity: 0;   transform: scale(0.4); }
   45%  { opacity: 1;   transform: scale(1.6); }

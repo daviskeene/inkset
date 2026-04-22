@@ -20,7 +20,7 @@ npm install @inkset/animate
 ```ts
 import { createShaderRegistry, defaultShaderRegistry } from "@inkset/animate";
 
-// `defaultShaderRegistry` ships with the built-in presets ("ink-bleed",
+// `defaultShaderRegistry` ships with the built-in presets ("ink-dither",
 // "dissolve"). Use `createShaderRegistry` directly when you want to start
 // from empty, or when you're registering your own loaders in isolation.
 const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });

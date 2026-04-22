@@ -1,10 +1,10 @@
 # inkset
 
-A streaming markdown renderer for AI chat UIs in React, powered by [pretext](https://github.com/chenglou/pretext) for DOM-free text measurement and layout.
+Rendering infrastructure for streaming AI output. Markdown today, generative UI tomorrow.
 
-Most chat UIs stream tokens into the page and let the browser figure out where things go. That works until someone resizes the window, or the response has code and math, or the stream is fast enough that layout cannot keep up.
+Most chat UIs stream tokens into the page and let the browser figure out where things go. That works until the stream gets fast, the response mixes code and math, someone rotates their phone, or the conversation gets long. At that point the DOM becomes part of the problem. The browser recalculates layout for the whole thread on every new token. Lines the user is reading shift under them. Long conversations start to feel heavy. Anything async that mounts into the column forces another pass.
 
-Inkset uses pretext to prepare text once and reuse that work during layout. The result is a renderer that stays stable while content streams, adapts across screen widths, and leaves room for richer blocks like code, math, tables, Mermaid diagrams, and reveal effects.
+Inkset uses [pretext](https://github.com/chenglou/pretext) to measure text once, then re-layout with arithmetic. Completed blocks do not reflow when new tokens arrive. Resize runs in microseconds because no DOM reads happen on the hot path. The same cost model extends to code, math, tables, Mermaid diagrams, and the generative UI components (json-render, A2UI) arriving in streams.
 
 ## Install
 
@@ -54,18 +54,26 @@ const inkset = useInkset({ plugins: [createCodePlugin(), createMathPlugin()] });
 
 ## How it works
 
+Three shifts in the cost model.
+
+**Layout without reflow.** Pretext measures text via Canvas once. After that, re-layout at a new width is pure arithmetic over cached segment widths. A thousand blocks relayout in under a millisecond, with no DOM reads on the hot path. Good for INP. Good for mobile.
+
+**Stable streaming.** The block currently receiving tokens rides in normal document flow, so the browser handles its height natively. Every block above it is frozen onto absolute coordinates computed by pretext. New tokens do not shift what the user is already reading, because frozen blocks never re-measure.
+
+**Protocol-neutral.** The plugin pipeline handles what async-settling content needs: provisional height, settled height when the content loads, local recompute without disturbing siblings. Code, math, tables, and diagrams ship as plugins. Generative UI components fit the same contract.
+
+The pipeline:
+
 ```
 Token arrives → Ingest (syntax repair)
              → Parse (remark/rehype per block)
              → Transform (plugins enrich AST)
              → Measure (pretext prepare, cached)
              → Layout (pretext arithmetic)
-             → Render (absolute positioning, flow for hot block)
+             → Render (absolute for frozen blocks, flow for the hot block)
 ```
 
-Frozen blocks use absolute positioning with pretext-computed coordinates. The actively streaming block uses normal document flow so CSS handles its height natively. No measurement race, no flicker.
-
-On resize, Inkset can often reuse pretext's prepared text and rerun layout arithmetic at the new width. Width-sensitive plugins can still do more work when they need to.
+On resize, Inkset reuses pretext's prepared text and reruns `layout()` at the new width. Width-sensitive plugins can re-transform when they need to. Rich blocks (code, math, diagrams) cache their settled heights per width, so narrower-then-wider resize does not reintroduce jitter.
 
 ## Plugins
 
@@ -131,9 +139,17 @@ pnpm --filter @inkset/playground dev  # Playground at localhost:3333
 
 ## Status
 
-Early. The core pipeline works, plugins render code and math, the hybrid layout model handles streaming without flicker. Pretext integration falls back to character-width estimates when Canvas isn't available (SSR). The measurement layer is block-type-aware but not pixel-perfect yet for all content types.
+Early but stable. The core pipeline is shipping, plugins cover code (Shiki), math (KaTeX), tables, and Mermaid diagrams. The frozen/hot layout model handles streaming without flicker.
 
-See [TODOS.md](./TODOS.md) for what's planned.
+Known gaps worth tracking:
+
+- **SSR.** Falls back to a character-width estimate when Canvas isn't available in Node, which produces one layout shift on hydration. A proper story needs pretext's `setMeasureContext` API or a node-canvas polyfill.
+- **Selection across absolute blocks.** Browser-native find-in-page works block-by-block, but selecting across frozen blocks needs a custom selection layer. On the roadmap.
+- **Framework adapters.** React only today. The core is framework-agnostic by design. Vue and Svelte adapters are planned.
+- **Generative UI plugin.** `@inkset/generative` for json-render and A2UI schemas is planned as a reference implementation.
+- **Web Worker pipeline.** The parse/measure/layout stages have no DOM dependencies. Moving them off the main thread is a near-term goal.
+
+See [TODOS.md](./TODOS.md) for the full list.
 
 ## License
 

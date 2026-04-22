@@ -3,7 +3,7 @@
 // so the generic code plugin still owns every other language.
 declare const process: { env: { NODE_ENV?: string } };
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   extractText,
   type InksetPlugin,
@@ -153,7 +153,7 @@ const isMermaidNode = (node: ASTNode): boolean => detectLanguage(node) === "merm
 
 // ── Diagram component ─────────────────────────────────────────────
 
-const DiagramBlock = ({ node, isStreaming }: PluginComponentProps) => {
+const DiagramBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps) => {
   const source = (node.pluginData?.source as string) ?? "";
   const theme = (node.pluginData?.theme as string) ?? "dark";
   const showHeader = (node.pluginData?.showHeader as boolean) ?? true;
@@ -239,6 +239,12 @@ const DiagramBlock = ({ node, isStreaming }: PluginComponentProps) => {
 
   const hasHeader = showHeader && showCopy;
   const displaySvg = svg ?? lastValidSvgRef.current;
+  const renderedMode = displaySvg ? "svg" : error ? "error" : source ? "source" : "empty";
+
+  useLayoutEffect(() => {
+    if (isStreaming || renderedMode === "empty") return;
+    onContentSettled?.();
+  }, [isStreaming, onContentSettled, renderedMode]);
 
   return (
     <div className="inkset-diagram-block" style={{ position: "relative" }}>
