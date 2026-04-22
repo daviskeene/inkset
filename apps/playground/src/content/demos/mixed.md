@@ -69,7 +69,7 @@ graph TD
 Inkset is [fully open source](https://github.com/daviskeene/inkset). You can install it with:
 
 ```bash
-npm install @inkset/core @inkset/react`
+npm install @inkset/core @inkset/react
 ```
 
 Drop `<Inkset />` into your chat UI or ask your favorite coding agent to set it up for you.
