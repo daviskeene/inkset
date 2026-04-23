@@ -67,6 +67,9 @@ export class Ingest {
 
 // ── Block splitting ────────────────────────────────────────────────
 
+const LATEX_BEGIN_RE = /\\begin\{[A-Za-z*]+\}/g;
+const LATEX_END_RE = /\\end\{[A-Za-z*]+\}/g;
+
 /** Splits a markdown document into block-level chunks, preserving fenced regions. */
 export const splitBlocks = (document: string): string[] => {
   if (!document) return [];
@@ -76,12 +79,13 @@ export const splitBlocks = (document: string): string[] => {
   let current: string[] = [];
   let inCodeFence = false;
   let inMathBlock = false;
+  let latexEnvDepth = 0;
   let fenceChar = "";
 
   for (const line of lines) {
     const trimmed = line.trimStart();
 
-    if (!inMathBlock) {
+    if (!inMathBlock && latexEnvDepth === 0) {
       const fenceMatch = trimmed.match(/^(`{3,}|~{3,})/);
       if (fenceMatch) {
         if (!inCodeFence) {
@@ -104,7 +108,13 @@ export const splitBlocks = (document: string): string[] => {
       }
     }
 
-    if (trimmed === "" && !inCodeFence && !inMathBlock) {
+    if (!inCodeFence) {
+      const begins = (line.match(LATEX_BEGIN_RE) ?? []).length;
+      const ends = (line.match(LATEX_END_RE) ?? []).length;
+      latexEnvDepth = Math.max(0, latexEnvDepth + begins - ends);
+    }
+
+    if (trimmed === "" && !inCodeFence && !inMathBlock && latexEnvDepth === 0) {
       if (current.length > 0) {
         blocks.push(current.join("\n"));
         current = [];
@@ -130,10 +140,82 @@ export const repair = (text: string): string => {
   result = normalizeDelimiters(result);
   result = repairCodeFences(result);
   result = repairMathBlocks(result);
+  result = resolveEquationRefs(result);
   result = repairInlineFormatting(result);
 
   return result;
 };
+
+// AMS numbered environments (starred variants don't number).
+const NUMBERED_ENVS = new Set([
+  "equation",
+  "align",
+  "gather",
+  "multline",
+  "alignat",
+  "eqnarray",
+]);
+
+const LATEX_ENV_BODY_RE = /\\begin\{([A-Za-z]+\*?)\}([\s\S]*?)\\end\{\1\}/g;
+
+/**
+ * Resolves `\eqref{name}` in the document by scanning `\begin…\end` blocks for
+ * `\label{name}` + `\tag{N}` (or auto-incremented counter). Outside env bodies
+ * the resolved ref becomes `$(N)$` so it picks up math styling; inside an env
+ * it stays as bare `(N)` since `$` would break KaTeX.
+ */
+const resolveEquationRefs = (text: string): string => {
+  // Fast path for the common case: no refs to resolve means no scanning needed.
+  // `includes` is a single SIMD-accelerated substring scan; far cheaper than the
+  // two full-doc regex passes below. Keeps the per-token repair cost at zero
+  // for non-math streams.
+  if (!text.includes("\\eqref{")) return text;
+
+  const labels = new Map<string, string>();
+  let counter = 0;
+
+  let m: RegExpExecArray | null;
+  LATEX_ENV_BODY_RE.lastIndex = 0;
+  while ((m = LATEX_ENV_BODY_RE.exec(text)) !== null) {
+    const rawEnv = m[1];
+    const env = rawEnv.replace(/\*$/, "");
+    const starred = rawEnv.endsWith("*");
+    const body = m[2];
+    const labelMatch = body.match(/\\label\{([^}]*)\}/);
+    const tagMatch = body.match(/\\tag\{([^}]*)\}/);
+
+    if (tagMatch) {
+      if (labelMatch) labels.set(labelMatch[1], tagMatch[1]);
+    } else if (NUMBERED_ENVS.has(env) && !starred) {
+      counter++;
+      if (labelMatch) labels.set(labelMatch[1], String(counter));
+    }
+  }
+
+  if (labels.size === 0) return text;
+
+  const chunks: string[] = [];
+  let lastEnd = 0;
+  LATEX_ENV_BODY_RE.lastIndex = 0;
+  while ((m = LATEX_ENV_BODY_RE.exec(text)) !== null) {
+    chunks.push(replaceEqref(text.slice(lastEnd, m.index), labels, true));
+    chunks.push(replaceEqref(m[0], labels, false));
+    lastEnd = m.index + m[0].length;
+  }
+  chunks.push(replaceEqref(text.slice(lastEnd), labels, true));
+  return chunks.join("");
+};
+
+const replaceEqref = (
+  text: string,
+  labels: Map<string, string>,
+  wrap: boolean,
+): string =>
+  text.replace(/\\eqref\{([^}]*)\}/g, (raw, name: string) => {
+    const tag = labels.get(name);
+    if (!tag) return raw;
+    return wrap ? `$(${tag})$` : `(${tag})`;
+  });
 
 const normalizeDelimiters = (text: string): string => {
   // $$ in replacement string is special (inserts literal $), so use $$$$

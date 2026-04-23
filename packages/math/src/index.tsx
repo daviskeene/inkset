@@ -195,10 +195,22 @@ export const createMathPlugin = (options?: MathPluginOptions): InksetPlugin => {
 
     transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
       const raw = extractText(node);
-      const latex = raw
-        .replace(/^\$\$\s*/, "")
-        .replace(/\s*\$\$$/, "")
-        .trim();
+      let latex = raw.trim();
+
+      // Bare \begin{env}...\end{env} blocks arrive without $$ wrapping; only
+      // strip fences when they're actually present.
+      if (latex.startsWith("$$")) {
+        latex = latex
+          .replace(/^\$\$\s*/, "")
+          .replace(/\s*\$\$$/, "")
+          .trim();
+      }
+
+      // KaTeX has no \label / \eqref support and errors on them. Strip so
+      // the surrounding equation still renders; cross-reference linking
+      // across blocks is out of scope here.
+      latex = latex.replace(/\\label\{[^}]*\}/g, "");
+      latex = latex.replace(/\\eqref\{[^}]*\}/g, "(?)");
 
       return {
         ...node,

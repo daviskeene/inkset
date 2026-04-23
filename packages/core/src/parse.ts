@@ -21,11 +21,15 @@ const getProcessor = () => {
 
 // ── Block type detection ───────────────────────────────────────────
 
+const MATH_ENV_RE =
+  /^\\begin\{(equation|align|aligned|gather|gathered|alignat|alignedat|multline|split|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|Bmatrix|cases|dcases|rcases|smallmatrix|subarray|CD)\*?\}/;
+
 const detectBlockType = (raw: string): BlockType => {
   const trimmed = raw.trimStart();
 
   if (trimmed.match(/^(`{3,}|~{3,})/)) return "code";
   if (trimmed.startsWith("$$")) return "math-display";
+  if (MATH_ENV_RE.test(trimmed)) return "math-display";
   if (trimmed.match(/^#{1,6}\s/)) return "heading";
   if (trimmed.startsWith("|")) return "table";
   if (trimmed.match(/^[-*+]\s/) || trimmed.match(/^\d+\.\s/)) return "list";
@@ -48,6 +52,22 @@ export const createBlocks = (rawBlocks: readonly string[]): Block[] => {
 };
 
 export const parseBlock = (block: Readonly<Block>): ASTNode => {
+  // Math blocks bypass remark: CommonMark escape handling collapses `\\`
+  // → `\` and `\{` → `{`, which destroys LaTeX line breaks and command
+  // boundaries. The math plugin wants the verbatim source.
+  if (block.type === "math-display") {
+    return {
+      type: "element",
+      tagName: "div",
+      properties: {},
+      children: [
+        { type: "text", value: block.raw, blockId: block.id, blockType: block.type },
+      ],
+      blockId: block.id,
+      blockType: block.type,
+    };
+  }
+
   const processor = getProcessor();
 
   try {

@@ -34,4 +34,39 @@ describe("createMathPlugin", () => {
     const enriched = plugin.transform(makeMathNode("E = mc^2"), ctx);
     expect(enriched.pluginData?.latex).toBe("E = mc^2");
   });
+
+  it("preserves bare \\begin{env}...\\end{env} without $$ wrapping", () => {
+    const plugin = createMathPlugin();
+    const raw = "\\begin{equation}\nx + y = 1\n\\end{equation}";
+    const node: ASTNode = {
+      type: "element",
+      tagName: "div",
+      blockId: 0,
+      blockType: "math-display",
+      children: [{ type: "text", value: raw, blockId: 0, blockType: "math-display" }],
+    };
+    const enriched = plugin.transform(node, ctx);
+    expect(enriched.pluginData?.latex).toContain("\\begin{equation}");
+    expect(enriched.pluginData?.latex).toContain("\\end{equation}");
+  });
+
+  it("strips \\label{...} before KaTeX sees it", () => {
+    const plugin = createMathPlugin();
+    const enriched = plugin.transform(
+      makeMathNode("\\begin{equation}\\label{eq:foo} x = 1 \\end{equation}"),
+      ctx,
+    );
+    expect(enriched.pluginData?.latex).not.toContain("\\label");
+    expect(enriched.pluginData?.latex).not.toContain("eq:foo");
+  });
+
+  it("replaces \\eqref{...} with a placeholder inside math", () => {
+    const plugin = createMathPlugin();
+    const enriched = plugin.transform(
+      makeMathNode("a = \\eqref{eq:foo} + 1"),
+      ctx,
+    );
+    expect(enriched.pluginData?.latex).not.toContain("\\eqref");
+    expect(enriched.pluginData?.latex).toContain("(?)");
+  });
 });

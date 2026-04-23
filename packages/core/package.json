@@ -1,6 +1,6 @@
 {
   "name": "@inkset/core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Core parsing, measurement, layout, and streaming pipeline for Inkset.",
   "type": "module",
   "sideEffects": false,

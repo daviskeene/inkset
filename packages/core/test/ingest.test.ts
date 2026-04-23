@@ -45,6 +45,25 @@ describe("splitBlocks", () => {
     const blocks = splitBlocks("A\n\n\n\nB");
     expect(blocks).toEqual(["A", "B"]);
   });
+
+  it("keeps bare \\begin{env}...\\end{env} blocks together", () => {
+    const doc =
+      "Before\n\n\\begin{equation}\nx + y = 1\n\\end{equation}\n\nAfter";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toHaveLength(3);
+    expect(blocks[1]).toContain("\\begin{equation}");
+    expect(blocks[1]).toContain("\\end{equation}");
+  });
+
+  it("handles nested LaTeX environments", () => {
+    const doc =
+      "\\begin{equation}\n\\begin{aligned}\na &= b\\\\\n\nc &= d\n\\end{aligned}\n\\end{equation}\n\nAfter";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toContain("\\begin{aligned}");
+    expect(blocks[0]).toContain("\\end{equation}");
+    expect(blocks[1]).toBe("After");
+  });
 });
 
 describe("repair", () => {
@@ -93,6 +112,40 @@ describe("repair", () => {
   it("auto-closes unclosed math block", () => {
     const result = repair("$$\nx = 1");
     expect(result.match(/\$\$/g)?.length).toBe(2);
+  });
+
+  it("resolves \\eqref to tag number with \\tag{N}", () => {
+    const doc =
+      "\\begin{equation}\\tag{5}\\label{eq:foo} x = 1 \\end{equation}\n\nSee \\eqref{eq:foo}.";
+    const result = repair(doc);
+    expect(result).toContain("See $(5)$.");
+  });
+
+  it("auto-numbers unlabeled numbered envs for \\eqref", () => {
+    const doc =
+      "\\begin{equation}\\label{a} a \\end{equation}\n\n\\begin{equation}\\label{b} b \\end{equation}\n\n\\eqref{b} then \\eqref{a}";
+    const result = repair(doc);
+    expect(result).toContain("$(2)$ then $(1)$");
+  });
+
+  it("skips starred envs for auto-numbering", () => {
+    const doc =
+      "\\begin{equation*}\\label{a} a \\end{equation*}\n\n\\begin{equation}\\label{b} b \\end{equation}\n\n\\eqref{b}";
+    const result = repair(doc);
+    expect(result).toContain("$(1)$");
+  });
+
+  it("leaves unresolvable \\eqref untouched", () => {
+    const doc = "See \\eqref{missing}.";
+    expect(repair(doc)).toBe(doc);
+  });
+
+  it("uses bare (N) for \\eqref inside env bodies", () => {
+    const doc =
+      "\\begin{equation}\\tag{3}\\label{x} y = 1 \\end{equation}\n\n\\begin{equation} z = \\eqref{x} \\end{equation}";
+    const result = repair(doc);
+    expect(result).toContain("z = (3)");
+    expect(result).not.toContain("z = $(3)$");
   });
 
   it("handles already-complete text", () => {
