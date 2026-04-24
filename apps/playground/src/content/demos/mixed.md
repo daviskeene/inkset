@@ -28,7 +28,7 @@ There's another shift in terms of what users are asking models to serve as outpu
 
 ### Inkset's place in all of this
 
-"Render markdown, let CSS handle it" was built for documents that arrive whole and hold their shape. Streaming AI output does neither. Every workaround since (debouncing tokens, virtualizing long threads, lazily mounting rich blocks) patches a symptom of the same thing: the browser lays out globally, and streams are local. Inkset's bet is that the next rendering layer for AI will own layout instead of deferring to the browser. Measure once, re-layout with arithmetic, freeze what's settled. Inkset may not end up being the one, but whatever does will look like this, and parsing will stop being the interesting problem.
+"Render markdown, let CSS handle it" was built for documents that arrive whole and hold their shape. Streaming AI output does neither. Every workaround since (debouncing tokens, virtualizing long threads, lazily mounting rich blocks) patches a symptom of the same thing: the browser lays out globally, and streams are local. Inkset's bet is that the next rendering layer for AI will own layout instead of deferring to the browser. Measure once, re-layout with arithmetic, freeze what's settled. Inkset may not be the one that wins, but whatever does will look like this, and parsing will stop being the interesting problem.
 
 ## What you get
 
