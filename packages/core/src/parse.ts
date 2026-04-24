@@ -60,9 +60,7 @@ export const parseBlock = (block: Readonly<Block>): ASTNode => {
       type: "element",
       tagName: "div",
       properties: {},
-      children: [
-        { type: "text", value: block.raw, blockId: block.id, blockType: block.type },
-      ],
+      children: [{ type: "text", value: block.raw, blockId: block.id, blockType: block.type }],
       blockId: block.id,
       blockType: block.type,
     };

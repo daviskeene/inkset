@@ -62,10 +62,7 @@ describe("createMathPlugin", () => {
 
   it("replaces \\eqref{...} with a placeholder inside math", () => {
     const plugin = createMathPlugin();
-    const enriched = plugin.transform(
-      makeMathNode("a = \\eqref{eq:foo} + 1"),
-      ctx,
-    );
+    const enriched = plugin.transform(makeMathNode("a = \\eqref{eq:foo} + 1"), ctx);
     expect(enriched.pluginData?.latex).not.toContain("\\eqref");
     expect(enriched.pluginData?.latex).toContain("(?)");
   });

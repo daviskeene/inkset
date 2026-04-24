@@ -147,14 +147,7 @@ export const repair = (text: string): string => {
 };
 
 // AMS numbered environments (starred variants don't number).
-const NUMBERED_ENVS = new Set([
-  "equation",
-  "align",
-  "gather",
-  "multline",
-  "alignat",
-  "eqnarray",
-]);
+const NUMBERED_ENVS = new Set(["equation", "align", "gather", "multline", "alignat", "eqnarray"]);
 
 const LATEX_ENV_BODY_RE = /\\begin\{([A-Za-z]+\*?)\}([\s\S]*?)\\end\{\1\}/g;
 
@@ -206,11 +199,7 @@ const resolveEquationRefs = (text: string): string => {
   return chunks.join("");
 };
 
-const replaceEqref = (
-  text: string,
-  labels: Map<string, string>,
-  wrap: boolean,
-): string =>
+const replaceEqref = (text: string, labels: Map<string, string>, wrap: boolean): string =>
   text.replace(/\\eqref\{([^}]*)\}/g, (raw, name: string) => {
     const tag = labels.get(name);
     if (!tag) return raw;

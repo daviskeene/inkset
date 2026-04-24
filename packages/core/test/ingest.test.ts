@@ -47,8 +47,7 @@ describe("splitBlocks", () => {
   });
 
   it("keeps bare \\begin{env}...\\end{env} blocks together", () => {
-    const doc =
-      "Before\n\n\\begin{equation}\nx + y = 1\n\\end{equation}\n\nAfter";
+    const doc = "Before\n\n\\begin{equation}\nx + y = 1\n\\end{equation}\n\nAfter";
     const blocks = splitBlocks(doc);
     expect(blocks).toHaveLength(3);
     expect(blocks[1]).toContain("\\begin{equation}");
