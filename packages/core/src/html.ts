@@ -13,6 +13,9 @@ export const escapeHtml = (str: string): string => {
 
 export const nodeToHtml = (node: Readonly<ASTNode>): string => {
   if (node.type === "text") return escapeHtml(node.value ?? "");
+  if (node.type === "inlineMath") {
+    return `<span data-inkset-inline-math>${escapeHtml(node.value ?? "")}</span>`;
+  }
   if (node.type === "root" && node.children) {
     return node.children.map(nodeToHtml).join("");
   }
