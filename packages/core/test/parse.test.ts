@@ -20,9 +20,7 @@ const collectNodes = (node: ASTNode, type: string, out: ASTNode[] = []): ASTNode
 describe("parseBlock", () => {
   it("protects inline math before markdown emphasis parsing", () => {
     const node = parseBlock(
-      makeBlock(
-        "Given $a\\in\\mathcal{C}$, moments $(\\varphi(a^{k}))_{k\\geq 1}$ determine it.",
-      ),
+      makeBlock("Given $a\\in\\mathcal{C}$, moments $(\\varphi(a^{k}))_{k\\geq 1}$ determine it."),
     );
 
     const inlineMath = collectNodes(node, "inlineMath");
