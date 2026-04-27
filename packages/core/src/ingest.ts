@@ -102,12 +102,7 @@ export const splitBlocks = (document: string): string[] => {
       }
     }
 
-    if (
-      !inCodeFence &&
-      !inMathBlock &&
-      latexEnvDepth === 0 &&
-      ATX_HEADING_RE.test(trimmed)
-    ) {
+    if (!inCodeFence && !inMathBlock && latexEnvDepth === 0 && ATX_HEADING_RE.test(trimmed)) {
       if (current.length > 0) {
         blocks.push(current.join("\n"));
         current = [];
