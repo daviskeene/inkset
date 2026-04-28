@@ -1,5 +1,11 @@
 # @inkset/core
 
+## 0.1.3
+
+### Patch Changes
+
+- Protect inline math before Markdown emphasis parsing and split compact ATX headings and display math fences into semantic blocks.
+
 ## 0.1.2
 
 ### Patch Changes

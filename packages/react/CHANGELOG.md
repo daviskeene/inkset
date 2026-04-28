@@ -1,5 +1,14 @@
 # @inkset/react
 
+## 0.1.4
+
+### Patch Changes
+
+- Render semantic inline math nodes from `@inkset/core` and add a `linkAttrs` hook for Markdown anchors.
+- Updated dependencies
+  - @inkset/core@0.1.3
+  - @inkset/animate@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes
