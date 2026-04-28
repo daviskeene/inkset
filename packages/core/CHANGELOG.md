@@ -1,5 +1,11 @@
 # @inkset/core
 
+## 0.1.4
+
+### Patch Changes
+
+- Improve math block boundary detection so display math and bare LaTeX environments render correctly without requiring defensive blank lines. Multi-line `$$...$$` blocks, inline-positioned display fences, and adjacent `\begin{equation}...\end{equation}` blocks are now split into semantic math blocks before Markdown parsing.
+
 ## 0.1.3
 
 ### Patch Changes

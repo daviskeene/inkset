@@ -145,7 +145,7 @@ const protectInlineMathInText = (text: string, math: string[]): string => {
     }
 
     markdown += text.slice(cursor, start);
-    const value = text.slice(start + 1, end);
+    const value = text.slice(start + 1, end).trim();
     if (value.length === 0) {
       markdown += "$$";
       cursor = end + 1;
@@ -263,9 +263,7 @@ const findInlineMathDelimiter = (text: string, fromIndex: number, opening: boole
     if (text[index] !== "$") continue;
     if (text[index - 1] === "\\") continue;
     if (text[index - 1] === "$" || text[index + 1] === "$") continue;
-    if (opening && /\s/.test(text[index + 1] ?? "")) continue;
-    if (opening && /\d/.test(text[index + 1] ?? "")) continue;
-    if (!opening && /\s/.test(text[index - 1] ?? "")) continue;
+    if (!opening && /\d/.test(text[index + 1] ?? "")) continue;
     return index;
   }
 

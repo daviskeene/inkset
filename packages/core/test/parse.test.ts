@@ -37,6 +37,21 @@ describe("parseBlock", () => {
     expect(collectNodes(node, "inlineMath")).toHaveLength(0);
   });
 
+  it("allows inline math to start with a digit", () => {
+    const node = parseBlock(makeBlock("Both factors divide $2^{r}+1$ and $2^{r}-1$ respectively."));
+
+    expect(collectNodes(node, "inlineMath").map((math) => math.value)).toEqual([
+      "2^{r}+1",
+      "2^{r}-1",
+    ]);
+  });
+
+  it("trims whitespace inside inline math delimiters", () => {
+    const node = parseBlock(makeBlock("This is a $ latex $ expression."));
+
+    expect(collectNodes(node, "inlineMath").map((math) => math.value)).toEqual(["latex"]);
+  });
+
   it("does not protect math-like text inside inline code", () => {
     const node = parseBlock(makeBlock("Use `$a_b$` literally, then render $x_y$."));
     const code = collectNodes(node, "element").find((child) => child.tagName === "code");

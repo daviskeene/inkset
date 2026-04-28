@@ -69,6 +69,8 @@ export class Ingest {
 
 const LATEX_BEGIN_RE = /\\begin\{[A-Za-z*]+\}/g;
 const LATEX_END_RE = /\\end\{[A-Za-z*]+\}/g;
+const LATEX_MATH_ENV_START_RE =
+  /^\\begin\{(equation|align|aligned|gather|gathered|alignat|alignedat|multline|split|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|Bmatrix|cases|dcases|rcases|smallmatrix|subarray|CD)\*?\}/;
 const ATX_HEADING_RE = /^(?: {0,3})(?:#{1,6})(?:\s+.*)?$/;
 const STANDALONE_MATH_FENCE_RE = /^\$\$\s*$/;
 
@@ -87,6 +89,8 @@ export const splitBlocks = (document: string): string[] => {
   for (const line of lines) {
     const trimmed = line.trimStart();
     const isStandaloneMathFence = STANDALONE_MATH_FENCE_RE.test(line.trim());
+    const startsLatexMathEnv =
+      !inCodeFence && !inMathBlock && latexEnvDepth === 0 && LATEX_MATH_ENV_START_RE.test(trimmed);
 
     if (!inMathBlock && latexEnvDepth === 0) {
       const fenceMatch = trimmed.match(/^(`{3,}|~{3,})/);
@@ -113,6 +117,46 @@ export const splitBlocks = (document: string): string[] => {
       continue;
     }
 
+    if (startsLatexMathEnv && current.length > 0) {
+      blocks.push(current.join("\n"));
+      current = [];
+    }
+
+    if (!inCodeFence && !inMathBlock && latexEnvDepth === 0) {
+      const segments = splitCompleteDisplayMathSpans(line);
+      if (segments) {
+        for (const segment of segments) {
+          if (segment.type === "text") {
+            if (segment.value.trim() !== "") {
+              current.push(segment.value.trim());
+            }
+            continue;
+          }
+
+          if (current.length > 0) {
+            blocks.push(current.join("\n"));
+            current = [];
+          }
+          blocks.push(segment.value.trim());
+        }
+        continue;
+      }
+    }
+
+    if (!inCodeFence && inMathBlock) {
+      const closeIndex = findDisplayMathFence(line, 0);
+      if (closeIndex !== -1) {
+        current.push(line.slice(0, closeIndex + 2));
+        blocks.push(current.join("\n"));
+        current = [];
+        inMathBlock = false;
+
+        const after = line.slice(closeIndex + 2).trim();
+        if (after !== "") current.push(after);
+        continue;
+      }
+    }
+
     if (!inCodeFence && !inMathBlock && latexEnvDepth === 0 && isStandaloneMathFence) {
       if (current.length > 0) {
         blocks.push(current.join("\n"));
@@ -123,21 +167,22 @@ export const splitBlocks = (document: string): string[] => {
       continue;
     }
 
-    if (!inCodeFence && inMathBlock && isStandaloneMathFence) {
-      current.push(line);
-      blocks.push(current.join("\n"));
-      current = [];
-      inMathBlock = false;
-      continue;
-    }
-
-    if (!inCodeFence && trimmed.startsWith("$$")) {
-      const mathFenceCount = (trimmed.match(/\$\$/g) ?? []).length;
-      if (mathFenceCount % 2 !== 0) {
-        inMathBlock = !inMathBlock;
+    if (!inCodeFence && !inMathBlock && latexEnvDepth === 0) {
+      const openIndex = findDisplayMathFence(line, 0);
+      if (openIndex !== -1) {
+        const before = line.slice(0, openIndex).trim();
+        if (before !== "") current.push(before);
+        if (current.length > 0) {
+          blocks.push(current.join("\n"));
+          current = [];
+        }
+        current.push(line.slice(openIndex));
+        inMathBlock = true;
+        continue;
       }
     }
 
+    const wasInLatexEnv = latexEnvDepth > 0 || startsLatexMathEnv;
     if (!inCodeFence) {
       const begins = (line.match(LATEX_BEGIN_RE) ?? []).length;
       const ends = (line.match(LATEX_END_RE) ?? []).length;
@@ -151,6 +196,10 @@ export const splitBlocks = (document: string): string[] => {
       }
     } else {
       current.push(line);
+      if (!inCodeFence && wasInLatexEnv && latexEnvDepth === 0) {
+        blocks.push(current.join("\n"));
+        current = [];
+      }
     }
   }
 
@@ -159,6 +208,54 @@ export const splitBlocks = (document: string): string[] => {
   }
 
   return blocks;
+};
+
+type DisplayMathSegment = {
+  type: "text" | "math";
+  value: string;
+};
+
+const splitCompleteDisplayMathSpans = (line: string): DisplayMathSegment[] | null => {
+  const first = findDisplayMathFence(line, 0);
+  if (first === -1) return null;
+
+  const segments: DisplayMathSegment[] = [];
+  let cursor = 0;
+  let foundMath = false;
+
+  while (cursor < line.length) {
+    const start = findDisplayMathFence(line, cursor);
+    if (start === -1) break;
+
+    const end = findDisplayMathFence(line, start + 2);
+    if (end === -1)
+      return foundMath ? segments.concat({ type: "text", value: line.slice(cursor) }) : null;
+
+    if (start > cursor) {
+      segments.push({ type: "text", value: line.slice(cursor, start) });
+    }
+
+    segments.push({ type: "math", value: line.slice(start, end + 2) });
+    foundMath = true;
+    cursor = end + 2;
+  }
+
+  if (!foundMath) return null;
+  if (cursor < line.length) {
+    segments.push({ type: "text", value: line.slice(cursor) });
+  }
+
+  return segments;
+};
+
+const findDisplayMathFence = (line: string, fromIndex: number): number => {
+  for (let index = fromIndex; index < line.length - 1; index++) {
+    if (line[index] !== "$" || line[index + 1] !== "$") continue;
+    if (line[index - 1] === "\\") continue;
+    return index;
+  }
+
+  return -1;
 };
 
 // ── Syntax repair ──────────────────────────────────────────────────

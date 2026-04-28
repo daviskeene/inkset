@@ -1,6 +1,6 @@
 {
   "name": "@inkset/diagram",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Mermaid diagram plugin for Inkset.",
   "type": "module",
   "sideEffects": false,

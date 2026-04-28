@@ -41,6 +41,18 @@ describe("splitBlocks", () => {
     expect(blocks).toEqual(["Before", "$$x = 1$$", "## After"]);
   });
 
+  it("splits single-line display math without surrounding blank lines", () => {
+    const doc = "Thus\n$$pu+qv=2^{k},\\qquad qu+pv=2^{m}$$\nand $qu<pv$.";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual(["Thus", "$$pu+qv=2^{k},\\qquad qu+pv=2^{m}$$", "and $qu<pv$."]);
+  });
+
+  it("splits inline-positioned display math spans out of prose", () => {
+    const doc = "Consequently $$q-p=2,\\qquad p+q=2^{m-1}.$$ Thus $p=1$.";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual(["Consequently", "$$q-p=2,\\qquad p+q=2^{m-1}.$$", "Thus $p=1$."]);
+  });
+
   it("handles multiple consecutive blank lines", () => {
     const blocks = splitBlocks("A\n\n\n\nB");
     expect(blocks).toEqual(["A", "B"]);
@@ -52,6 +64,18 @@ describe("splitBlocks", () => {
     expect(blocks).toHaveLength(3);
     expect(blocks[1]).toContain("\\begin{equation}");
     expect(blocks[1]).toContain("\\end{equation}");
+  });
+
+  it("splits bare math environments without surrounding blank lines", () => {
+    const doc =
+      "Adding and subtracting give\n\\begin{equation}\n(p+q)(u+v)=2^{m}(2^{r}+1)\n\\end{equation}\n\\begin{equation}\n(q-p)(v-u)=2^{m}(2^{r}-1)\n\\end{equation}\nAll four factors are even.";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual([
+      "Adding and subtracting give",
+      "\\begin{equation}\n(p+q)(u+v)=2^{m}(2^{r}+1)\n\\end{equation}",
+      "\\begin{equation}\n(q-p)(v-u)=2^{m}(2^{r}-1)\n\\end{equation}",
+      "All four factors are even.",
+    ]);
   });
 
   it("handles nested LaTeX environments", () => {
@@ -100,6 +124,17 @@ describe("splitBlocks", () => {
       "The scalar Cauchy transform is defined as",
       "$$\nG_{\\mu}(\\zeta):=\\int_{\\mathbb{R}}\\frac{\\mu(\\mathrm{d}\\xi)}{\\zeta-\\xi}.\n$$",
       "For a noncommutative random variable",
+    ]);
+  });
+
+  it("keeps multi-line display math fenced by inline $$ boundaries without blank lines", () => {
+    const doc =
+      "For $m\\ge1$ integrate by parts:\n$$I_m=[x(1+x^2)^m]_0^1-2m\\!\\int_0^1x^2(1+x^2)^{m-1}dx\n=2^m-2m\\!\\int_0^1[(1+x^2)-1](1+x^2)^{m-1}dx.$$\nHence $(2m+1)I_m=2^m+2mI_{m-1}$.";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual([
+      "For $m\\ge1$ integrate by parts:",
+      "$$I_m=[x(1+x^2)^m]_0^1-2m\\!\\int_0^1x^2(1+x^2)^{m-1}dx\n=2^m-2m\\!\\int_0^1[(1+x^2)-1](1+x^2)^{m-1}dx.$$",
+      "Hence $(2m+1)I_m=2^m+2mI_{m-1}$.",
     ]);
   });
 });
