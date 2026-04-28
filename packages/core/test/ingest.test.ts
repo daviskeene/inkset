@@ -64,6 +64,34 @@ describe("splitBlocks", () => {
     expect(blocks[1]).toBe("After");
   });
 
+  it("splits ATX headings without surrounding blank lines", () => {
+    const doc =
+      "where the last power series converges in a neighborhood of infinity.\n## Theorem\nLet r be a noncommutative random variable";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual([
+      "where the last power series converges in a neighborhood of infinity.",
+      "## Theorem",
+      "Let r be a noncommutative random variable",
+    ]);
+  });
+
+  it("does not split ATX-looking lines inside code fences", () => {
+    const doc = "Before\n\n```\n## Not a heading\n```\nAfter";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual(["Before", "```\n## Not a heading\n```\nAfter"]);
+  });
+
+  it("does not split indented code as ATX headings", () => {
+    const doc = "Before\n\n    # Not a heading\n    still code\n\nAfter";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual(["Before", "    # Not a heading\n    still code", "After"]);
+  });
+
+  it("splits empty ATX headings without surrounding blank lines", () => {
+    const blocks = splitBlocks("Before\n###\nAfter");
+    expect(blocks).toEqual(["Before", "###", "After"]);
+  });
+
   it("treats standalone display math fences as block boundaries without blank lines", () => {
     const doc =
       "The scalar Cauchy transform is defined as\n$$\nG_{\\mu}(\\zeta):=\\int_{\\mathbb{R}}\\frac{\\mu(\\mathrm{d}\\xi)}{\\zeta-\\xi}.\n$$\nFor a noncommutative random variable";
