@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBlock } from "../src/parse.js";
+import { parseBlock, extractText } from "../src/parse.js";
 import type { ASTNode, Block } from "../src/types.js";
 
 const makeBlock = (raw: string): Block => ({
@@ -35,5 +35,29 @@ describe("parseBlock", () => {
     const node = parseBlock(makeBlock("The price is $60 and the deposit is $5."));
 
     expect(collectNodes(node, "inlineMath")).toHaveLength(0);
+  });
+
+  it("does not protect math-like text inside inline code", () => {
+    const node = parseBlock(makeBlock("Use `$a_b$` literally, then render $x_y$."));
+    const code = collectNodes(node, "element").find((child) => child.tagName === "code");
+
+    expect(code ? extractText(code) : "").toBe("$a_b$");
+    expect(collectNodes(code as ASTNode, "inlineMath")).toHaveLength(0);
+    expect(collectNodes(node, "inlineMath").map((math) => math.value)).toEqual(["x_y"]);
+  });
+
+  it("does not protect math-like text inside link destinations", () => {
+    const node = parseBlock(makeBlock("[docs](/docs/$id$/view) and $x_y$"));
+    const link = collectNodes(node, "element").find((child) => child.tagName === "a");
+
+    expect(link?.properties?.href).toBe("/docs/$id$/view");
+    expect(collectNodes(node, "inlineMath").map((math) => math.value)).toEqual(["x_y"]);
+  });
+
+  it("does not collide with literal placeholder-like text", () => {
+    const node = parseBlock(makeBlock("Literal INKSETINLINEMATH0X and math $x_y$."));
+
+    expect(extractText(node)).toContain("INKSETINLINEMATH0X");
+    expect(collectNodes(node, "inlineMath").map((math) => math.value)).toEqual(["x_y"]);
   });
 });

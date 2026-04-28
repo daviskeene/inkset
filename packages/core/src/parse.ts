@@ -97,36 +97,165 @@ type ProtectedInlineMath = {
   math: string[];
 };
 
-const INLINE_MATH_PLACEHOLDER_PREFIX = "INKSETINLINEMATH";
-const INLINE_MATH_PLACEHOLDER_SUFFIX = "X";
-const INLINE_MATH_PLACEHOLDER_RE = /INKSETINLINEMATH(\d+)X/g;
+const INLINE_MATH_PLACEHOLDER_PREFIX = "\uE000INKSET_INLINE_MATH_";
+const INLINE_MATH_PLACEHOLDER_SUFFIX = "\uE001";
+const INLINE_MATH_PLACEHOLDER_RE = /\uE000INKSET_INLINE_MATH_(\d+)\uE001/g;
 
 const protectInlineMath = (raw: string): ProtectedInlineMath => {
   const math: string[] = [];
+  let markdown = protectInlineMathInText(raw, math);
+
+  return { markdown, math };
+};
+
+const protectInlineMathInText = (text: string, math: string[]): string => {
   let markdown = "";
   let cursor = 0;
 
-  while (cursor < raw.length) {
-    const start = findInlineMathDelimiter(raw, cursor, true);
-    if (start === -1) {
-      markdown += raw.slice(cursor);
-      break;
+  while (cursor < text.length) {
+    const protectedSpan = findProtectedMarkdownSpan(text, cursor);
+    const start = findInlineMathDelimiter(text, cursor, true);
+    if (start === -1 || (protectedSpan && protectedSpan.start < start)) {
+      const end = protectedSpan?.end ?? text.length;
+      markdown += text.slice(cursor, end);
+      cursor = end;
+      if (!protectedSpan) {
+        break;
+      }
+      continue;
     }
 
-    const end = findInlineMathDelimiter(raw, start + 1, false);
+    if (protectedSpan && protectedSpan.start === start) {
+      markdown += text.slice(cursor, protectedSpan.end);
+      cursor = protectedSpan.end;
+      continue;
+    }
+
+    const end = findInlineMathDelimiter(text, start + 1, false);
     if (end === -1) {
-      markdown += raw.slice(cursor);
+      markdown += text.slice(cursor);
       break;
     }
 
-    markdown += raw.slice(cursor, start);
-    const value = raw.slice(start + 1, end);
+    const closingProtectedSpan = findProtectedMarkdownSpan(text, start + 1);
+    if (closingProtectedSpan && closingProtectedSpan.start < end) {
+      markdown += text.slice(cursor, closingProtectedSpan.end);
+      cursor = closingProtectedSpan.end;
+      continue;
+    }
+
+    markdown += text.slice(cursor, start);
+    const value = text.slice(start + 1, end);
+    if (value.length === 0) {
+      markdown += "$$";
+      cursor = end + 1;
+      continue;
+    }
+
     const index = math.push(value) - 1;
     markdown += `${INLINE_MATH_PLACEHOLDER_PREFIX}${index}${INLINE_MATH_PLACEHOLDER_SUFFIX}`;
     cursor = end + 1;
   }
 
-  return { markdown, math };
+  return markdown;
+};
+
+type ProtectedMarkdownSpan = {
+  start: number;
+  end: number;
+};
+
+const findProtectedMarkdownSpan = (
+  text: string,
+  fromIndex: number,
+): ProtectedMarkdownSpan | null => {
+  let best: ProtectedMarkdownSpan | null = null;
+
+  const codeSpan = findInlineCodeSpan(text, fromIndex);
+  if (codeSpan) best = codeSpan;
+
+  const linkDestination = findInlineLinkDestination(text, fromIndex);
+  if (linkDestination && (!best || linkDestination.start < best.start)) {
+    best = linkDestination;
+  }
+
+  return best;
+};
+
+const findInlineCodeSpan = (text: string, fromIndex: number): ProtectedMarkdownSpan | null => {
+  for (let index = fromIndex; index < text.length; index++) {
+    if (text[index] !== "`") continue;
+
+    let tickCount = 1;
+    while (text[index + tickCount] === "`") {
+      tickCount++;
+    }
+
+    const delimiter = "`".repeat(tickCount);
+    const end = text.indexOf(delimiter, index + tickCount);
+    if (end === -1) {
+      return null;
+    }
+
+    return { start: index, end: end + tickCount };
+  }
+
+  return null;
+};
+
+const findInlineLinkDestination = (
+  text: string,
+  fromIndex: number,
+): ProtectedMarkdownSpan | null => {
+  for (let index = fromIndex; index < text.length; index++) {
+    if (text[index] !== "[") continue;
+
+    const labelEnd = findUnescaped(text, "]", index + 1);
+    if (labelEnd === -1 || text[labelEnd + 1] !== "(") {
+      continue;
+    }
+
+    const destinationStart = labelEnd + 2;
+    const destinationEnd = findLinkDestinationEnd(text, destinationStart);
+    if (destinationEnd === -1) {
+      return null;
+    }
+
+    return { start: destinationStart, end: destinationEnd };
+  }
+
+  return null;
+};
+
+const findLinkDestinationEnd = (text: string, fromIndex: number): number => {
+  let depth = 0;
+
+  for (let index = fromIndex; index < text.length; index++) {
+    const char = text[index];
+    if (text[index - 1] === "\\") continue;
+
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+
+    if (char === ")") {
+      if (depth === 0) return index;
+      depth--;
+    }
+  }
+
+  return -1;
+};
+
+const findUnescaped = (text: string, target: string, fromIndex: number): number => {
+  for (let index = fromIndex; index < text.length; index++) {
+    if (text[index] !== target) continue;
+    if (text[index - 1] === "\\") continue;
+    return index;
+  }
+
+  return -1;
 };
 
 const findInlineMathDelimiter = (text: string, fromIndex: number, opening: boolean): number => {
@@ -203,7 +332,6 @@ const splitInlineMathPlaceholders = (
 
   return children;
 };
-
 export type ParseResult = {
   nodes: ASTNode[];
   parsedBlockIds: Set<number>;
