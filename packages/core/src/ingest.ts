@@ -69,6 +69,7 @@ export class Ingest {
 
 const LATEX_BEGIN_RE = /\\begin\{[A-Za-z*]+\}/g;
 const LATEX_END_RE = /\\end\{[A-Za-z*]+\}/g;
+const STANDALONE_MATH_FENCE_RE = /^\$\$\s*$/;
 
 /** Splits a markdown document into block-level chunks, preserving fenced regions. */
 export const splitBlocks = (document: string): string[] => {
@@ -84,6 +85,7 @@ export const splitBlocks = (document: string): string[] => {
 
   for (const line of lines) {
     const trimmed = line.trimStart();
+    const isStandaloneMathFence = STANDALONE_MATH_FENCE_RE.test(line.trim());
 
     if (!inMathBlock && latexEnvDepth === 0) {
       const fenceMatch = trimmed.match(/^(`{3,}|~{3,})/);
@@ -99,6 +101,24 @@ export const splitBlocks = (document: string): string[] => {
           fenceChar = "";
         }
       }
+    }
+
+    if (!inCodeFence && !inMathBlock && latexEnvDepth === 0 && isStandaloneMathFence) {
+      if (current.length > 0) {
+        blocks.push(current.join("\n"));
+        current = [];
+      }
+      current.push(line);
+      inMathBlock = true;
+      continue;
+    }
+
+    if (!inCodeFence && inMathBlock && isStandaloneMathFence) {
+      current.push(line);
+      blocks.push(current.join("\n"));
+      current = [];
+      inMathBlock = false;
+      continue;
     }
 
     if (!inCodeFence && trimmed.startsWith("$$")) {
