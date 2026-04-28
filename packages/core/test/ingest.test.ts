@@ -80,6 +80,17 @@ describe("splitBlocks", () => {
     const blocks = splitBlocks(doc);
     expect(blocks).toEqual(["Before", "```\n## Not a heading\n```\nAfter"]);
   });
+
+  it("does not split indented code as ATX headings", () => {
+    const doc = "Before\n\n    # Not a heading\n    still code\n\nAfter";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual(["Before", "    # Not a heading\n    still code", "After"]);
+  });
+
+  it("splits empty ATX headings without surrounding blank lines", () => {
+    const blocks = splitBlocks("Before\n###\nAfter");
+    expect(blocks).toEqual(["Before", "###", "After"]);
+  });
 });
 
 describe("repair", () => {

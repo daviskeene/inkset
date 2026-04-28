@@ -69,7 +69,7 @@ export class Ingest {
 
 const LATEX_BEGIN_RE = /\\begin\{[A-Za-z*]+\}/g;
 const LATEX_END_RE = /\\end\{[A-Za-z*]+\}/g;
-const ATX_HEADING_RE = /^#{1,6}\s+/;
+const ATX_HEADING_RE = /^(?: {0,3})(?:#{1,6})(?:\s+.*)?$/;
 
 /** Splits a markdown document into block-level chunks, preserving fenced regions. */
 export const splitBlocks = (document: string): string[] => {
@@ -102,7 +102,7 @@ export const splitBlocks = (document: string): string[] => {
       }
     }
 
-    if (!inCodeFence && !inMathBlock && latexEnvDepth === 0 && ATX_HEADING_RE.test(trimmed)) {
+    if (!inCodeFence && !inMathBlock && latexEnvDepth === 0 && ATX_HEADING_RE.test(line)) {
       if (current.length > 0) {
         blocks.push(current.join("\n"));
         current = [];
