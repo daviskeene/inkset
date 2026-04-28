@@ -949,6 +949,7 @@ type BlockRendererProps = {
   revealComponent?: RevealComponent | null;
   /** Animation duration (ms) — forwarded to `RevealComponentProps.durationMs`. */
   revealDurationMs?: number;
+  linkAttrs?: LinkAttrsFn;
 };
 
 const BlockRenderer = memo(
@@ -962,6 +963,7 @@ const BlockRenderer = memo(
     displayNode,
     revealComponent,
     revealDurationMs,
+    linkAttrs,
   }: BlockRendererProps) {
     const { node, x, y, width, height, shrinkwrapWidth } = block;
     const blockRef = useRef<HTMLDivElement>(null);
@@ -1054,6 +1056,7 @@ const BlockRenderer = memo(
             registry={registry}
             revealComponent={revealComponent ?? null}
             revealDurationMs={revealDurationMs ?? 0}
+            linkAttrs={linkAttrs}
           />
         )}
       </div>
@@ -1072,7 +1075,8 @@ const BlockRenderer = memo(
     prev.onHeightChange === next.onHeightChange &&
     prev.displayNode === next.displayNode &&
     prev.revealComponent === next.revealComponent &&
-    prev.revealDurationMs === next.revealDurationMs,
+    prev.revealDurationMs === next.revealDurationMs &&
+    prev.linkAttrs === next.linkAttrs,
 );
 
 // ── Default block renderer ────────────────────────────────────────
@@ -1086,11 +1090,13 @@ const DefaultBlockRenderer = ({
   registry,
   revealComponent,
   revealDurationMs,
+  linkAttrs,
 }: {
   node: EnrichedNode;
   registry: PluginRegistry;
   revealComponent?: RevealComponent | null;
   revealDurationMs?: number;
+  linkAttrs?: LinkAttrsFn;
 }) => {
   return (
     <div className="inkset-default-block">
@@ -1101,6 +1107,7 @@ const DefaultBlockRenderer = ({
         true,
         revealComponent ?? null,
         revealDurationMs ?? 0,
+        linkAttrs,
       )}
     </div>
   );
@@ -1119,6 +1126,7 @@ const renderAstNode = (
   allowInlineMath: boolean = true,
   revealComponent: RevealComponent | null = null,
   revealDurationMs: number = 0,
+  linkAttrs?: LinkAttrsFn,
 ): React.ReactNode => {
   if (node.type === "text") {
     return renderTextNode(node, registry, key, allowInlineMath);
@@ -1133,6 +1141,7 @@ const renderAstNode = (
         allowInlineMath,
         revealComponent,
         revealDurationMs,
+        linkAttrs,
       ),
     );
   }
@@ -1156,6 +1165,7 @@ const renderAstNode = (
         false,
         null,
         revealDurationMs,
+        linkAttrs,
       ),
     );
 
@@ -1201,8 +1211,13 @@ const renderAstNode = (
       nextAllowInlineMath,
       revealComponent,
       revealDurationMs,
+      linkAttrs,
     ),
   );
+
+  if (tagName === "a" && linkAttrs && typeof props.href === "string") {
+    Object.assign(props, linkAttrs(props.href));
+  }
 
   return React.createElement(tagName, props, ...(children ?? []));
 };
@@ -1406,6 +1421,10 @@ const findInlineMathDelimiter = (text: string, fromIndex: number): number => {
   return -1;
 };
 
+export type LinkAttrsFn = (
+  href: string,
+) => Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children"> | undefined;
+
 // ── <Inkset> component ──────────────────────────────────────────
 
 export type InksetProps = {
@@ -1483,6 +1502,11 @@ export type InksetProps = {
    * renders many unique text segments over its lifetime.
    */
   cacheSize?: number;
+  /**
+   * Returns additional attributes for Markdown links. Useful for external-link
+   * policy such as target/rel without replacing the whole renderer.
+   */
+  linkAttrs?: LinkAttrsFn;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -1509,6 +1533,7 @@ export const Inkset = ({
   reveal,
   shaderRegistry,
   cacheSize,
+  linkAttrs,
   className,
   style,
   children,
@@ -2288,6 +2313,7 @@ export const Inkset = ({
           displayNode={displayNodes.get(block.blockId)}
           revealComponent={revealConfig.component}
           revealDurationMs={timelineConfig?.durationMs ?? 320}
+          linkAttrs={linkAttrs}
         />
       ))}
 
@@ -2311,6 +2337,7 @@ export const Inkset = ({
             displayNode={displayNodes.get(hotBlock.blockId)}
             revealComponent={revealConfig.component}
             revealDurationMs={timelineConfig?.durationMs ?? 320}
+            linkAttrs={linkAttrs}
           />
         </>
       )}
