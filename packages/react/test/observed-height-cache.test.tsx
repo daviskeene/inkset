@@ -13,6 +13,8 @@ import {
 const HEURISTIC_HEIGHT = 20;
 const SHRINKING_HEURISTIC_HEIGHT = 120;
 const SHRINKING_SETTLED_HEIGHT = 40;
+const PARAGRAPH_HEURISTIC_HEIGHT = 24;
+const INLINE_MATH_SETTLED_HEIGHT = 90;
 
 const getSettledHeight = (width: number): number => {
   if (width >= 280) return 80;
@@ -126,6 +128,46 @@ const createShrinkingAsyncPlugin = (): InksetPlugin => {
   };
 };
 
+const AsyncInlineMath = ({ node: _node, onContentSettled }: PluginComponentProps) => {
+  const [settled, setSettled] = useState(false);
+  const renderedHeight = settled ? INLINE_MATH_SETTLED_HEIGHT : HEURISTIC_HEIGHT;
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setSettled(true);
+    }, 10);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (settled) {
+      onContentSettled?.();
+    }
+  }, [settled, onContentSettled]);
+
+  return (
+    <span
+      data-testid="async-inline-math"
+      data-measured-height={renderedHeight}
+      style={{ display: "inline-block", height: `${renderedHeight}px` }}
+    >
+      inline math
+    </span>
+  );
+};
+
+const createAsyncInlineMathPlugin = (): InksetPlugin & { rendererName: string } => {
+  return {
+    name: "math",
+    rendererName: "test",
+    handles: [],
+    transform(node: ASTNode): EnrichedNode {
+      return node as EnrichedNode;
+    },
+    component: AsyncInlineMath,
+  };
+};
+
 class MockResizeObserver {
   observe(): void {}
   disconnect(): void {}
@@ -154,6 +196,14 @@ const waitFor = async (predicate: () => boolean, message: string): Promise<void>
     await flushMicrotasks();
   }
   throw new Error(message);
+};
+
+const getTranslatedY = (element: HTMLElement): number => {
+  const match = element.style.transform.match(/translate\([^,]+,\s*([^)]+)px\)/);
+  if (!match) {
+    throw new Error(`Expected translate transform, got "${element.style.transform}"`);
+  }
+  return Number(match[1]);
 };
 
 describe("Inkset observed height cache", () => {
@@ -316,5 +366,35 @@ describe("Inkset observed height cache", () => {
     await runPendingTimers();
 
     expect(frozenBlock!.style.minHeight).toBe("40px");
+  });
+
+  it("uses inline math content settlement to reposition following frozen blocks", async () => {
+    const plugin = createAsyncInlineMathPlugin();
+    const content = "First $\\frac{a}{b}$ paragraph.\n\nSecond paragraph.\n\nThird paragraph.";
+
+    await act(async () => {
+      root.render(
+        <Inkset
+          content={content}
+          streaming
+          width={300}
+          blockSpacing={{ default: 12 }}
+          plugins={[plugin]}
+        />,
+      );
+    });
+    await flushMicrotasks();
+
+    const firstBlock = container.querySelector<HTMLElement>('[data-block-id="0"]');
+    const secondBlock = container.querySelector<HTMLElement>('[data-block-id="1"]');
+    expect(firstBlock).not.toBeNull();
+    expect(secondBlock).not.toBeNull();
+    expect(firstBlock!.style.minHeight).toBe(`${PARAGRAPH_HEURISTIC_HEIGHT}px`);
+    expect(getTranslatedY(secondBlock!)).toBe(PARAGRAPH_HEURISTIC_HEIGHT + 12);
+
+    await runPendingTimers();
+
+    expect(firstBlock!.style.minHeight).toBe(`${INLINE_MATH_SETTLED_HEIGHT}px`);
+    expect(getTranslatedY(secondBlock!)).toBe(INLINE_MATH_SETTLED_HEIGHT + 12);
   });
 });

@@ -1054,6 +1054,7 @@ const BlockRenderer = memo(
           <DefaultBlockRenderer
             node={displayNode ?? node}
             registry={registry}
+            onContentSettled={handleContentSettled}
             revealComponent={revealComponent ?? null}
             revealDurationMs={revealDurationMs ?? 0}
             linkAttrs={linkAttrs}
@@ -1088,12 +1089,14 @@ type MathInlinePlugin = InksetPlugin & {
 const DefaultBlockRenderer = ({
   node,
   registry,
+  onContentSettled,
   revealComponent,
   revealDurationMs,
   linkAttrs,
 }: {
   node: EnrichedNode;
   registry: PluginRegistry;
+  onContentSettled?: () => void;
   revealComponent?: RevealComponent | null;
   revealDurationMs?: number;
   linkAttrs?: LinkAttrsFn;
@@ -1108,6 +1111,7 @@ const DefaultBlockRenderer = ({
         revealComponent ?? null,
         revealDurationMs ?? 0,
         linkAttrs,
+        onContentSettled,
       )}
     </div>
   );
@@ -1127,13 +1131,14 @@ const renderAstNode = (
   revealComponent: RevealComponent | null = null,
   revealDurationMs: number = 0,
   linkAttrs?: LinkAttrsFn,
+  onContentSettled?: () => void,
 ): React.ReactNode => {
   if (node.type === "text") {
     return node.value ?? "";
   }
 
   if (node.type === "inlineMath") {
-    return renderInlineMathNode(node, registry, key, allowInlineMath);
+    return renderInlineMathNode(node, registry, key, allowInlineMath, onContentSettled);
   }
 
   if (node.type === "root") {
@@ -1146,6 +1151,7 @@ const renderAstNode = (
         revealComponent,
         revealDurationMs,
         linkAttrs,
+        onContentSettled,
       ),
     );
   }
@@ -1170,6 +1176,7 @@ const renderAstNode = (
         null,
         revealDurationMs,
         linkAttrs,
+        onContentSettled,
       ),
     );
 
@@ -1216,6 +1223,7 @@ const renderAstNode = (
       revealComponent,
       revealDurationMs,
       linkAttrs,
+      onContentSettled,
     ),
   );
 
@@ -1245,6 +1253,7 @@ const renderInlineMathNode = (
   registry: PluginRegistry,
   key: string,
   allowInlineMath: boolean,
+  onContentSettled?: () => void,
 ): React.ReactNode => {
   const mathPlugin = registry.get("math") as MathInlinePlugin | undefined;
   if (!allowInlineMath || !mathPlugin?.component) {
@@ -1273,7 +1282,14 @@ const renderInlineMathNode = (
   };
 
   const InlineMath = mathPlugin.component;
-  return <InlineMath key={`${key}.math`} node={inlineNode} isStreaming={false} />;
+  return (
+    <InlineMath
+      key={`${key}.math`}
+      node={inlineNode}
+      isStreaming={false}
+      onContentSettled={onContentSettled}
+    />
+  );
 };
 
 const toReactProps = (
