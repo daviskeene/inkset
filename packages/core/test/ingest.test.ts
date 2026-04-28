@@ -63,6 +63,17 @@ describe("splitBlocks", () => {
     expect(blocks[0]).toContain("\\end{equation}");
     expect(blocks[1]).toBe("After");
   });
+
+  it("treats standalone display math fences as block boundaries without blank lines", () => {
+    const doc =
+      "The scalar Cauchy transform is defined as\n$$\nG_{\\mu}(\\zeta):=\\int_{\\mathbb{R}}\\frac{\\mu(\\mathrm{d}\\xi)}{\\zeta-\\xi}.\n$$\nFor a noncommutative random variable";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual([
+      "The scalar Cauchy transform is defined as",
+      "$$\nG_{\\mu}(\\zeta):=\\int_{\\mathbb{R}}\\frac{\\mu(\\mathrm{d}\\xi)}{\\zeta-\\xi}.\n$$",
+      "For a noncommutative random variable",
+    ]);
+  });
 });
 
 describe("repair", () => {
