@@ -103,7 +103,7 @@ const INLINE_MATH_PLACEHOLDER_RE = /\uE000INKSET_INLINE_MATH_(\d+)\uE001/g;
 
 const protectInlineMath = (raw: string): ProtectedInlineMath => {
   const math: string[] = [];
-  let markdown = protectInlineMathInText(raw, math);
+  const markdown = protectInlineMathInText(raw, math);
 
   return { markdown, math };
 };
