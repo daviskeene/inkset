@@ -1129,7 +1129,11 @@ const renderAstNode = (
   linkAttrs?: LinkAttrsFn,
 ): React.ReactNode => {
   if (node.type === "text") {
-    return renderTextNode(node, registry, key, allowInlineMath);
+    return node.value ?? "";
+  }
+
+  if (node.type === "inlineMath") {
+    return renderInlineMathNode(node, registry, key, allowInlineMath);
   }
 
   if (node.type === "root") {
@@ -1236,56 +1240,40 @@ const extractTextFromChildren = (children: EnrichedNode["children"] | undefined)
 const isWhitespaceTextNode = (node: EnrichedNode): boolean =>
   node.type === "text" && typeof node.value === "string" && node.value.trim() === "";
 
-const renderTextNode = (
+const renderInlineMathNode = (
   node: EnrichedNode,
   registry: PluginRegistry,
   key: string,
   allowInlineMath: boolean,
 ): React.ReactNode => {
-  const text = node.value ?? "";
-  if (!allowInlineMath || !text.includes("$")) {
-    return text;
-  }
-
   const mathPlugin = registry.get("math") as MathInlinePlugin | undefined;
-  if (!mathPlugin?.component) {
-    return text;
+  if (!allowInlineMath || !mathPlugin?.component) {
+    return `$${node.value ?? ""}$`;
   }
 
-  const segments = splitInlineMath(text);
-  if (!segments.some((segment) => segment.type === "math")) {
-    return text;
-  }
-
-  return segments.map((segment, index) => {
-    if (segment.type === "text") {
-      return <React.Fragment key={`${key}.text.${index}`}>{segment.value}</React.Fragment>;
-    }
-
-    const inlineNode: EnrichedNode = {
-      type: "element",
-      tagName: "span",
-      blockId: node.blockId,
-      blockType: node.blockType,
-      transformedBy: "math",
-      pluginData: {
-        latex: segment.value,
-        displayMode: false,
-        renderer: mathPlugin.rendererName ?? "katex",
+  const inlineNode: EnrichedNode = {
+    type: "element",
+    tagName: "span",
+    blockId: node.blockId,
+    blockType: node.blockType,
+    transformedBy: "math",
+    pluginData: {
+      latex: node.value ?? "",
+      displayMode: false,
+      renderer: mathPlugin.rendererName ?? "katex",
+    },
+    children: [
+      {
+        type: "text",
+        value: node.value ?? "",
+        blockId: node.blockId,
+        blockType: node.blockType,
       },
-      children: [
-        {
-          type: "text",
-          value: segment.value,
-          blockId: node.blockId,
-          blockType: node.blockType,
-        },
-      ],
-    };
+    ],
+  };
 
-    const InlineMath = mathPlugin.component;
-    return <InlineMath key={`${key}.math.${index}`} node={inlineNode} isStreaming={false} />;
-  });
+  const InlineMath = mathPlugin.component;
+  return <InlineMath key={`${key}.math`} node={inlineNode} isStreaming={false} />;
 };
 
 const toReactProps = (
@@ -1369,56 +1357,6 @@ const collectShaderTokens = (
   for (const child of node.children) {
     collectShaderTokens(child as EnrichedNode, block, durationMs, out);
   }
-};
-
-type InlineMathSegment = { type: "text"; value: string } | { type: "math"; value: string };
-
-const splitInlineMath = (text: string): InlineMathSegment[] => {
-  const segments: InlineMathSegment[] = [];
-  let cursor = 0;
-
-  while (cursor < text.length) {
-    const start = findInlineMathDelimiter(text, cursor);
-    if (start === -1) {
-      segments.push({ type: "text", value: text.slice(cursor) });
-      break;
-    }
-
-    const end = findInlineMathDelimiter(text, start + 1);
-    if (end === -1) {
-      segments.push({ type: "text", value: text.slice(cursor) });
-      break;
-    }
-
-    if (start > cursor) {
-      segments.push({ type: "text", value: text.slice(cursor, start) });
-    }
-
-    const value = text.slice(start + 1, end).trim();
-    if (value) {
-      segments.push({ type: "math", value });
-    } else {
-      segments.push({ type: "text", value: "$$" });
-    }
-
-    cursor = end + 1;
-  }
-
-  return segments;
-};
-
-const findInlineMathDelimiter = (text: string, fromIndex: number): number => {
-  for (let index = fromIndex; index < text.length; index++) {
-    if (text[index] !== "$") continue;
-    if (text[index - 1] === "\\") continue;
-    if (text[index + 1] === "$") {
-      index += 1;
-      continue;
-    }
-    return index;
-  }
-
-  return -1;
 };
 
 export type LinkAttrsFn = (
