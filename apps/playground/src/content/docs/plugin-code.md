@@ -20,6 +20,19 @@ const codePlugin = createCodePlugin({
 <Inkset content={markdown} plugins={[codePlugin]} />;
 ```
 
+## Example
+
+```tsx
+import { Inkset } from "@inkset/react";
+import { createCodePlugin } from "@inkset/code";
+
+const plugins = [createCodePlugin({ theme: "github-dark" })];
+
+export function Message({ text, streaming }: { text: string; streaming: boolean }) {
+  return <Inkset content={text} streaming={streaming} plugins={plugins} />;
+}
+```
+
 ## Options
 
 | Option          | Type      | Default         | What it does                                            |

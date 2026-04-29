@@ -53,6 +53,21 @@ describe("splitBlocks", () => {
     expect(blocks).toEqual(["Consequently", "$$q-p=2,\\qquad p+q=2^{m-1}.$$", "Thus $p=1$."]);
   });
 
+  it("does not split display-math examples inside inline code spans", () => {
+    const doc = "The plugin claims display-math blocks such as `$$...$$`.";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual(["The plugin claims display-math blocks such as `$$...$$`."]);
+  });
+
+  it("does not split display-math examples inside multi-backtick code spans", () => {
+    const doc =
+      "- **Syntax repair.** Unterminated `**bold**`, `` `code` ``, `[links]()`, `$$math$$`, and fenced code blocks are auto-closed.";
+    const blocks = splitBlocks(doc);
+    expect(blocks).toEqual([
+      "- **Syntax repair.** Unterminated `**bold**`, `` `code` ``, `[links]()`, `$$math$$`, and fenced code blocks are auto-closed.",
+    ]);
+  });
+
   it("handles multiple consecutive blank lines", () => {
     const blocks = splitBlocks("A\n\n\n\nB");
     expect(blocks).toEqual(["A", "B"]);

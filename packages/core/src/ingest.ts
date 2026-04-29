@@ -252,10 +252,36 @@ const findDisplayMathFence = (line: string, fromIndex: number): number => {
   for (let index = fromIndex; index < line.length - 1; index++) {
     if (line[index] !== "$" || line[index + 1] !== "$") continue;
     if (line[index - 1] === "\\") continue;
+    if (isInsideInlineCodeSpan(line, index)) continue;
     return index;
   }
 
   return -1;
+};
+
+const isInsideInlineCodeSpan = (line: string, targetIndex: number): boolean => {
+  let cursor = 0;
+
+  while (cursor < targetIndex) {
+    if (line[cursor] !== "`") {
+      cursor++;
+      continue;
+    }
+
+    let tickCount = 1;
+    while (line[cursor + tickCount] === "`") {
+      tickCount++;
+    }
+
+    const delimiter = "`".repeat(tickCount);
+    const end = line.indexOf(delimiter, cursor + tickCount);
+    if (end === -1) return false;
+    if (targetIndex > cursor && targetIndex < end) return true;
+
+    cursor = end + tickCount;
+  }
+
+  return false;
 };
 
 // ── Syntax repair ──────────────────────────────────────────────────

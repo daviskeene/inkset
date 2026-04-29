@@ -28,6 +28,18 @@ sequenceDiagram
 ```
 ````
 
+## Example
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant App
+  participant Inkset
+  User->>App: send markdown
+  App->>Inkset: stream tokens
+  Inkset-->>App: stable rendered blocks
+```
+
 ## Options
 
 | Option       | Type      | Default     | What it does                                                      |

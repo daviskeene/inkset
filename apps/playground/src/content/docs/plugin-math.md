@@ -28,6 +28,18 @@ The plugin claims display-math blocks such as `$$...$$`.
 
 Inline math still works in the React renderer, but it is not claimed as a block by the plugin contract.
 
+## Example
+
+Inline math stays in prose: $E = mc^2$ and $\nabla \cdot \vec{E} = \rho / \varepsilon_0$.
+
+$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
+
+$$
+\frac{d}{dx}\left(\int_a^x f(t)\,dt\right)=f(x)
+$$
+
 ## Options
 
 | Option         | Type                              | Default    | What it does                                  |
