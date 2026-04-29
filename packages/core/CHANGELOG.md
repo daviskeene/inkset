@@ -1,5 +1,11 @@
 # @inkset/core
 
+## 0.1.5
+
+### Patch Changes
+
+- 622bed8: Ignore display-math fence examples inside inline code spans when splitting markdown blocks.
+
 ## 0.1.4
 
 ### Patch Changes
