@@ -16,6 +16,15 @@ import { createTablePlugin } from "@inkset/table";
 <Inkset content={markdown} plugins={[createTablePlugin()]} />;
 ```
 
+## Example
+
+| Plugin            | Input it claims       | Rendered output                |
+| ----------------- | --------------------- | ------------------------------ |
+| `@inkset/code`    | fenced code blocks    | highlighted code with copy     |
+| `@inkset/math`    | display math blocks   | KaTeX-rendered equations       |
+| `@inkset/diagram` | `mermaid` code fences | SVG diagrams                   |
+| `@inkset/table`   | markdown tables       | responsive table with CSV copy |
+
 ## Options
 
 | Option         | Type                              | Default        | What it does                                    |

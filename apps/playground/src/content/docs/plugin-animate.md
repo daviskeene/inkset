@@ -31,6 +31,12 @@ const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });
 />;
 ```
 
+## Example
+
+The preview below streams a short sentence through the built-in `ink-dither` reveal configuration.
+
+<!-- docs-example:animate -->
+
 ## Exports
 
 | Export                  | What it does                                             |

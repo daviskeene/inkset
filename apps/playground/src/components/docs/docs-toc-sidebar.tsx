@@ -9,10 +9,6 @@ export const DocsTocSidebar = ({ activeSlug }: { activeSlug: string }) => {
     <nav
       className="pg-docs-toc-nav"
       style={{
-        position: "sticky",
-        top: 68,
-        maxHeight: "calc(100vh - 80px)",
-        overflowY: "auto",
         padding: "44px 20px 32px 0",
       }}
     >

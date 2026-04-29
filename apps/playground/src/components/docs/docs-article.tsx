@@ -12,6 +12,7 @@ import type { ThemeKey } from "../../lib/themes";
 import type { DocsEntry } from "../../lib/docs-nav";
 import type { DocsPage } from "../../lib/docs-content";
 import { slugifyHeading } from "../../lib/docs-slug";
+import { DocsAnimateExample } from "./docs-plugin-examples";
 
 // Per-theme plugin bundles — shiki and mermaid need explicit themes so a
 // dark code block on a light page doesn't end up as dark-on-dark.
@@ -63,6 +64,7 @@ const LEDE_THEME: InksetTheme = {
 
 const BODY_FONT = '"Libre Franklin", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif';
 const ZERO_BLOCK_SPACING: BlockSpacing = { default: 0 };
+const ANIMATE_EXAMPLE_MARKER = "<!-- docs-example:animate -->";
 const DOCS_BLOCK_SPACING: BlockSpacing = {
   default: 8,
   blocks: {
@@ -112,6 +114,8 @@ export const DocsArticle = ({
     ],
     [themeKey],
   );
+  const bodyParts =
+    page.slug === "plugin-animate" ? page.body.split(ANIMATE_EXAMPLE_MARKER) : [page.body];
 
   // Inkset wants a width in px. We observe the column's width so the layout
   // reflows in lockstep with the viewport.
@@ -262,20 +266,26 @@ export const DocsArticle = ({
       )}
 
       <div className="pg-docs-body" style={{ minWidth: 0, color: "var(--pg-text-primary)" }}>
-        <Inkset
-          key={page.slug}
-          content={page.body}
-          plugins={plugins}
-          theme={INKSET_THEME}
-          width={width}
-          font={BODY_FONT}
-          fontSize={15}
-          lineHeight={26}
-          blockSpacing={DOCS_BLOCK_SPACING}
-          headingSizes={[2, 1.6, 1.15, 1]}
-          headingWeights={[600, 600, 600, 600]}
-          headingLineHeights={[1.15, 1.2, 1.25, 1.35]}
-        />
+        {bodyParts.map((part, index) => (
+          <React.Fragment key={`${page.slug}-body-${index}`}>
+            {part.trim() ? (
+              <Inkset
+                content={part}
+                plugins={plugins}
+                theme={INKSET_THEME}
+                width={width}
+                font={BODY_FONT}
+                fontSize={15}
+                lineHeight={26}
+                blockSpacing={DOCS_BLOCK_SPACING}
+                headingSizes={[2, 1.6, 1.15, 1]}
+                headingWeights={[600, 600, 600, 600]}
+                headingLineHeights={[1.15, 1.2, 1.25, 1.35]}
+              />
+            ) : null}
+            {index < bodyParts.length - 1 ? <DocsAnimateExample width={width} /> : null}
+          </React.Fragment>
+        ))}
       </div>
 
       {prev || next ? (

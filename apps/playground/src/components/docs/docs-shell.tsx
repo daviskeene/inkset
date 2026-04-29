@@ -81,6 +81,9 @@ export const DocsShell = ({
         <aside
           className={`pg-docs-toc${tocOpen ? " is-open" : ""}`}
           aria-label="Documentation navigation"
+          style={{
+            alignSelf: "stretch",
+          }}
         >
           {/* Drawer header — only visible when the TOC is in drawer mode. */}
           <div
@@ -149,7 +152,7 @@ export const DocsShell = ({
             position: "sticky",
             top: 68,
             alignSelf: "start",
-            height: "calc(100vh - 80px)",
+            maxHeight: "calc(100vh - 80px)",
             padding: "48px 0 32px",
             overflowY: "auto",
             minWidth: 0,
