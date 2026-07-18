@@ -31,6 +31,7 @@ export { DEFAULT_BLOCK_SPACING, getNodeBlockKind, resolveBlockGap } from "./bloc
 export { PluginRegistry } from "./plugin";
 export { Ingest, splitBlocks, repair } from "./ingest";
 export { createBlocks, parseBlock, parseBlocks, extractText } from "./parse";
+export type { ParseCacheEntry, ParseResult } from "./parse";
 export { transformBlocks, retransformWidthSensitive } from "./transform";
 export {
   MeasureLayer,

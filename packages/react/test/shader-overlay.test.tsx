@@ -20,7 +20,11 @@ const flushMicrotasks = async (): Promise<void> => {
 const waitFor = async (predicate: () => boolean, message: string): Promise<void> => {
   for (let i = 0; i < 20; i += 1) {
     if (predicate()) return;
-    await flushMicrotasks();
+    // Streamed appends run at rAF cadence (real timers here), so wait a beat
+    // of real time rather than only draining microtasks.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
   }
   throw new Error(message);
 };

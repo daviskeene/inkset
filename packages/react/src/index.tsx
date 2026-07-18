@@ -783,7 +783,12 @@ export type UseInksetResult = {
   containerRef: React.RefObject<HTMLDivElement | null>;
   appendToken: (token: string) => Promise<void>;
   endStream: () => Promise<void>;
-  setContent: (content: string) => Promise<void>;
+  /**
+   * Replace the whole document. `{ streaming: true }` keeps the pipeline's
+   * ingest open so later `appendToken()` calls extend it incrementally;
+   * finish with `endStream()`. Default settles the content immediately.
+   */
+  setContent: (content: string, options?: { streaming?: boolean }) => Promise<void>;
   /**
    * Sync accessor for a glyph-position lookup used by the reveal layer. Only
    * returns non-null once the pipeline has initialized and pretext has
@@ -899,8 +904,8 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     await pipelineRef.current?.endStream();
   }, []);
 
-  const setContent = useCallback(async (content: string) => {
-    await pipelineRef.current?.setContent(content);
+  const setContent = useCallback(async (content: string, options?: { streaming?: boolean }) => {
+    await pipelineRef.current?.setContent(content, options);
   }, []);
 
   const getGlyphLookup = useCallback(
@@ -1042,7 +1047,6 @@ const BlockRenderer = memo(
         style={style}
         data-block-id={block.blockId}
         data-block-type={node.blockType}
-        role="article"
       >
         {PluginComponent ? (
           <PluginComponent
@@ -1492,8 +1496,16 @@ export const Inkset = ({
   style,
   children,
 }: InksetProps) => {
-  const { state, registry, pipelineVersion, containerRef, setContent, endStream, getGlyphLookup } =
-    useInkset({
+  const {
+    state,
+    registry,
+    pipelineVersion,
+    containerRef,
+    appendToken,
+    setContent,
+    endStream,
+    getGlyphLookup,
+  } = useInkset({
       plugins,
       width,
       font,
@@ -1703,6 +1715,10 @@ export const Inkset = ({
     content?: string;
     pipelineVersion?: number;
   }>({});
+  // Whether the pipeline's ingest is open (content was submitted with
+  // `streaming: true` and endStream hasn't run). Gates the incremental
+  // appendToken path: appending to a closed ingest is a silent no-op.
+  const pipelineStreamOpenRef = useRef(false);
   const [resolvedHeights, setResolvedHeights] = useState<Map<number, ResolvedBlockHeight>>(
     () => new Map(),
   );
@@ -1743,33 +1759,47 @@ export const Inkset = ({
 
     const prevContent = prevContentRef.current.content;
     const prevPipelineVersion = prevContentRef.current.pipelineVersion;
-    const grewMonotonically = prevContent !== undefined && effectiveContent.startsWith(prevContent);
-    const continuingRevealSession = streaming || streamSessionActiveRef.current;
-    const replacedDocument =
-      prevPipelineVersion !== pipelineVersion ||
-      prevContent === undefined ||
-      !grewMonotonically ||
-      (!continuingRevealSession && effectiveContent !== prevContent);
-
-    if (replacedDocument) {
-      observedHeightsRef.current = new Map();
-      pendingHeightUpdatesRef.current.clear();
-      setResolvedHeights(new Map());
-      // Reset the reveal offsets map on a hard content replacement. Without
-      // this, a fresh document would inherit stale per-block offsets and
-      // suppress the reveal animation entirely.
-      revealedOffsetsRef.current = new Map();
-    }
+    const grewMonotonically =
+      prevPipelineVersion === pipelineVersion &&
+      prevContent !== undefined &&
+      effectiveContent.startsWith(prevContent);
 
     prevContentRef.current = { content: effectiveContent, pipelineVersion };
-    setContent(effectiveContent);
-  }, [effectiveContent, pipelineVersion, setContent, streaming]);
+
+    // Monotonic growth while the pipeline's ingest is still open: feed only
+    // the delta through the incremental path. Frozen blocks keep their
+    // parse/transform/measure caches instead of re-running the whole
+    // document cold on every update — this is the pipeline the architecture
+    // is built around.
+    if (grewMonotonically && pipelineStreamOpenRef.current) {
+      appendToken(effectiveContent.slice(prevContent.length));
+      return;
+    }
+
+    // Document replacement (first content, rebuilt pipeline, non-monotonic
+    // edit, or static content change outside a stream session).
+    observedHeightsRef.current = new Map();
+    pendingHeightUpdatesRef.current.clear();
+    setResolvedHeights(new Map());
+    // Reset the reveal offsets map on a hard content replacement. Without
+    // this, a fresh document would inherit stale per-block offsets and
+    // suppress the reveal animation entirely.
+    revealedOffsetsRef.current = new Map();
+
+    pipelineStreamOpenRef.current = streaming;
+    setContent(effectiveContent, { streaming });
+  }, [effectiveContent, pipelineVersion, appendToken, setContent, streaming]);
 
   useEffect(() => {
-    if (!streaming && prevContentRef.current.content !== undefined) {
-      endStream();
-    }
-  }, [streaming, endStream]);
+    if (streaming) return;
+    if (prevContentRef.current.content === undefined) return;
+    // While the reveal gate is still draining, the pipeline must stay open so
+    // the tail chunks append incrementally; the drain's final emit re-runs
+    // this effect with displayedContent caught up to content.
+    if (revealConfig.throttle && content !== undefined && displayedContent !== content) return;
+    pipelineStreamOpenRef.current = false;
+    endStream();
+  }, [streaming, endStream, displayedContent, content, revealConfig.throttle]);
 
   useEffect(() => {
     const container = containerRef.current;

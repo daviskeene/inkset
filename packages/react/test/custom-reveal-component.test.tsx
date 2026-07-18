@@ -16,6 +16,14 @@ const flushMicrotasks = async (): Promise<void> => {
   });
 };
 
+// Streamed appends run through the pipeline at rAF cadence; give the frame a
+// chance to fire (real timers in this suite).
+const awaitFrame = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  });
+};
+
 describe("Inkset custom reveal components", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -109,12 +117,12 @@ describe("Inkset custom reveal components", () => {
     await act(async () => {
       root.render(<Inkset content="Alpha beta" streaming width={320} reveal={reveal} />);
     });
-    await flushMicrotasks();
+    await awaitFrame();
 
     await act(async () => {
       root.render(<Inkset content="Alpha beta gamma" streaming width={320} reveal={reveal} />);
     });
-    await flushMicrotasks();
+    await awaitFrame();
 
     expect(mountedTokens).toEqual(["Alpha", "beta", "gamma"]);
   });

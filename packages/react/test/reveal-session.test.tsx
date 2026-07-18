@@ -214,6 +214,10 @@ describe("Inkset reveal session", () => {
     await act(async () => {
       root.render(<Inkset content="Alpha beta " streaming width={320} reveal={reveal} />);
     });
+    // The appended delta renders on the next animation frame.
+    await act(async () => {
+      vi.advanceTimersByTime(20);
+    });
     await flushMicrotasks();
 
     const secondSpan = container.querySelector<HTMLElement>("[data-inkset-reveal-token]");

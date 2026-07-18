@@ -58,6 +58,11 @@ export class Ingest {
       }
     } else if (newCount === this.lastBlockCount && newCount > 0) {
       events.push({ type: "block:update", blockId: newCount - 1 });
+    } else if (newCount < this.lastBlockCount && newCount > 0) {
+      // Blocks merged (e.g. a fence opener swallowing what were separate
+      // blocks). Without an event the pipeline never schedules an update and
+      // the display goes stale until the next token.
+      events.push({ type: "block:update", blockId: newCount - 1 });
     }
 
     this.lastBlockCount = newCount;
