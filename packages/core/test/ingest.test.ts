@@ -309,3 +309,16 @@ describe("Ingest", () => {
     expect(ingest.isStreaming).toBe(true);
   });
 });
+
+describe("Ingest block-merge events", () => {
+  it("emits an update when appending merges blocks (count decrease)", () => {
+    const ingest = new Ingest();
+    // Unclosed inline code: the $$ pair is live, so this splits into blocks.
+    ingest.append("a `$$b$$");
+    // Closing the code span protects the $$, merging everything into one block.
+    const events = ingest.append("` c");
+
+    expect(events.length).toBeGreaterThan(0);
+    expect(events).toContainEqual({ type: "block:update", blockId: 0 });
+  });
+});

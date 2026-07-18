@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseBlock, extractText } from "../src/parse.js";
+import { createBlocks, parseBlock, parseBlocks, extractText } from "../src/parse.js";
+import type { ParseCacheEntry } from "../src/parse.js";
 import type { ASTNode, Block } from "../src/types.js";
 
 const makeBlock = (raw: string): Block => ({
@@ -74,5 +75,47 @@ describe("parseBlock", () => {
 
     expect(extractText(node)).toContain("INKSETINLINEMATH0X");
     expect(collectNodes(node, "inlineMath").map((math) => math.value)).toEqual(["x_y"]);
+  });
+});
+
+describe("createBlocks type detection", () => {
+  it("treats tag-shaped starts as html", () => {
+    expect(createBlocks(["<div>hi</div>"])[0].type).toBe("html");
+    expect(createBlocks(["</p>"])[0].type).toBe("html");
+    expect(createBlocks(["<br/>"])[0].type).toBe("html");
+    expect(createBlocks(["<!-- note -->"])[0].type).toBe("html");
+  });
+
+  it("keeps non-tag text starting with < as a paragraph", () => {
+    expect(createBlocks(["<3 this idea"])[0].type).toBe("paragraph");
+    expect(createBlocks(["< 5 items remain"])[0].type).toBe("paragraph");
+  });
+});
+
+describe("parseBlocks cache", () => {
+  it("re-parses a frozen block when its raw text changes", () => {
+    const cache = new Map<number, ParseCacheEntry>();
+    const [original] = createBlocks(["See \\eqref{decay} for details."]);
+    original.hot = false;
+    parseBlocks([original], cache);
+
+    // repair() can rewrite frozen blocks (e.g. \eqref resolving once a later
+    // \label arrives); the cache must notice the raw change and re-parse.
+    const rewritten: Block = { ...original, raw: "See $(1)$ for details." };
+    const { nodes, parsedBlockIds } = parseBlocks([rewritten], cache);
+
+    expect(parsedBlockIds.has(original.id)).toBe(true);
+    expect(extractText(nodes[0])).not.toContain("\\eqref");
+  });
+
+  it("reuses the cached AST for frozen blocks with unchanged raw text", () => {
+    const cache = new Map<number, ParseCacheEntry>();
+    const [block] = createBlocks(["Stable paragraph."]);
+    block.hot = false;
+    const first = parseBlocks([block], cache);
+    const second = parseBlocks([block], cache);
+
+    expect(second.parsedBlockIds.size).toBe(0);
+    expect(second.nodes[0]).toBe(first.nodes[0]);
   });
 });

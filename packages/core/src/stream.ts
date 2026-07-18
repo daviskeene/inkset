@@ -4,11 +4,10 @@ import type {
   LayoutTree,
   MeasuredBlock,
   InksetOptions,
-  ASTNode,
   PluginContext,
 } from "./types";
 import { Ingest, splitBlocks } from "./ingest";
-import { createBlocks, parseBlocks, extractText } from "./parse";
+import { createBlocks, parseBlocks, extractText, type ParseCacheEntry } from "./parse";
 import { transformBlocks, retransformWidthSensitive } from "./transform";
 import { MeasureLayer } from "./measure";
 import { computeLayout, getLayoutHeight } from "./layout";
@@ -50,6 +49,10 @@ export type PipelineMetrics = {
   lastMeasureMs: number;
   lastLayoutMs: number;
   totalPipelineMs: number;
+  /**
+   * Fraction of blocks in the last pipeline run whose measurements were
+   * reused from the block-level measure cache (0..1).
+   */
   cacheHitRate: number;
 };
 
@@ -60,10 +63,12 @@ export class StreamingPipeline {
   private registry = new PluginRegistry();
   private measureLayer: MeasureLayer;
 
-  private parseCache = new Map<number, ASTNode>();
+  private parseCache = new Map<number, ParseCacheEntry>();
   private transformCache = new Map<number, EnrichedNode>();
   private hyphenCache = new Map<number, { source: EnrichedNode; hyphenated: EnrichedNode }>();
-  private measureCache = new Map<number, MeasuredBlock>();
+  // Keyed by blockId; entries are only valid for the same node identity at the
+  // same container width, so both are stored alongside the measurement.
+  private measureCache = new Map<number, { width: number; block: MeasuredBlock }>();
 
   private currentNodes: EnrichedNode[] = [];
   private currentMeasured: MeasuredBlock[] = [];
@@ -104,6 +109,7 @@ export class StreamingPipeline {
     cacheHitRate: 0,
   };
   private tick = 0;
+  private lastMeasureCacheHits = 0;
 
   private listeners: Set<(state: PipelineState) => void> = new Set();
 
@@ -225,12 +231,20 @@ export class StreamingPipeline {
   }
 
   async endStream(): Promise<void> {
+    // Already-closed ingest means the document was fully settled by a prior
+    // setContent()/endStream(); re-running the pipeline would be a no-op.
+    if (!this.ingest.isStreaming) return;
     this.ingest.end();
     this.cancelPendingUpdate();
     await this.runPipeline();
   }
 
-  async setContent(content: string): Promise<void> {
+  /**
+   * Replace the whole document. With `streaming: true` the ingest stays open
+   * so subsequent `appendToken()` calls extend this content incrementally;
+   * call `endStream()` to settle. Default closes the stream (settled content).
+   */
+  async setContent(content: string, options?: { streaming?: boolean }): Promise<void> {
     this.cancelPendingUpdate();
     this.parseCache.clear();
     this.transformCache.clear();
@@ -241,7 +255,9 @@ export class StreamingPipeline {
     this.currentLayout = [];
     this.ingest.reset();
     this.ingest.append(content);
-    this.ingest.end();
+    if (!options?.streaming) {
+      this.ingest.end();
+    }
     await this.runPipeline();
   }
 
@@ -378,6 +394,7 @@ export class StreamingPipeline {
     this.metrics.lastTransformMs = performance.now() - transformStart;
 
     const measureStart = performance.now();
+    this.lastMeasureCacheHits = 0;
     this.currentMeasured = await this.measureBlocks(this.currentNodes, this.containerWidth);
     this.metrics.lastMeasureMs = performance.now() - measureStart;
 
@@ -390,7 +407,7 @@ export class StreamingPipeline {
 
     this.metrics.totalPipelineMs = performance.now() - pipelineStart;
     this.metrics.cacheHitRate =
-      this.measureLayer.cacheStats.size / Math.max(1, this.measureLayer.cacheStats.maxSize);
+      this.currentNodes.length > 0 ? this.lastMeasureCacheHits / this.currentNodes.length : 0;
 
     this.notify();
   }
@@ -451,9 +468,13 @@ export class StreamingPipeline {
     const measured: MeasuredBlock[] = [];
 
     for (const node of nodes) {
+      // Node identity is the validity key: frozen blocks keep the same
+      // enriched-node object across ticks, while the hot block (and any
+      // frozen block re-parsed after a repair rewrite) gets a fresh one.
       const cached = this.measureCache.get(node.blockId);
-      if (cached && !this.ingest.isStreaming) {
-        measured.push(cached);
+      if (cached && cached.block.node === node && cached.width === containerWidth) {
+        this.lastMeasureCacheHits++;
+        measured.push(cached.block);
         continue;
       }
 
@@ -478,7 +499,7 @@ export class StreamingPipeline {
         }
       }
 
-      this.measureCache.set(node.blockId, result);
+      this.measureCache.set(node.blockId, { width: containerWidth, block: result });
       measured.push(result);
     }
 

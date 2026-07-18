@@ -17,6 +17,11 @@ const CODE_HEADER_HEIGHT = 24;
 const CODE_PADDING = 24;
 const CODE_MIN_HEIGHT = 48;
 const COPY_FEEDBACK_DURATION_MS = 2000;
+// While a code block streams, re-highlighting the whole block on every token
+// is the heaviest per-frame work in the pipeline. Throttle to this interval
+// (leading + trailing, so the latest code always gets highlighted) and let
+// the settled render highlight immediately.
+const STREAMING_HIGHLIGHT_THROTTLE_MS = 120;
 
 // ── Shiki lazy loading ─────────────────────────────────────────────
 
@@ -121,33 +126,47 @@ const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps
   const showLangLabel = (node.pluginData?.showLangLabel as boolean) ?? true;
   const wrapLongLines = (node.pluginData?.wrapLongLines as boolean) ?? false;
 
+  const lastHighlightAtRef = useRef(0);
+
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const themes = lightTheme ? [theme, lightTheme] : [theme];
 
-    getHighlighter(themes).then((highlighter) => {
-      if (cancelled) return;
-      try {
-        setHtmlDark(highlighter.codeToHtml(code, { lang, theme }));
-        if (lightTheme) {
-          setHtmlLight(highlighter.codeToHtml(code, { lang, theme: lightTheme }));
-        } else {
+    const highlight = () => {
+      lastHighlightAtRef.current = Date.now();
+      getHighlighter(themes).then((highlighter) => {
+        if (cancelled) return;
+        try {
+          setHtmlDark(highlighter.codeToHtml(code, { lang, theme }));
+          if (lightTheme) {
+            setHtmlLight(highlighter.codeToHtml(code, { lang, theme: lightTheme }));
+          } else {
+            setHtmlLight(null);
+          }
+        } catch (err: unknown) {
+          // Fall through to the raw <pre> below when shiki can't highlight.
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[inkset/code] Highlight failed, falling back to plain text:", err);
+          }
+          setHtmlDark(null);
           setHtmlLight(null);
         }
-      } catch (err: unknown) {
-        // Fall through to the raw <pre> below when shiki can't highlight.
-        if (process.env.NODE_ENV !== "production") {
-          console.debug("[inkset/code] Highlight failed, falling back to plain text:", err);
-        }
-        setHtmlDark(null);
-        setHtmlLight(null);
-      }
-    });
+      });
+    };
+
+    const sinceLast = Date.now() - lastHighlightAtRef.current;
+    if (!isStreaming || sinceLast >= STREAMING_HIGHLIGHT_THROTTLE_MS) {
+      highlight();
+    } else {
+      timer = setTimeout(highlight, STREAMING_HIGHLIGHT_THROTTLE_MS - sinceLast);
+    }
 
     return () => {
       cancelled = true;
+      if (timer !== null) clearTimeout(timer);
     };
-  }, [code, lang, theme, lightTheme]);
+  }, [code, lang, theme, lightTheme, isStreaming]);
 
   useLayoutEffect(() => {
     if (isStreaming) return;

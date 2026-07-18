@@ -34,7 +34,9 @@ const detectBlockType = (raw: string): BlockType => {
   if (trimmed.startsWith("|")) return "table";
   if (trimmed.match(/^[-*+]\s/) || trimmed.match(/^\d+\.\s/)) return "list";
   if (trimmed.startsWith(">")) return "blockquote";
-  if (trimmed.startsWith("<")) return "html";
+  // Only tag-shaped starts count as HTML (`<div`, `</p>`, `<br/>`, `<!--`,
+  // `<!DOCTYPE`). A paragraph like "<3 this idea" stays a paragraph.
+  if (/^<(?:[a-zA-Z][a-zA-Z0-9-]*(?:[\s/>]|$)|\/[a-zA-Z]|!)/.test(trimmed)) return "html";
   if (trimmed.match(/^([-*_]){3,}\s*$/)) return "thematic-break";
 
   return "paragraph";
@@ -335,17 +337,31 @@ export type ParseResult = {
   parsedBlockIds: Set<number>;
 };
 
-/** Only re-parses hot or uncached blocks; frozen blocks reuse cached AST nodes. */
-export const parseBlocks = (blocks: readonly Block[], cache: Map<number, ASTNode>): ParseResult => {
+export type ParseCacheEntry = {
+  raw: string;
+  node: ASTNode;
+};
+
+/**
+ * Only re-parses hot, uncached, or content-changed blocks; frozen blocks with
+ * unchanged raw text reuse cached AST nodes. The raw-text check matters:
+ * `repair()` can rewrite a block after it froze (e.g. `\eqref{name}` resolving
+ * once a later `\label` arrives), so block index alone is not a valid cache key.
+ */
+export const parseBlocks = (
+  blocks: readonly Block[],
+  cache: Map<number, ParseCacheEntry>,
+): ParseResult => {
   const nodes: ASTNode[] = [];
   const parsedBlockIds = new Set<number>();
 
   for (const block of blocks) {
-    if (!block.hot && cache.has(block.id)) {
-      nodes.push(cache.get(block.id)!);
+    const cached = cache.get(block.id);
+    if (!block.hot && cached && cached.raw === block.raw) {
+      nodes.push(cached.node);
     } else {
       const node = parseBlock(block);
-      cache.set(block.id, node);
+      cache.set(block.id, { raw: block.raw, node });
       nodes.push(node);
       parsedBlockIds.add(block.id);
     }
