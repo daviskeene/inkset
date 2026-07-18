@@ -97,7 +97,9 @@ describe("smoke: <Inkset> zero-config integration", () => {
     }
 
     await act(async () => {
-      root.render(<Inkset content={DOC_STEPS[DOC_STEPS.length - 1]} streaming={false} width={480} />);
+      root.render(
+        <Inkset content={DOC_STEPS[DOC_STEPS.length - 1]} streaming={false} width={480} />,
+      );
     });
     await settle();
 
@@ -124,9 +126,7 @@ describe("smoke: <Inkset> zero-config integration", () => {
 
   it("mid-stream unclosed markdown renders repaired, not broken", async () => {
     await act(async () => {
-      root.render(
-        <Inkset content={"Some **bold text that has not clo"} streaming width={480} />,
-      );
+      root.render(<Inkset content={"Some **bold text that has not clo"} streaming width={480} />);
     });
     await settle();
 
