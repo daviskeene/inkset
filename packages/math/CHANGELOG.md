@@ -1,5 +1,12 @@
 # @inkset/math
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [e2e8c59]
+  - @inkset/core@0.1.6
+
 ## 0.1.5
 
 ### Patch Changes
