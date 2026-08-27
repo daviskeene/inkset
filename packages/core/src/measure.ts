@@ -34,8 +34,20 @@ const TABLE_HEADER_HEIGHT = 40;
 const TABLE_MIN_HEIGHT = 80;
 const LIST_ITEM_PADDING = 4;
 const BLOCKQUOTE_EXTRA_PADDING = 16;
-const THEMATIC_BREAK_HEIGHT = 24;
+// The default stylesheet renders <hr> as a 1px border with no margin.
+const THEMATIC_BREAK_HEIGHT = 1;
 const AVG_CHAR_WIDTH_RATIO = 0.6;
+
+/**
+ * Height for a block with no measurable text. Most such blocks (a scroll
+ * anchor, an HTML comment, a bare definitions block) render nothing and take
+ * no space, but a thematic break draws a rule, so it keeps its 1px — the
+ * layout drops the gap after zero-height blocks and must not do that here.
+ */
+const measureTextlessBlock = (node: EnrichedNode, maxWidth: number): Dimensions => ({
+  width: maxWidth,
+  height: node.blockType === "thematic-break" ? THEMATIC_BREAK_HEIGHT : 0,
+});
 
 export class LRUCache {
   private entries = new Map<string, CacheEntry>();
@@ -248,7 +260,7 @@ export class MeasureLayer {
         blockId: node.blockId,
         node,
         kind: getNodeBlockKind(node),
-        dimensions: { width: maxWidth, height: 0 },
+        dimensions: measureTextlessBlock(node, maxWidth),
       };
     }
 
@@ -435,7 +447,7 @@ export class MeasureLayer {
     }
 
     const text = extractText(measured.node);
-    if (!text) return { width: newWidth, height: 0 };
+    if (!text) return measureTextlessBlock(measured.node, newWidth);
 
     return this.measureBlockByType(measured.node, text, newWidth);
   }
