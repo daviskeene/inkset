@@ -243,6 +243,53 @@ const INKSET_STYLES = `
     color: var(--inkset-blockquote-text);
   }
 
+  /* Super/subscripts must not inflate the line box, or the DOM height of a
+     paragraph with a footnote marker drifts from the pretext estimate. */
+  :where(.inkset-root sup, .inkset-root sub) {
+    font-size: 0.75em;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+
+  :where(.inkset-root sup) {
+    top: -0.5em;
+  }
+
+  :where(.inkset-root sub) {
+    bottom: -0.25em;
+  }
+
+  :where(.inkset-root a[data-footnote-ref], .inkset-root a[data-footnote-backref]) {
+    text-decoration: none;
+  }
+
+  :where(.inkset-root section.footnotes) {
+    border-top: 1px solid var(--inkset-color-hr);
+    padding-top: 0.75em;
+  }
+
+  :where(.inkset-root section.footnotes ol) {
+    padding-left: var(--inkset-list-indent);
+  }
+
+  :where(.inkset-root section.footnotes li + li) {
+    margin-top: 0.25em;
+  }
+
+  /* remark's "Footnotes" heading is for assistive tech only. */
+  :where(.inkset-root section.footnotes .sr-only) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   :where(.inkset-root hr) {
     margin: 0;
     border: 0;
@@ -643,7 +690,9 @@ const resolveLayout = (
       height,
     };
 
-    if (index < layout.length - 1) {
+    // Mirrors computeLayout: a zero-height block (anchor, comment, bare
+    // definitions) takes no space and owes no gap to its successor.
+    if (index < layout.length - 1 && height > 0) {
       currentY += height + resolveBlockGap(block.kind, layout[index + 1].kind, blockSpacing);
     }
     return nextBlock;
@@ -1143,6 +1192,13 @@ const renderAstNode = (
 
   if (node.type === "inlineMath") {
     return renderInlineMathNode(node, registry, key, allowInlineMath, onContentSettled);
+  }
+
+  // The parse layer already converts or drops raw HTML; guard here too so a
+  // custom AST source can never turn a `raw`/`comment` node into a stray
+  // <div> (which is invalid inside <p> and forces a line break).
+  if (node.type === "raw" || node.type === "comment" || node.type === "doctype") {
+    return null;
   }
 
   if (node.type === "root") {

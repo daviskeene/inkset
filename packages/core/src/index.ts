@@ -5,6 +5,7 @@ export type {
   BlockSpacingPairRule,
   BlockSpacingValue,
   Block,
+  BlockReferences,
   BlockType,
   BuiltinBlockKind,
   Dimensions,
@@ -30,8 +31,15 @@ export { InksetError } from "./types";
 export { DEFAULT_BLOCK_SPACING, getNodeBlockKind, resolveBlockGap } from "./block-spacing";
 export { PluginRegistry } from "./plugin";
 export { Ingest, splitBlocks, repair } from "./ingest";
-export { createBlocks, parseBlock, parseBlocks, extractText } from "./parse";
-export type { ParseCacheEntry, ParseResult } from "./parse";
+export type { RepairOptions } from "./ingest";
+export {
+  collectDocumentReferences,
+  createBlocks,
+  parseBlock,
+  parseBlocks,
+  extractText,
+} from "./parse";
+export type { DocumentReferences, ParseCacheEntry, ParseResult } from "./parse";
 export { transformBlocks, retransformWidthSensitive } from "./transform";
 export {
   MeasureLayer,

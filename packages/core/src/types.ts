@@ -13,6 +13,8 @@ export type BlockType =
   | "blockquote"
   | "html"
   | "thematic-break"
+  /** The merged footnote definitions, rendered as GFM's footnote section. */
+  | "footnotes"
   | "custom";
 
 export type Properties = Record<string, unknown>;
@@ -33,6 +35,7 @@ export type BuiltinBlockKind =
   | "math"
   | "hr"
   | "html"
+  | "footnotes"
   | "unknown";
 
 export type BlockSpacingValue = {
@@ -52,12 +55,32 @@ export interface BlockSpacing {
   pairs?: BlockSpacingPairRule[];
 }
 
+/**
+ * Definitions from elsewhere in the document that a block needs at parse time.
+ * Blocks parse in isolation, so `[^1]` and `[text][ref]` can only resolve if
+ * the matching `[^1]: …` / `[ref]: …` lines are appended to the block's
+ * markdown; `createBlocks()` attaches them here.
+ */
+export type BlockReferences = {
+  /** Markdown source of the definitions to append before parsing. */
+  definitions: string;
+  /**
+   * Footnote labels in document order of first reference; the index + 1 is
+   * the number a reference renders with. Empty when the block cites none.
+   */
+  footnoteOrder: readonly string[];
+  /** Cache identity; the parse cache re-parses the block when this changes. */
+  key: string;
+};
+
 export type Block = {
   id: number;
   raw: string;
   type: BlockType;
   /** Whether this block is still receiving streaming tokens */
   hot: boolean;
+  /** Document-level definitions this block references, if any. */
+  references?: BlockReferences;
 };
 
 // ── AST types (post-parse) ─────────────────────────────────────────

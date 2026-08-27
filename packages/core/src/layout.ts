@@ -45,7 +45,11 @@ export const computeLayout = (
       shrinkwrapWidth: block.shrinkwrapWidth,
     });
 
-    if (i < measured.length - 1) {
+    // A zero-height block renders nothing (an HTML comment, a scroll anchor, a
+    // bare link-definition block), so it takes no vertical space at all: no
+    // height and no gap after it. The gap *before* it still applies, which is
+    // exactly the gap its visible predecessor owes the next visible block.
+    if (i < measured.length - 1 && height > 0) {
       y += height + resolveBlockGap(block.kind, measured[i + 1].kind, blockSpacing);
     }
   }

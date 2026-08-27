@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createBlocks, parseBlock, parseBlocks, extractText } from "../src/parse.js";
+import {
+  collectDocumentReferences,
+  createBlocks,
+  parseBlock,
+  parseBlocks,
+  extractText,
+} from "../src/parse.js";
 import type { ParseCacheEntry } from "../src/parse.js";
 import type { ASTNode, Block } from "../src/types.js";
 
@@ -117,5 +123,126 @@ describe("parseBlocks cache", () => {
 
     expect(second.parsedBlockIds.size).toBe(0);
     expect(second.nodes[0]).toBe(first.nodes[0]);
+  });
+});
+
+const parseDocument = (rawBlocks: string[]) => {
+  const { blocks, references } = collectDocumentReferences(rawBlocks);
+  return createBlocks(blocks, references).map((block) => ({ block, node: parseBlock(block) }));
+};
+
+const findElements = (node: ASTNode, tagName: string, out: ASTNode[] = []): ASTNode[] => {
+  if (node.type === "element" && node.tagName === tagName) out.push(node);
+  for (const child of node.children ?? []) findElements(child, tagName, out);
+  return out;
+};
+
+const frozen = (blocks: Block[]): Block[] => blocks.map((block) => ({ ...block, hot: false }));
+
+describe("document references", () => {
+  it("detects footnote definition blocks", () => {
+    expect(createBlocks(["[^1]: A note."])[0].type).toBe("footnotes");
+  });
+
+  it("resolves footnotes across blocks and numbers them in document order", () => {
+    const parsed = parseDocument([
+      "Ref A[^b] and B[^a].",
+      "Again[^a].",
+      "[^a]: Def a.",
+      "[^b]: Def **b**.",
+    ]);
+    expect(parsed.map((p) => p.block.type)).toEqual(["paragraph", "paragraph", "footnotes"]);
+
+    const refs0 = findElements(parsed[0].node, "a");
+    expect(refs0.map(extractText)).toEqual(["1", "2"]);
+    expect(refs0.map((a) => a.properties?.href)).toEqual([
+      "#user-content-fn-b",
+      "#user-content-fn-a",
+    ]);
+    expect(refs0[0].properties?.["data-footnote-ref"]).toBe("");
+    expect(refs0[0].properties?.["aria-describedby"]).toBe("footnote-label");
+    expect(findElements(parsed[0].node, "section")).toHaveLength(0);
+
+    expect(findElements(parsed[1].node, "a").map(extractText)).toEqual(["2"]);
+
+    const section = findElements(parsed[2].node, "section");
+    expect(section).toHaveLength(1);
+    expect(section[0].properties?.["data-footnotes"]).toBe("");
+    expect(findElements(section[0], "li").map((li) => li.properties?.id)).toEqual([
+      "user-content-fn-b",
+      "user-content-fn-a",
+    ]);
+    expect(findElements(section[0], "strong").map(extractText)).toEqual(["b"]);
+  });
+
+  it("renders nothing for unreferenced footnote definitions", () => {
+    const parsed = parseDocument(["Plain text.", "[^x]: unused"]);
+    expect(parsed[1].block.type).toBe("footnotes");
+    expect(parsed[1].node.children).toEqual([]);
+    expect(extractText(parsed[1].node)).toBe("");
+  });
+
+  it("ignores footnote references inside inline code", () => {
+    const parsed = parseDocument(["Use `[^1]` syntax.", "[^1]: def"]);
+    expect(findElements(parsed[0].node, "sup")).toHaveLength(0);
+    expect(findElements(parsed[0].node, "code").map(extractText)).toEqual(["[^1]"]);
+    expect(parsed[1].node.children).toEqual([]);
+  });
+
+  it("resolves link reference definitions across blocks", () => {
+    const parsed = parseDocument([
+      "See [the docs][d] and ![img][d].",
+      '[d]: https://example.com "Title"',
+    ]);
+    expect(findElements(parsed[0].node, "a").map((a) => a.properties?.href)).toEqual([
+      "https://example.com",
+    ]);
+    expect(findElements(parsed[0].node, "img")[0].properties?.src).toBe("https://example.com");
+    expect(parsed[1].node.children).toEqual([]);
+  });
+
+  it("re-parses a frozen block when a late definition arrives", () => {
+    const cache = new Map<number, ParseCacheEntry>();
+    const first = collectDocumentReferences(["Cite[^1].", "Filler."]);
+    const before = parseBlocks(frozen(createBlocks(first.blocks, first.references)), cache);
+    expect(findElements(before.nodes[0], "sup")).toHaveLength(0);
+
+    const second = collectDocumentReferences(["Cite[^1].", "Filler.", "[^1]: Late."]);
+    const after = parseBlocks(frozen(createBlocks(second.blocks, second.references)), cache);
+    expect(after.parsedBlockIds.has(0)).toBe(true);
+    expect(after.parsedBlockIds.has(1)).toBe(false);
+    expect(findElements(after.nodes[0], "sup")).toHaveLength(1);
+  });
+});
+
+describe("raw HTML policy", () => {
+  it("turns a scroll anchor into an empty <a id> with no text", () => {
+    const node = parseBlock(createBlocks(['<a id="section-1"></a>'])[0]);
+    const anchors = findElements(node, "a");
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0].properties?.id).toBe("section-1");
+    expect(findElements(node, "div")).toHaveLength(0);
+    expect(collectNodes(node, "raw")).toHaveLength(0);
+    expect(extractText(node)).toBe("");
+  });
+
+  it("drops comments and unknown HTML instead of emitting empty wrappers", () => {
+    expect(parseBlock(createBlocks(["<!-- hidden -->"])[0]).children).toEqual([]);
+    expect(parseBlock(createBlocks(["<div>Hello</div>"])[0]).children).toEqual([]);
+    const inline = parseBlock(makeBlock("press <kbd>Ctrl</kbd> now"));
+    expect(collectNodes(inline, "raw")).toHaveLength(0);
+    expect(findElements(inline, "div")).toHaveLength(0);
+    expect(extractText(inline)).toBe("press Ctrl now");
+  });
+
+  it("keeps <br> as a line break that measurement can see", () => {
+    const node = parseBlock(makeBlock("line one<br>line two"));
+    expect(findElements(node, "br")).toHaveLength(1);
+    expect(extractText(node)).toBe("line one\nline two");
+  });
+
+  it("rejects anchors carrying anything but an id", () => {
+    const node = parseBlock(makeBlock('<a id="x" onclick="alert(1)"></a>'));
+    expect(findElements(node, "a")).toHaveLength(0);
   });
 });
