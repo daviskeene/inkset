@@ -28,15 +28,48 @@ export const createCopyHandler = (_registry: PluginRegistry): CopyHandler => {
   };
 };
 
+/** The selection clipped to one block, or null when it only touches it. */
+const clipRangeToBlock = (range: Range, blockEl: HTMLElement): Range | null => {
+  const blockRange = document.createRange();
+  blockRange.selectNodeContents(blockEl);
+  if (
+    range.compareBoundaryPoints(Range.END_TO_START, blockRange) >= 0 ||
+    range.compareBoundaryPoints(Range.START_TO_END, blockRange) <= 0
+  ) {
+    return null;
+  }
+  if (blockEl.contains(range.startContainer)) {
+    blockRange.setStart(range.startContainer, range.startOffset);
+  }
+  if (blockEl.contains(range.endContainer)) {
+    blockRange.setEnd(range.endContainer, range.endOffset);
+  }
+  return blockRange.collapsed ? null : blockRange;
+};
+
+/** Whether the selection spans the block from its first to its last character. */
+const coversBlock = (range: Range, blockEl: HTMLElement): boolean => {
+  const blockRange = document.createRange();
+  blockRange.selectNodeContents(blockEl);
+  return (
+    range.compareBoundaryPoints(Range.START_TO_START, blockRange) <= 0 &&
+    range.compareBoundaryPoints(Range.END_TO_END, blockRange) >= 0
+  );
+};
+
 const extractSmartText = (container: HTMLElement, range: Range): string | null => {
   const parts: string[] = [];
   const blocks = container.querySelectorAll("[data-block-id]");
 
   for (const block of blocks) {
-    if (!range.intersectsNode(block)) continue;
-
-    const blockType = block.getAttribute("data-block-type");
     const blockEl = block as HTMLElement;
+    const clipped = clipRangeToBlock(range, blockEl);
+    if (!clipped) continue;
+
+    // Source-friendly extraction (the code text, the LaTeX, the aligned
+    // table) only when the whole block is selected. A partial selection
+    // copies exactly what is highlighted — never lines the user did not pick.
+    const blockType = coversBlock(range, blockEl) ? block.getAttribute("data-block-type") : null;
 
     switch (blockType) {
       case "code": {
@@ -67,15 +100,7 @@ const extractSmartText = (container: HTMLElement, range: Range): string | null =
       }
 
       default: {
-        const blockRange = document.createRange();
-        blockRange.selectNodeContents(blockEl);
-        if (blockEl.contains(range.startContainer)) {
-          blockRange.setStart(range.startContainer, range.startOffset);
-        }
-        if (blockEl.contains(range.endContainer)) {
-          blockRange.setEnd(range.endContainer, range.endOffset);
-        }
-        parts.push(blockRange.toString());
+        parts.push(clipped.toString());
         break;
       }
     }
