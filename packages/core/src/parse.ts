@@ -342,10 +342,13 @@ const protectInlineMathInText = (text: string, math: string[]): string => {
       continue;
     }
 
-    const end = findInlineMathDelimiter(text, start + 1, false);
+    const end = findInlineMathCloser(text, start);
     if (end === -1) {
-      markdown += text.slice(cursor);
-      break;
+      // Not math (a currency amount, a shell variable, an unmatched `$`):
+      // emit the `$` literally and keep scanning — a real `$x$` may follow.
+      markdown += text.slice(cursor, start + 1);
+      cursor = start + 1;
+      continue;
     }
 
     const closingProtectedSpan = findProtectedMarkdownSpan(text, start + 1);
@@ -390,7 +393,23 @@ const findProtectedMarkdownSpan = (
     best = linkDestination;
   }
 
+  const autolink = findAutolinkSpan(text, fromIndex);
+  if (autolink && (!best || autolink.start < best.start)) {
+    best = autolink;
+  }
+
   return best;
+};
+
+// `<scheme:…>` autolinks and GFM autolink literals (`https://…`, `www.…`).
+// A `$` inside a URL (`/$filter`, `/$HOME`) is part of the URL.
+const AUTOLINK_RE = /<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*>|(?:https?:\/\/|www\.)[^\s<>]+/g;
+
+const findAutolinkSpan = (text: string, fromIndex: number): ProtectedMarkdownSpan | null => {
+  AUTOLINK_RE.lastIndex = fromIndex;
+  const match = AUTOLINK_RE.exec(text);
+  if (!match) return null;
+  return { start: match.index, end: match.index + match[0].length };
 };
 
 const findInlineCodeSpan = (text: string, fromIndex: number): ProtectedMarkdownSpan | null => {
@@ -429,7 +448,9 @@ const findInlineLinkDestination = (
     const destinationStart = labelEnd + 2;
     const destinationEnd = findLinkDestinationEnd(text, destinationStart);
     if (destinationEnd === -1) {
-      return null;
+      // `[a](unclosed …` is not a link; a later `[b](…)` on the same line
+      // still may be.
+      continue;
     }
 
     return { start: destinationStart, end: destinationEnd };
@@ -481,6 +502,42 @@ const findInlineMathDelimiter = (text: string, fromIndex: number, opening: boole
   return -1;
 };
 
+const isWhitespaceChar = (char: string | undefined): boolean =>
+  char !== undefined && /\s/.test(char);
+const isAlphanumericChar = (char: string | undefined): boolean =>
+  char !== undefined && /[\p{L}\p{N}]/u.test(char);
+
+/**
+ * The closing `$` for the opener at `start`, or -1 when this opener is prose.
+ * The first `$` after the opener decides — scanning further would pair a
+ * currency `$5` with the opener of a later `$x^2$` and eat the sentence
+ * between them. A candidate closer is rejected when it is followed by a
+ * digit (`$5 and $10`), when the opener looked like currency (`$5`) and the
+ * closer is glued to a word (`$5 and $ten`), or when the closer is preceded
+ * by whitespace while the opener was not followed by any (`$PATH and $HOME`);
+ * symmetric padding (`$ x $`) is still allowed.
+ */
+const findInlineMathCloser = (text: string, start: number): number => {
+  const afterOpener = text[start + 1];
+  const currencyLike = /\d/.test(afterOpener ?? "");
+  const openerPadded = isWhitespaceChar(afterOpener);
+
+  for (let index = start + 1; index < text.length; index++) {
+    if (text[index] !== "$") continue;
+    if (text[index - 1] === "\\") continue;
+    if (text[index - 1] === "$" || text[index + 1] === "$") continue;
+
+    const before = text[index - 1];
+    const after = text[index + 1];
+    if (/\d/.test(after ?? "")) return -1;
+    if (currencyLike && isAlphanumericChar(after)) return -1;
+    if (!openerPadded && isWhitespaceChar(before)) return -1;
+    return index;
+  }
+
+  return -1;
+};
+
 const restoreInlineMathPlaceholders = (
   node: ASTNode,
   math: readonly string[],
@@ -488,7 +545,11 @@ const restoreInlineMathPlaceholders = (
   blockType: BlockType,
 ): ASTNode => {
   if (math.length === 0) return node;
-  if (!node.children) return node;
+
+  const properties = restorePlaceholdersInProperties(node.properties, math);
+  if (!node.children) {
+    return properties === node.properties ? node : { ...node, properties };
+  }
 
   const children: ASTNode[] = [];
   for (const child of node.children) {
@@ -499,7 +560,31 @@ const restoreInlineMathPlaceholders = (
     }
   }
 
-  return { ...node, children };
+  return { ...node, properties, children };
+};
+
+/**
+ * A placeholder can land in an attribute — image `alt`, link `title` — where
+ * there is no node to render math into. Put the original `$…$` source back.
+ */
+const restorePlaceholdersInProperties = (
+  properties: ASTNode["properties"],
+  math: readonly string[],
+): ASTNode["properties"] => {
+  if (!properties) return properties;
+
+  let restored: Record<string, unknown> | null = null;
+  for (const [name, value] of Object.entries(properties)) {
+    if (typeof value !== "string" || !value.includes(INLINE_MATH_PLACEHOLDER_PREFIX)) continue;
+    INLINE_MATH_PLACEHOLDER_RE.lastIndex = 0;
+    const next = value.replace(INLINE_MATH_PLACEHOLDER_RE, (_, index: string) => {
+      return `$${math[Number(index)] ?? ""}$`;
+    });
+    if (!restored) restored = { ...properties };
+    restored[name] = next;
+  }
+
+  return restored ?? properties;
 };
 
 const splitInlineMathPlaceholders = (
@@ -745,6 +830,36 @@ const convertHastChild = (
  * the DOM attribute names, so map them here once; everything else hast emits
  * (`className`, `align`, `start`, `checked`, …) is already React-compatible.
  */
+// Same allow-list react-markdown uses (plus `tel:`). Relative URLs, fragments
+// and query strings pass; any other scheme is dropped.
+const SAFE_URL_PROTOCOL_RE = /^(?:https?|ircs?|mailto|tel|xmpp)$/i;
+
+/**
+ * True for relative URLs and for absolute ones with an allow-listed scheme.
+ * Control characters are stripped before inspecting the scheme because
+ * browsers ignore them (`java\tscript:` runs).
+ */
+const isSafeUrl = (value: unknown): boolean => {
+  if (typeof value !== "string") return true;
+  // eslint-disable-next-line no-control-regex
+  const url = value.replace(/[ - ]/g, "");
+  const colon = url.indexOf(":");
+  if (colon === -1) return true;
+
+  const questionMark = url.indexOf("?");
+  const numberSign = url.indexOf("#");
+  const slash = url.indexOf("/");
+  if (
+    (slash !== -1 && colon > slash) ||
+    (questionMark !== -1 && colon > questionMark) ||
+    (numberSign !== -1 && colon > numberSign)
+  ) {
+    return true;
+  }
+
+  return SAFE_URL_PROTOCOL_RE.test(url.slice(0, colon));
+};
+
 const normalizeProperties = (properties: Record<string, unknown>): Record<string, unknown> => {
   let normalized: Record<string, unknown> | null = null;
 
@@ -766,6 +881,15 @@ const normalizeProperties = (properties: Record<string, unknown>): Record<string
 
     if (Array.isArray(nextValue) && nextName !== "className") {
       nextValue = nextValue.join(" ");
+    }
+
+    if ((nextName === "href" || nextName === "src") && !isSafeUrl(nextValue)) {
+      // Model output is untrusted: a `javascript:` link is script execution
+      // on click. Drop the attribute (the link degrades to text) rather than
+      // trusting any downstream renderer to catch it.
+      if (!normalized) normalized = { ...properties };
+      delete normalized[name];
+      continue;
     }
 
     if (nextName !== name || nextValue !== value) {

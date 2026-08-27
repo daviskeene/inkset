@@ -262,3 +262,84 @@ describe("raw HTML policy", () => {
     expect(findElements(node, "a")).toHaveLength(0);
   });
 });
+
+describe("URL sanitization", () => {
+  it("drops javascript:, vbscript: and data: destinations but keeps safe ones", () => {
+    const node = parseBlock(
+      makeBlock(
+        "[a](javascript:alert(1)) [b](VBScript:x) ![c](data:text/html,x) [d](https://ok.com) [e](/rel?q=a:b) [f](#frag) [g](mailto:x@y.z)",
+      ),
+    );
+    expect(findElements(node, "a").map((a) => a.properties?.href)).toEqual([
+      undefined,
+      undefined,
+      "https://ok.com",
+      "/rel?q=a:b",
+      "#frag",
+      "mailto:x@y.z",
+    ]);
+    expect(findElements(node, "img")[0].properties?.src).toBeUndefined();
+    expect(extractText(node)).toContain("a b");
+  });
+
+  it("neutralizes entity-encoded and control-character schemes", () => {
+    const node = parseBlock(
+      makeBlock("[a](&#106;avascript:alert(1)) [b](<java&#9;script:alert(1)>)"),
+    );
+    const links = findElements(node, "a");
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.map((a) => a.properties?.href)).toEqual(links.map(() => undefined));
+  });
+});
+
+describe("inline math delimiters", () => {
+  const mathValues = (text: string) =>
+    collectNodes(parseBlock(makeBlock(text)), "inlineMath").map((m) => m.value);
+
+  it("does not pair a currency $ with a later math opener", () => {
+    const node = parseBlock(makeBlock("It costs $5 and the formula is $x^2$."));
+    expect(collectNodes(node, "inlineMath").map((m) => m.value)).toEqual(["x^2"]);
+    expect(extractText(node)).toBe("It costs $5 and the formula is x^2.");
+  });
+
+  it("keeps shell variables and currency ranges literal", () => {
+    for (const text of [
+      "I have $5 and $ten",
+      "use $PATH and $HOME vars",
+      "Between $100 and $200, then done",
+      "prices ($5) and ($6)",
+    ]) {
+      expect(mathValues(text), text).toEqual([]);
+    }
+  });
+
+  it("still recognizes math after a currency range", () => {
+    expect(mathValues("Between $100 and $200, then $E=mc^2$ holds")).toEqual(["E=mc^2"]);
+  });
+
+  it("keeps a link whose text contains a currency amount", () => {
+    const node = parseBlock(makeBlock("[cost $5](http://a.com) and $x$"));
+    expect(findElements(node, "a").map((a) => a.properties?.href)).toEqual(["http://a.com"]);
+    expect(collectNodes(node, "inlineMath").map((m) => m.value)).toEqual(["x"]);
+  });
+
+  it("leaves $ inside autolinks and bare URLs alone", () => {
+    const node = parseBlock(makeBlock("<http://a.com/$x> and https://b.com/$y then $z$"));
+    expect(findElements(node, "a").map((a) => a.properties?.href)).toEqual([
+      "http://a.com/$x",
+      "https://b.com/$y",
+    ]);
+    expect(collectNodes(node, "inlineMath").map((m) => m.value)).toEqual(["z"]);
+  });
+
+  it("restores placeholders that land in image alt text", () => {
+    const node = parseBlock(makeBlock("![$x$](img.png)"));
+    expect(findElements(node, "img")[0].properties?.alt).toBe("$x$");
+  });
+
+  it("keeps scanning past an unclosed link destination", () => {
+    const node = parseBlock(makeBlock("[a](unclosed and [b](/docs/$id$/) then $y$"));
+    expect(findElements(node, "a").map((a) => a.properties?.href)).toEqual(["/docs/$id$/"]);
+    expect(collectNodes(node, "inlineMath").map((m) => m.value)).toEqual(["y"]);
+  });
+});

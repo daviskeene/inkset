@@ -453,3 +453,73 @@ describe("single-line display math (issue #14 regression)", () => {
     ).toEqual(["code"]);
   });
 });
+
+describe("splitBlocks: LaTeX environments inside $$ blocks", () => {
+  it("keeps $$ … \\begin{aligned} … \\end{aligned} … $$ as one block", () => {
+    const math = "$$\n\\begin{aligned}\na &= b \\\\\nc &= d\n\\end{aligned}\n$$";
+    expect(splitBlocks(`${math}\n\nAfter`)).toEqual([math, "After"]);
+  });
+
+  it("closes on \\end{env}$$ and keeps splitting afterwards", () => {
+    const doc =
+      "$$\n\\begin{aligned}\na\n\\end{aligned}$$\n\nNext para\n\n$$\nx_1 = \\frac{a}{b}\n$$";
+    expect(splitBlocks(doc)).toEqual([
+      "$$\n\\begin{aligned}\na\n\\end{aligned}$$",
+      "Next para",
+      "$$\nx_1 = \\frac{a}{b}\n$$",
+    ]);
+  });
+
+  it("ignores \\begin in prose and inline code", () => {
+    expect(
+      splitBlocks("Use `\\begin{align}` to start.\n\n## Next\n\ntext\n\n$$\nx = 1\n$$"),
+    ).toEqual(["Use `\\begin{align}` to start.", "## Next", "text", "$$\nx = 1\n$$"]);
+    expect(splitBlocks("Say \\begin{itemize} here.\n\nNext")).toEqual([
+      "Say \\begin{itemize} here.",
+      "Next",
+    ]);
+  });
+});
+
+describe("splitBlocks: fence rules", () => {
+  it("requires the closer to be at least as long as the opener", () => {
+    const doc = "````\n```\n# comment\n```\n````";
+    expect(splitBlocks(doc)).toEqual([doc]);
+  });
+
+  it("does not close on a fence line carrying an info string", () => {
+    const doc = "```\ncode\n```x\nmore\n```";
+    expect(splitBlocks(doc)).toEqual([doc]);
+  });
+
+  it("keeps repair in agreement with the splitter for nested fences", () => {
+    const doc = "````\ncode\n```\n\nmore\n````";
+    expect(repair(doc)).toBe(doc);
+    expect(splitBlocks(doc)).toEqual([doc]);
+  });
+
+  it("does not let a tilde line inside a backtick fence toggle repair state", () => {
+    const doc = "```\n~~~\n$$\n```";
+    expect(repair(doc)).toBe(doc);
+    expect(splitBlocks(doc)).toEqual([doc]);
+  });
+});
+
+describe("splitBlocks: display math edge cases", () => {
+  it("does not treat $$$ as a math fence", () => {
+    expect(splitBlocks("Pricing: $$$ (expensive)\n\nNext para")).toEqual([
+      "Pricing: $$$ (expensive)",
+      "Next para",
+    ]);
+    expect(repair("Pricing: $$$ (expensive)")).toBe("Pricing: $$$ (expensive)");
+  });
+
+  it("opens a second math block after a complete span on the same line", () => {
+    expect(splitBlocks("$$a$$ and $$b\nc\n$$\nAfter")).toEqual([
+      "$$a$$",
+      "and",
+      "$$b\nc\n$$",
+      "After",
+    ]);
+  });
+});
