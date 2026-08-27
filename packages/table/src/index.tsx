@@ -11,8 +11,11 @@ import {
   type PluginComponentProps,
 } from "@inkset/core";
 
-const TABLE_HEADER_HEIGHT = 20;
-const TABLE_ROW_HEIGHT = 44;
+// Mirrors the default stylesheet: 2px+20px+2px toolbar, header row 39px
+// (10px padding ×2 + 18px line + 1px border), body rows 45px.
+const TABLE_HEADER_HEIGHT = 24;
+const TABLE_HEAD_ROW_HEIGHT = 39;
+const TABLE_ROW_HEIGHT = 45;
 const TABLE_MIN_HEIGHT = 64;
 const COPY_FEEDBACK_DURATION_MS = 2000;
 
@@ -48,11 +51,15 @@ const TableBlock = ({ node }: PluginComponentProps) => {
   const stickyHeader = (node.pluginData?.stickyHeader as boolean) ?? false;
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(csvData).then(() => {
-      setCopied(true);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
-    });
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
+    navigator.clipboard
+      .writeText(csvData)
+      .then(() => {
+        setCopied(true);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
+      })
+      .catch(() => setCopied(false));
   }, [csvData]);
 
   // data-* attrs rather than runtime className juggling so the default
@@ -97,6 +104,12 @@ export const createTablePlugin = (options?: TablePluginOptions): InksetPlugin =>
     key: [showCopy, borderStyle, zebra, stickyHeader].join("|"),
     handles: ["table"],
 
+    // The block splitter types anything starting with `|` as a table, which
+    // includes a lone leading pipe and a table whose delimiter row hasn't
+    // streamed in yet. Only claim blocks remark actually parsed as tables;
+    // everything else stays a paragraph with no table chrome around it.
+    canHandle: (node) => findNodes(node, "table").length > 0,
+
     transform(node: ASTNode, _ctx: PluginContext): EnrichedNode {
       const html = nodeToHtml(node);
       const csv = nodeToCSV(node);
@@ -114,10 +127,12 @@ export const createTablePlugin = (options?: TablePluginOptions): InksetPlugin =>
       // The header bar only occupies space when showCopy is on.
       const headerHeight =
         (node.pluginData?.showCopy as boolean) === false ? 0 : TABLE_HEADER_HEIGHT;
+      const rowsHeight =
+        rowCount === 0 ? 0 : TABLE_HEAD_ROW_HEIGHT + (rowCount - 1) * TABLE_ROW_HEIGHT;
 
       return {
         width: maxWidth,
-        height: Math.max(rowCount * TABLE_ROW_HEIGHT + headerHeight, TABLE_MIN_HEIGHT),
+        height: Math.max(rowsHeight + headerHeight, TABLE_MIN_HEIGHT),
       };
     },
 

@@ -80,3 +80,32 @@ describe("createTablePlugin", () => {
     expect(typeof enriched.pluginData?.csv).toBe("string");
   });
 });
+
+describe("createTablePlugin audit fixes", () => {
+  it("only claims blocks that actually contain a table", () => {
+    const plugin = createTablePlugin();
+    expect(plugin.canHandle?.(makeTableNode())).toBe(true);
+    const paragraph: ASTNode = {
+      type: "element",
+      tagName: "p",
+      blockId: 0,
+      blockType: "table",
+      children: [{ type: "text", value: "|not a table", blockId: 0, blockType: "table" }],
+    };
+    expect(plugin.canHandle?.(paragraph)).toBe(false);
+  });
+
+  it("measures the toolbar, header row and body rows like the stylesheet", () => {
+    const plugin = createTablePlugin();
+    const enriched = plugin.transform(makeTableNode(), ctx);
+    const rows = ((enriched.pluginData?.html as string).match(/<tr/g) ?? []).length;
+    expect(plugin.measure?.(enriched, 600)).toEqual({
+      width: 600,
+      height: Math.max(24 + 39 + (rows - 1) * 45, 64),
+    });
+    const noCopy = createTablePlugin({ showCopy: false });
+    expect(noCopy.measure?.(noCopy.transform(makeTableNode(), ctx), 600).height).toBe(
+      Math.max(39 + (rows - 1) * 45, 64),
+    );
+  });
+});

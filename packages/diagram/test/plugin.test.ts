@@ -119,3 +119,23 @@ describe("createDiagramPlugin", () => {
     expect(a.key).not.toBe(c.key);
   });
 });
+
+describe("createDiagramPlugin audit fixes", () => {
+  it("detects the language case-insensitively", () => {
+    const plugin = createDiagramPlugin();
+    expect(plugin.canHandle!(makeCodeNode("Mermaid", "graph TD\nA-->B"))).toBe(true);
+    expect(plugin.canHandle!(makeCodeNode("MERMAID", "graph TD\nA-->B"))).toBe(true);
+  });
+
+  it("reserves header height only when a header will render", () => {
+    const withHeader = createDiagramPlugin();
+    const noCopy = createDiagramPlugin({ showCopy: false });
+    const node = makeCodeNode(
+      "mermaid",
+      "graph TD\nA-->B\nB-->C\nC-->D\nD-->E\nE-->F\nF-->G\nG-->H",
+    );
+    const a = withHeader.measure!(withHeader.transform(node, ctx), 600).height;
+    const b = noCopy.measure!(noCopy.transform(node, ctx), 600).height;
+    expect(a - b).toBe(24);
+  });
+});

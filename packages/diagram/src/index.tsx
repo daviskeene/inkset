@@ -17,6 +17,10 @@ import {
 // Height estimate used before the real SVG measures itself. The layout
 // engine's observed-height feedback loop corrects the layout after paint;
 // getting the estimate close just reduces visible layout shift.
+// `process` only exists for bundled consumers; an unbundled ESM import must
+// not throw a ReferenceError from inside a catch block.
+const isDev = typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
+
 const DIAGRAM_HEADER_HEIGHT = 24;
 const DIAGRAM_PADDING = 32;
 const DIAGRAM_MIN_HEIGHT = 320;
@@ -88,7 +92,7 @@ const getMermaid = (): Promise<MermaidModule> => {
     // hasn't installed it. Log once and re-throw so callers fall through
     // to their raw-source fallback branch.
     mermaidPromise = import("mermaid").catch((err: unknown) => {
-      if (process.env.NODE_ENV !== "production") {
+      if (isDev) {
         console.warn(
           "[inkset/diagram] `mermaid` is not installed. Run `npm install mermaid` to enable diagram rendering.",
           err,
@@ -209,7 +213,7 @@ const DiagramBlock = ({ node, isStreaming, onContentSettled }: PluginComponentPr
           setError("");
         } catch (err) {
           if (cancelled) return;
-          if (process.env.NODE_ENV !== "production") {
+          if (isDev) {
             console.debug("[inkset/diagram] mermaid render failed:", err);
           }
           // Keep the last valid render visible rather than flashing the raw
@@ -230,11 +234,15 @@ const DiagramBlock = ({ node, isStreaming, onContentSettled }: PluginComponentPr
   }, [id, source, theme, isStreaming]);
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(source).then(() => {
-      setCopied(true);
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
-    });
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
+    navigator.clipboard
+      .writeText(source)
+      .then(() => {
+        setCopied(true);
+        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS);
+      })
+      .catch(() => setCopied(false));
   }, [source]);
 
   const hasHeader = showHeader && showCopy;
@@ -303,9 +311,10 @@ export const createDiagramPlugin = (options?: DiagramPluginOptions): InksetPlugi
     key: [theme, language, showHeader, showCopy].join("|"),
     handles: ["code"],
 
-    // Lang-scoped gate: only claim code blocks whose language matches.
-    // The generic code plugin keeps every other language without change.
-    canHandle: (node) => detectLanguage(node) === language,
+    // Lang-scoped gate: only claim code blocks whose language matches
+    // (case-insensitively — models write ```Mermaid too). The generic code
+    // plugin keeps every other language without change.
+    canHandle: (node) => (detectLanguage(node) ?? "").toLowerCase() === language.toLowerCase(),
 
     async preload(): Promise<void> {
       // Warm the mermaid chunk during pipeline init. The fallback at
@@ -324,8 +333,11 @@ export const createDiagramPlugin = (options?: DiagramPluginOptions): InksetPlugi
 
     measure(node: EnrichedNode, maxWidth: number): Dimensions {
       const source = (node.pluginData?.source as string) ?? "";
-      const headerSpace =
-        (node.pluginData?.showHeader as boolean) === false ? 0 : DIAGRAM_HEADER_HEIGHT;
+      // Same predicate as the component: no copy button, no header bar.
+      const hasHeader =
+        (node.pluginData?.showHeader as boolean) !== false &&
+        (node.pluginData?.showCopy as boolean) !== false;
+      const headerSpace = hasHeader ? DIAGRAM_HEADER_HEIGHT : 0;
       // Type-aware content estimate + chrome. The ResizeObserver feedback
       // in the React layer corrects to real SVG height after paint; this
       // estimate just aims to keep the initial paint close enough that
