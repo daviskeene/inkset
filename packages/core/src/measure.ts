@@ -7,6 +7,7 @@ import type {
   HeadingSizeTuple,
   HeadingWeightTuple,
   HeadingLineHeightTuple,
+  HeadingTrackingTuple,
 } from "./types";
 import { getNodeBlockKind } from "./block-spacing";
 import { extractText } from "./parse";
@@ -25,29 +26,37 @@ type CacheEntry = {
 
 const LRU_DEFAULT_MAX_SIZE = 500;
 
-// Block-type measurement constants
-const CODE_LINE_HEIGHT = 21; // 14px font * 1.5 line-height
-const CODE_HEADER_HEIGHT = 28;
-const CODE_PADDING = 24;
-const TABLE_ROW_HEIGHT = 36;
-const TABLE_HEADER_HEIGHT = 40;
-const TABLE_MIN_HEIGHT = 80;
-const LIST_ITEM_PADDING = 4;
-const BLOCKQUOTE_EXTRA_PADDING = 16;
+// Block-type measurement constants, mirroring the default stylesheet in
+// @inkset/react. Plugin chrome (code header bars, table toolbars) is the
+// plugins' own business — see their `measure()`.
+const LIST_INDENT_EM = 1.4; // --inkset-list-indent
+const BLOCKQUOTE_BORDER_WIDTH = 3; // --inkset-blockquote-border-width (+ 1em padding)
+const TABLE_ROW_CHROME = 4; // UA default: 1px cell padding ×2 + 2px border-spacing
 // The default stylesheet renders <hr> as a 1px border with no margin.
 const THEMATIC_BREAK_HEIGHT = 1;
 const AVG_CHAR_WIDTH_RATIO = 0.6;
+// Average glyph advance as a fraction of font size, used to translate
+// letter-spacing into an equivalent measuring width.
+const AVERAGE_GLYPH_EM = 0.5;
 
 /**
  * Height for a block with no measurable text. Most such blocks (a scroll
  * anchor, an HTML comment, a bare definitions block) render nothing and take
- * no space, but a thematic break draws a rule, so it keeps its 1px — the
- * layout drops the gap after zero-height blocks and must not do that here.
+ * no space. A thematic break draws a rule, so it keeps its 1px, and an
+ * image-only paragraph reserves a line until the real image height is
+ * observed — the layout drops the gap after zero-height blocks and must not
+ * do that for either.
  */
-const measureTextlessBlock = (node: EnrichedNode, maxWidth: number): Dimensions => ({
-  width: maxWidth,
-  height: node.blockType === "thematic-break" ? THEMATIC_BREAK_HEIGHT : 0,
-});
+const measureTextlessBlock = (
+  node: EnrichedNode,
+  maxWidth: number,
+  lineHeight: number,
+): Dimensions => {
+  if (node.blockType === "thematic-break")
+    return { width: maxWidth, height: THEMATIC_BREAK_HEIGHT };
+  if (containsElement(node, "img")) return { width: maxWidth, height: lineHeight };
+  return { width: maxWidth, height: 0 };
+};
 
 export class LRUCache {
   private entries = new Map<string, CacheEntry>();
@@ -191,12 +200,15 @@ export type MeasureOptions = {
   headingSizes?: HeadingSizeTuple;
   headingWeights?: HeadingWeightTuple;
   headingLineHeights?: HeadingLineHeightTuple;
+  headingTracking?: HeadingTrackingTuple;
 };
 
 type TypographySpec = {
   font: string;
   fontSize: number;
   lineHeight: number;
+  /** CSS letter-spacing in px (negative tightens). Canvas cannot apply it. */
+  letterSpacing?: number;
 };
 
 const DEFAULT_FONT_SIZE = 16;
@@ -209,6 +221,8 @@ const DEFAULT_LINE_HEIGHT = 24;
 export const DEFAULT_HEADING_SIZES: HeadingSizeTuple = [3, 2.15, 1.3, 1];
 export const DEFAULT_HEADING_WEIGHTS: HeadingWeightTuple = [800, 780, 720, 680];
 export const DEFAULT_HEADING_LINE_HEIGHTS: HeadingLineHeightTuple = [1.05, 1.08, 1.15, 1.2];
+// Matches `--inkset-heading-N-tracking` in the default stylesheet (em).
+export const DEFAULT_HEADING_TRACKING: HeadingTrackingTuple = [-0.04, -0.035, -0.02, 0];
 
 const DEFAULT_OPTIONS: MeasureOptions = {
   font: "system-ui, sans-serif",
@@ -218,6 +232,7 @@ const DEFAULT_OPTIONS: MeasureOptions = {
   headingSizes: DEFAULT_HEADING_SIZES,
   headingWeights: DEFAULT_HEADING_WEIGHTS,
   headingLineHeights: DEFAULT_HEADING_LINE_HEIGHTS,
+  headingTracking: DEFAULT_HEADING_TRACKING,
 };
 
 export class MeasureLayer {
@@ -260,7 +275,7 @@ export class MeasureLayer {
         blockId: node.blockId,
         node,
         kind: getNodeBlockKind(node),
-        dimensions: measureTextlessBlock(node, maxWidth),
+        dimensions: measureTextlessBlock(node, maxWidth, this.options.lineHeight),
       };
     }
 
@@ -270,9 +285,11 @@ export class MeasureLayer {
   }
 
   /**
-   * Accounts for headings being taller, code blocks having monospace + header
-   * bars, lists having indent, etc. Each block type uses a different sizing
-   * heuristic so pretext can approximate layout without DOM access.
+   * Block-type-aware sizing so pretext can approximate the default
+   * stylesheet's layout without DOM access. Plugin-rendered blocks never get
+   * here (their `measure()` runs first), so the code and table cases model
+   * the *default* renderer — a bare `<pre>` or a UA-styled `<table>` in the
+   * base font — not the plugins' chrome.
    */
   private async measureBlockByType(
     node: EnrichedNode,
@@ -280,7 +297,6 @@ export class MeasureLayer {
     maxWidth: number,
   ): Promise<Dimensions> {
     const baseTypography = this.getBaseTypography();
-    const baseDims = await this.measureTextWithTypography(text, maxWidth, baseTypography);
 
     switch (node.blockType) {
       case "heading": {
@@ -292,49 +308,31 @@ export class MeasureLayer {
       }
 
       case "code": {
-        const lines = text.split("\n");
-        return {
-          width: maxWidth,
-          height: lines.length * CODE_LINE_HEIGHT + CODE_HEADER_HEIGHT + CODE_PADDING,
-        };
+        // One line per source line; remark's trailing newline adds none.
+        const lines = text.replace(/\n$/, "").split("\n").length;
+        return { width: maxWidth, height: lines * this.options.lineHeight };
       }
 
       case "table": {
-        const rows = (text.match(/\n/g) ?? []).length + 1;
-        return {
-          width: maxWidth,
-          height: Math.max(rows * TABLE_ROW_HEIGHT + TABLE_HEADER_HEIGHT, TABLE_MIN_HEIGHT),
-        };
+        // Count rows in the tree: the text contains a newline per cell.
+        const rows = Math.max(1, countElements(node, "tr"));
+        return { width: maxWidth, height: rows * (this.options.lineHeight + TABLE_ROW_CHROME) };
       }
 
       case "list": {
-        const items = text.split("\n").filter((l) => l.trim());
-        if (items.length === 0) {
-          return { width: maxWidth, height: this.options.lineHeight };
-        }
-        // Items wrap inside (maxWidth - list-indent), so measure each at that
-        // inner width and sum the real heights. Using items.length × lineHeight
-        // undercounts badly when bullets span 2+ lines.
-        const listIndent = this.options.fontSize * 1.4;
-        const innerWidth = Math.max(1, maxWidth - listIndent);
-        let total = 0;
-        for (const item of items) {
-          const d = await this.measureTextWithTypography(item, innerWidth, baseTypography);
-          total += d.height;
-        }
-        // The list gap belongs between items, not after the final bullet.
-        total += Math.max(0, items.length - 1) * LIST_ITEM_PADDING;
-        return {
-          width: maxWidth,
-          height: Math.max(total, this.options.lineHeight),
-        };
+        const height = await this.measureListContainer(node, maxWidth, baseTypography);
+        return { width: maxWidth, height: Math.max(height, this.options.lineHeight) };
       }
 
       case "blockquote": {
-        return {
-          width: maxWidth,
-          height: baseDims.height + BLOCKQUOTE_EXTRA_PADDING,
-        };
+        // The stylesheet narrows the text column by `padding-left: 1em` plus
+        // the border; it adds no vertical padding.
+        const innerWidth = Math.max(
+          1,
+          maxWidth - (this.options.fontSize + BLOCKQUOTE_BORDER_WIDTH),
+        );
+        const dims = await this.measureTextWithTypography(text, innerWidth, baseTypography);
+        return { width: maxWidth, height: dims.height };
       }
 
       case "thematic-break": {
@@ -342,8 +340,60 @@ export class MeasureLayer {
       }
 
       default:
-        return baseDims;
+        return this.measureTextWithTypography(text, maxWidth, baseTypography);
     }
+  }
+
+  /**
+   * Sums list items the way the DOM lays them out: each `<li>` wraps inside
+   * the list's indent, nested lists indent again, and soft line breaks inside
+   * an item collapse to spaces rather than starting a new bullet.
+   */
+  private async measureListContainer(
+    node: EnrichedNode,
+    width: number,
+    typography: TypographySpec,
+  ): Promise<number> {
+    const indent = this.options.fontSize * LIST_INDENT_EM;
+    let total = 0;
+
+    for (const child of node.children ?? []) {
+      if (child.type !== "element") continue;
+
+      if (child.tagName === "ul" || child.tagName === "ol") {
+        total += await this.measureListContainer(child, Math.max(1, width - indent), typography);
+        continue;
+      }
+
+      if (child.tagName !== "li") {
+        total += await this.measureListContainer(child, width, typography);
+        continue;
+      }
+
+      // Own content first (each paragraph of a loose item is its own box),
+      // then nested lists one indent deeper.
+      let run = "";
+      const flushRun = async () => {
+        const text = run.trim();
+        run = "";
+        if (text) total += (await this.measureTextWithTypography(text, width, typography)).height;
+      };
+      for (const part of child.children ?? []) {
+        if (part.tagName === "ul" || part.tagName === "ol") {
+          await flushRun();
+          total += await this.measureListContainer(part, Math.max(1, width - indent), typography);
+        } else if (part.tagName === "p") {
+          await flushRun();
+          run = extractText(part);
+          await flushRun();
+        } else {
+          run += extractText(part);
+        }
+      }
+      await flushRun();
+    }
+
+    return total;
   }
 
   async measureText(text: string, maxWidth: number): Promise<Dimensions> {
@@ -402,7 +452,7 @@ export class MeasureLayer {
     const pretext = await getPretext();
 
     if (!pretext || this.pretextUnavailable) {
-      return this.fallbackMeasure(text, maxWidth, typography.fontSize, typography.lineHeight);
+      return this.fallbackMeasure(text, maxWidth, typography);
     }
 
     const cacheKey = `${text}|${typography.font}`;
@@ -413,10 +463,16 @@ export class MeasureLayer {
         handle = pretext.prepare(text, typography.font);
         this.cache.set(cacheKey, handle);
       }
-      const result = pretext.layout(handle, maxWidth, typography.lineHeight);
+      const result = pretext.layout(
+        handle,
+        compensateLetterSpacing(maxWidth, typography),
+        typography.lineHeight,
+      );
+      // Whole pixels: the DOM reports integer heights and fractional `y`s
+      // would put every following block on a sub-pixel boundary.
       return {
         width: maxWidth,
-        height: result.height,
+        height: Math.ceil(result.height),
       };
     } catch (err) {
       // Pretext throws when Canvas/OffscreenCanvas isn't available (SSR, Node tests).
@@ -426,7 +482,7 @@ export class MeasureLayer {
         "[inkset] pretext measurement failed; falling back to character-width estimate:",
         err,
       );
-      return this.fallbackMeasure(text, maxWidth, typography.fontSize, typography.lineHeight);
+      return this.fallbackMeasure(text, maxWidth, typography);
     }
   }
 
@@ -447,7 +503,7 @@ export class MeasureLayer {
     }
 
     const text = extractText(measured.node);
-    if (!text) return measureTextlessBlock(measured.node, newWidth);
+    if (!text) return measureTextlessBlock(measured.node, newWidth, this.options.lineHeight);
 
     return this.measureBlockByType(measured.node, text, newWidth);
   }
@@ -507,29 +563,49 @@ export class MeasureLayer {
     // h1..h4 are explicit; h5/h6 (and anything higher) inherit h4.
     const idx = Math.max(0, Math.min(3, level - 1));
     const fontSize = base * sizes[idx];
+    const tracking = this.options.headingTracking ?? DEFAULT_HEADING_TRACKING;
 
     return {
       font: buildFontShorthand(weights[idx], fontSize, this.options.font),
       fontSize,
       lineHeight: fontSize * lineHeights[idx],
+      letterSpacing: fontSize * tracking[idx],
     };
   }
 
-  private fallbackMeasure(
-    text: string,
-    maxWidth: number,
-    fontSize: number = this.options.fontSize,
-    lineHeight: number = this.options.lineHeight,
-  ): Dimensions {
-    const avgCharWidth = fontSize * AVG_CHAR_WIDTH_RATIO;
-    const charsPerLine = Math.max(1, Math.floor(maxWidth / avgCharWidth));
+  private fallbackMeasure(text: string, maxWidth: number, typography: TypographySpec): Dimensions {
+    const avgCharWidth = typography.fontSize * AVG_CHAR_WIDTH_RATIO;
+    const layoutWidth = compensateLetterSpacing(maxWidth, typography);
+    const charsPerLine = Math.max(1, Math.floor(layoutWidth / avgCharWidth));
     const lineCount = Math.max(1, Math.ceil(text.length / charsPerLine));
     return {
       width: maxWidth,
-      height: lineCount * lineHeight,
+      height: Math.ceil(lineCount * typography.lineHeight),
     };
   }
 }
+
+/**
+ * Canvas measurement has no letter-spacing, but the default stylesheet tracks
+ * h1–h3 tighter (`-0.04em` on h1). Every glyph the DOM draws is `letterSpacing`
+ * narrower than pretext thinks, so a line holds more of them: measure at a
+ * proportionally wider width instead of wrapping one line too early.
+ */
+const compensateLetterSpacing = (maxWidth: number, typography: TypographySpec): number => {
+  const letterSpacing = typography.letterSpacing ?? 0;
+  if (letterSpacing === 0) return maxWidth;
+  const averageGlyph = typography.fontSize * AVERAGE_GLYPH_EM;
+  return maxWidth / Math.max(0.5, 1 + letterSpacing / averageGlyph);
+};
+
+const countElements = (node: EnrichedNode, tagName: string): number => {
+  let count = node.type === "element" && node.tagName === tagName ? 1 : 0;
+  for (const child of node.children ?? []) count += countElements(child, tagName);
+  return count;
+};
+
+const containsElement = (node: EnrichedNode, tagName: string): boolean =>
+  countElements(node, tagName) > 0;
 
 const getHeadingLevel = (node: EnrichedNode): number => {
   const tag = node.tagName ?? node.children?.[0]?.tagName ?? "";

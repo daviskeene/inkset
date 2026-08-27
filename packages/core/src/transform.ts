@@ -32,12 +32,19 @@ export const transformBlocks = (
   return result;
 };
 
-/** Re-transforms only width-sensitive blocks after a container resize. */
+/**
+ * Re-transforms only width-sensitive blocks after a container resize.
+ *
+ * `sourceOf` returns the parsed (pre-transform) AST for a node so the plugin
+ * sees the same input it saw the first time; without it the plugin's own
+ * previous output is fed back in and wrappers compound on every resize.
+ */
 export const retransformWidthSensitive = (
   nodes: EnrichedNode[],
   registry: PluginRegistry,
   ctx: Readonly<PluginContext>,
   cache: Map<number, EnrichedNode>,
+  sourceOf?: (node: EnrichedNode) => ASTNode | undefined,
 ): { nodes: EnrichedNode[]; changed: boolean } => {
   const widthSensitivePlugins = registry.widthSensitive();
   if (widthSensitivePlugins.length === 0) {
@@ -49,7 +56,7 @@ export const retransformWidthSensitive = (
 
   for (const node of nodes) {
     if (node.transformedBy && widthSensitivePlugins.some((p) => p.name === node.transformedBy)) {
-      const reTransformed = registry.transform(node, ctx);
+      const reTransformed = registry.transform(sourceOf?.(node) ?? node, ctx);
       cache.set(node.blockId, reTransformed);
       result.push(reTransformed);
       changed = true;

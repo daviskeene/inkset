@@ -91,6 +91,7 @@ export class StreamingPipeline {
       | "headingSizes"
       | "headingWeights"
       | "headingLineHeights"
+      | "headingTracking"
       | "shrinkwrap"
     >
   > & {
@@ -99,12 +100,21 @@ export class StreamingPipeline {
     headingSizes: InksetOptions["headingSizes"];
     headingWeights: InksetOptions["headingWeights"];
     headingLineHeights: InksetOptions["headingLineHeights"];
+    headingTracking: InksetOptions["headingTracking"];
     shrinkwrap: InksetOptions["shrinkwrap"];
   };
   private hyphenator: Hyphenator | null = null;
 
   private pendingUpdate: ReturnType<typeof setTimeout> | number | null = null;
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
+  private destroyed = false;
+  /**
+   * Bumped whenever a pipeline run or a relayout starts. Both await
+   * measurement; whichever finds a newer generation afterwards was superseded
+   * and must not commit its (stale) result.
+   */
+  private generation = 0;
 
   private metrics: PipelineMetrics = {
     lastParseMs: 0,
@@ -131,6 +141,7 @@ export class StreamingPipeline {
       headingSizes: options?.headingSizes,
       headingWeights: options?.headingWeights,
       headingLineHeights: options?.headingLineHeights,
+      headingTracking: options?.headingTracking,
       shrinkwrap: options?.shrinkwrap ?? false,
     };
 
@@ -142,6 +153,7 @@ export class StreamingPipeline {
       headingSizes: this.options.headingSizes,
       headingWeights: this.options.headingWeights,
       headingLineHeights: this.options.headingLineHeights,
+      headingTracking: this.options.headingTracking,
     });
 
     if (options?.plugins) {
@@ -153,7 +165,17 @@ export class StreamingPipeline {
 
   async init(): Promise<void> {
     if (this.initialized) return;
+    // Every pre-init token used to start its own initialization (and its own
+    // plugin preload); share one in-flight promise instead.
+    if (!this.initPromise) {
+      this.initPromise = this.initialize().finally(() => {
+        this.initPromise = null;
+      });
+    }
+    return this.initPromise;
+  }
 
+  private async initialize(): Promise<void> {
     const hyphenationPromise = this.options.hyphenation
       ? this.loadHyphenator().catch((err: unknown) => {
           console.warn("[inkset] hyphenator failed to load; rendering without soft hyphens:", err);
@@ -231,12 +253,14 @@ export class StreamingPipeline {
   }
 
   async appendToken(token: string): Promise<void> {
+    if (this.destroyed) return;
     const events = this.ingest.append(token);
     if (events.length === 0) return;
     this.schedulePipelineUpdate();
   }
 
   async endStream(): Promise<void> {
+    if (this.destroyed) return;
     // Already-closed ingest means the document was fully settled by a prior
     // setContent()/endStream(); re-running the pipeline would be a no-op.
     if (!this.ingest.isStreaming) return;
@@ -251,6 +275,7 @@ export class StreamingPipeline {
    * call `endStream()` to settle. Default closes the stream (settled content).
    */
   async setContent(content: string, options?: { streaming?: boolean }): Promise<void> {
+    if (this.destroyed) return;
     this.cancelPendingUpdate();
     this.parseCache.clear();
     this.transformCache.clear();
@@ -298,6 +323,7 @@ export class StreamingPipeline {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.cancelPendingUpdate();
     this.listeners.clear();
     this.parseCache.clear();
@@ -311,18 +337,21 @@ export class StreamingPipeline {
   // ── Private ────────────────────────────────────────────────────
 
   private schedulePipelineUpdate(): void {
-    if (this.pendingUpdate !== null) return;
+    if (this.destroyed || this.pendingUpdate !== null) return;
+
+    const run = () => {
+      this.pendingUpdate = null;
+      // A scheduled run has no caller to reject to; a plugin bug must not
+      // become an unhandled rejection that leaves the display frozen.
+      void this.runPipeline().catch((err: unknown) => {
+        console.warn("[inkset] pipeline update failed:", err);
+      });
+    };
 
     if (typeof requestAnimationFrame !== "undefined") {
-      this.pendingUpdate = requestAnimationFrame(() => {
-        this.pendingUpdate = null;
-        this.runPipeline();
-      });
+      this.pendingUpdate = requestAnimationFrame(run);
     } else {
-      this.pendingUpdate = setTimeout(() => {
-        this.pendingUpdate = null;
-        this.runPipeline();
-      }, 0);
+      this.pendingUpdate = setTimeout(run, 0);
     }
   }
 
@@ -361,16 +390,20 @@ export class StreamingPipeline {
   }
 
   private async runPipeline(): Promise<void> {
+    if (this.destroyed) return;
     if (!this.initialized) await this.init();
+    if (this.destroyed) return;
 
-    this.tick += 1;
+    const generation = ++this.generation;
+    const containerWidth = this.containerWidth;
     const pipelineStart = performance.now();
 
     const repaired = this.ingest.getRepaired();
+    const isStreaming = this.ingest.isStreaming;
     const { blocks: rawBlocks, references } = collectDocumentReferences(splitBlocks(repaired));
     const blocks = createBlocks(rawBlocks, references);
 
-    if (this.ingest.isStreaming) {
+    if (isStreaming) {
       for (let i = 0; i < blocks.length - 1; i++) {
         blocks[i].hot = false;
       }
@@ -382,13 +415,10 @@ export class StreamingPipeline {
 
     const parseStart = performance.now();
     const { nodes, parsedBlockIds } = parseBlocks(blocks, this.parseCache);
-    this.metrics.lastParseMs = performance.now() - parseStart;
+    const parseMs = performance.now() - parseStart;
 
     const transformStart = performance.now();
-    const ctx: PluginContext = {
-      containerWidth: this.containerWidth,
-      isStreaming: this.ingest.isStreaming,
-    };
+    const ctx: PluginContext = { containerWidth, isStreaming };
     const transformed = transformBlocks(
       nodes,
       this.registry,
@@ -396,62 +426,83 @@ export class StreamingPipeline {
       this.transformCache,
       parsedBlockIds,
     );
-    this.currentNodes = this.applyHyphenation(transformed);
-    this.metrics.lastTransformMs = performance.now() - transformStart;
+    const nextNodes = this.applyHyphenation(transformed);
+    const transformMs = performance.now() - transformStart;
 
     const measureStart = performance.now();
     this.lastMeasureCacheHits = 0;
-    this.currentMeasured = await this.measureBlocks(this.currentNodes, this.containerWidth);
-    this.metrics.lastMeasureMs = performance.now() - measureStart;
+    const nextMeasured = await this.measureBlocks(nextNodes, containerWidth);
+    const measureMs = performance.now() - measureStart;
 
+    if (this.destroyed) return;
+    if (generation !== this.generation) {
+      // Superseded while measuring: a newer run or relayout owns the state and
+      // measured the latest document at the latest width. Schedule one more
+      // run so nothing that arrived in between is lost; it coalesces with any
+      // pending update.
+      this.schedulePipelineUpdate();
+      return;
+    }
+
+    // Commit atomically so a relayout observing `currentNodes` never sees a
+    // document whose `currentMeasured` belongs to the previous one.
     const layoutStart = performance.now();
-    this.currentLayout = computeLayout(this.currentMeasured, {
-      containerWidth: this.containerWidth,
+    this.tick += 1;
+    this.currentNodes = nextNodes;
+    this.currentMeasured = nextMeasured;
+    this.currentLayout = computeLayout(nextMeasured, {
+      containerWidth,
       blockSpacing: this.options.blockSpacing,
     });
+    this.metrics.lastParseMs = parseMs;
+    this.metrics.lastTransformMs = transformMs;
+    this.metrics.lastMeasureMs = measureMs;
     this.metrics.lastLayoutMs = performance.now() - layoutStart;
-
     this.metrics.totalPipelineMs = performance.now() - pipelineStart;
     this.metrics.cacheHitRate =
-      this.currentNodes.length > 0 ? this.lastMeasureCacheHits / this.currentNodes.length : 0;
+      nextNodes.length > 0 ? this.lastMeasureCacheHits / nextNodes.length : 0;
 
     this.notify();
+
+    if (containerWidth !== this.containerWidth) {
+      // The container resized while this run had no nodes for setWidth to
+      // relayout (first run) — measure again at the current width.
+      this.schedulePipelineUpdate();
+    }
   }
 
   private async relayout(targetWidth: number): Promise<void> {
     if (this.currentNodes.length === 0) return;
 
+    const generation = ++this.generation;
     const ctx: PluginContext = {
       containerWidth: targetWidth,
       isStreaming: this.ingest.isStreaming,
     };
 
+    // Width-sensitive plugins re-transform from the parsed AST, not from their
+    // previous (already enriched and hyphenated) output.
     const { nodes, changed } = retransformWidthSensitive(
       this.currentNodes,
       this.registry,
       ctx,
       this.transformCache,
+      (node) => this.parseCache.get(node.blockId)?.node,
     );
 
-    let nextNodes = this.currentNodes;
-    let nextMeasured = this.currentMeasured;
+    const nextNodes = changed ? this.applyHyphenation(nodes) : this.currentNodes;
+    // Same path as a pipeline run: the identity+width cache skips blocks
+    // already measured at this width, and shrinkwrap is recomputed for the
+    // new width instead of carrying the old value along.
+    const nextMeasured = await this.measureBlocks(nextNodes, targetWidth);
 
-    if (changed) {
-      nextNodes = this.applyHyphenation(nodes);
-      nextMeasured = await this.measureBlocks(nextNodes, targetWidth);
-    } else {
-      const reMeasured: MeasuredBlock[] = [];
-      for (const measured of this.currentMeasured) {
-        const plugin = measured.node.transformedBy
-          ? this.registry.get(measured.node.transformedBy)
-          : undefined;
-        const dims = await this.measureLayer.relayout(measured, targetWidth, plugin);
-        reMeasured.push({ ...measured, dimensions: dims });
-      }
-      nextMeasured = reMeasured;
+    if (this.destroyed) return;
+    if (generation !== this.generation) {
+      // A newer run or relayout committed after us; its state is fresher.
+      return;
     }
-
     if (targetWidth !== this.containerWidth) {
+      // Superseded width; the setWidth loop relayouts at the latest one.
       return;
     }
 
