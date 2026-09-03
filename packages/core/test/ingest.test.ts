@@ -523,3 +523,23 @@ describe("splitBlocks: display math edge cases", () => {
     ]);
   });
 });
+
+describe("fences inside containers", () => {
+  it("leaves a fenced snippet inside a blockquote untouched", () => {
+    const doc = "> ```js\n> const re = /\\[a-z\\]/;\n> ```";
+    expect(repair(doc)).toBe(doc);
+    expect(splitBlocks(doc)).toEqual([doc]);
+  });
+
+  it("keeps a list item's fence together across blank lines", () => {
+    const doc = "- ```py\n  a = 1\n\n  b = 2\n  ```";
+    expect(repair(doc)).toBe(doc);
+    expect(splitBlocks(doc)).toEqual([doc]);
+  });
+
+  it("does not open a fence on a code span written with three backticks", () => {
+    const doc = "```npm test``` is the command.\n\nThen deploy.";
+    expect(repair(doc)).toBe(doc);
+    expect(splitBlocks(doc)).toEqual(["```npm test``` is the command.", "Then deploy."]);
+  });
+});

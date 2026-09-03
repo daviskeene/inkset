@@ -83,11 +83,21 @@ const CODE_FENCE_RE = /^(`{3,}|~{3,})/;
 type CodeFence = { char: string; length: number };
 type CodeFenceLine = CodeFence & { rest: string };
 
+// A fence nested in a blockquote or list item (`> ```js`, `- ~~~`) is still a
+// fence: the container markers come off before the fence itself is matched.
+const CONTAINER_PREFIX_RE = /^(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+)+/;
+
 /** The fence marker on a (left-trimmed) line, or null. */
 const matchCodeFence = (trimmed: string): CodeFenceLine | null => {
-  const match = trimmed.match(CODE_FENCE_RE);
+  const line = trimmed.replace(CONTAINER_PREFIX_RE, "").trimStart();
+  const match = line.match(CODE_FENCE_RE);
   if (!match) return null;
-  return { char: match[1][0], length: match[1].length, rest: trimmed.slice(match[1].length) };
+  const rest = line.slice(match[1].length);
+  // CommonMark: the info string of a backtick fence cannot contain backticks,
+  // so "```code``` inline" is a code span, not an opener that swallows the
+  // rest of the document.
+  if (match[1][0] === "`" && rest.includes("`")) return null;
+  return { char: match[1][0], length: match[1].length, rest };
 };
 
 /**
@@ -668,7 +678,7 @@ const repairInlineFormatting = (text: string): string => {
   const prefix = lastNewline >= 0 ? result.slice(0, lastNewline + 1) : "";
 
   // A fence line is structure, not prose; its `~~~` is not strikethrough.
-  if (CODE_FENCE_RE.test(lastLine.trimStart())) return result;
+  if (matchCodeFence(lastLine.trimStart())) return result;
 
   let repairedLine = lastLine;
 
