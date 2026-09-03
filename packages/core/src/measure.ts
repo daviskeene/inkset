@@ -34,6 +34,11 @@ const BLOCKQUOTE_BORDER_WIDTH = 3; // --inkset-blockquote-border-width (+ 1em pa
 const TABLE_ROW_CHROME = 4; // UA default: 1px cell padding ×2 + 2px border-spacing
 // The default stylesheet renders <hr> as a 1px border with no margin.
 const THEMATIC_BREAK_HEIGHT = 1;
+// section.footnotes: a 1px rule and 0.75em of padding above the list, 0.25em
+// between notes.
+const FOOTNOTES_RULE_HEIGHT = 1;
+const FOOTNOTES_PADDING_EM = 0.75;
+const FOOTNOTES_ITEM_GAP_EM = 0.25;
 const AVG_CHAR_WIDTH_RATIO = 0.6;
 // Average glyph advance as a fraction of font size, used to translate
 // letter-spacing into an equivalent measuring width.
@@ -339,6 +344,19 @@ export class MeasureLayer {
         return { width: maxWidth, height: THEMATIC_BREAK_HEIGHT };
       }
 
+      case "footnotes": {
+        // GFM's footnote section: the "Footnotes" heading is visually hidden,
+        // the notes measure like list items, and the stylesheet adds the rule,
+        // the top padding, and a gap between notes.
+        const items = countElements(node, "li");
+        const list = await this.measureListContainer(node, maxWidth, baseTypography);
+        const chrome =
+          FOOTNOTES_RULE_HEIGHT +
+          (FOOTNOTES_PADDING_EM + Math.max(0, items - 1) * FOOTNOTES_ITEM_GAP_EM) *
+            this.options.fontSize;
+        return { width: maxWidth, height: Math.ceil(list + chrome) };
+      }
+
       default:
         return this.measureTextWithTypography(text, maxWidth, baseTypography);
     }
@@ -430,13 +448,18 @@ export class MeasureLayer {
 
     try {
       const prepared = pretext.prepareWithSegments(text, typography.font);
-      const stats = pretext.measureLineStats(prepared, maxWidth);
+      // Wrap at the same tracking-compensated width the height estimate used,
+      // then scale the result back into DOM pixels: the tracked glyphs the DOM
+      // draws are narrower than the untracked ones pretext measured.
+      const layoutWidth = compensateLetterSpacing(maxWidth, typography);
+      const domScale = maxWidth / layoutWidth;
+      const stats = pretext.measureLineStats(prepared, layoutWidth);
       if (stats.lineCount <= 1) {
         // One-line content is already balanced: return its natural width so
         // callers can still opt to shrink the container.
-        return { width: stats.maxLineWidth, lineCount: 1 };
+        return { width: stats.maxLineWidth * domScale, lineCount: 1 };
       }
-      return { width: Math.ceil(stats.maxLineWidth), lineCount: stats.lineCount };
+      return { width: Math.ceil(stats.maxLineWidth * domScale), lineCount: stats.lineCount };
     } catch (err) {
       this.pretextUnavailable = true;
       console.warn("[inkset] pretext shrinkwrap failed:", err);
@@ -541,7 +564,9 @@ export class MeasureLayer {
     return buildGlyphLookup(pretextModule as unknown as GlyphPretextModule, {
       text,
       font: typography.font,
-      maxWidth,
+      // The wrap width the height estimate used, so reveal spans land on the
+      // lines the layout reserved.
+      maxWidth: compensateLetterSpacing(maxWidth, typography),
       lineHeight: typography.lineHeight,
     });
   }

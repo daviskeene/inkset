@@ -3,7 +3,7 @@
 // 16px, 24px lines).
 import { describe, expect, it } from "vitest";
 import { MeasureLayer } from "../src/measure.js";
-import { createBlocks, parseBlock } from "../src/parse.js";
+import { collectDocumentReferences, createBlocks, parseBlock } from "../src/parse.js";
 import type { EnrichedNode } from "../src/types.js";
 
 const layer = new MeasureLayer({ font: "sans-serif", fontSize: 16, lineHeight: 24 });
@@ -46,6 +46,18 @@ describe("default-renderer measurement heuristics", () => {
     // h1 is 48px → 28.8px per character; 11 characters need 316.8px, but the
     // -0.04em tracking buys ~8.7% more room, so they fit on one line at 300px.
     expect(await height(`# ${"x".repeat(11)}`, 300)).toBe(51);
+  });
+
+  it("measures the footnote section as its notes plus the rule and padding", async () => {
+    const { blocks, references } = collectDocumentReferences([
+      "Text[^a] and[^b].",
+      "[^a]: Note one.",
+      "[^b]: Note two.",
+    ]);
+    const footnotes = createBlocks(blocks, references)[blocks.length - 1];
+    const measured = await layer.measureBlock(parseBlock(footnotes), 800);
+    // Two 24px notes, a 1px rule, 12px of padding, 4px between the notes.
+    expect(measured.dimensions.height).toBe(48 + 1 + 12 + 4);
   });
 
   it("returns whole-pixel heights", async () => {
