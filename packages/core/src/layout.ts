@@ -16,6 +16,14 @@ const DEFAULT_LAYOUT_OPTIONS: LayoutOptions = {
   padding: 0,
 };
 
+/** Index of the first block at or after `from` that takes vertical space, or -1. */
+const nextVisibleIndex = (measured: readonly MeasuredBlock[], from: number): number => {
+  for (let i = from; i < measured.length; i++) {
+    if (measured[i].dimensions.height > 0) return i;
+  }
+  return -1;
+};
+
 export const computeLayout = (
   measured: readonly MeasuredBlock[],
   options?: Partial<LayoutOptions>,
@@ -46,11 +54,13 @@ export const computeLayout = (
     });
 
     // A zero-height block renders nothing (an HTML comment, a scroll anchor, a
-    // bare link-definition block), so it takes no vertical space at all: no
-    // height and no gap after it. The gap *before* it still applies, which is
-    // exactly the gap its visible predecessor owes the next visible block.
-    if (i < measured.length - 1 && height > 0) {
-      y += height + resolveBlockGap(block.kind, measured[i + 1].kind, blockSpacing);
+    // bare link-definition block), so it is transparent to spacing: it takes
+    // no height, owes no gap, and the gap its visible predecessor adds is the
+    // one the pair rules resolve for the next *visible* block.
+    if (height > 0) {
+      const next = nextVisibleIndex(measured, i + 1);
+      const gap = next === -1 ? 0 : resolveBlockGap(block.kind, measured[next].kind, blockSpacing);
+      y += height + gap;
     }
   }
 

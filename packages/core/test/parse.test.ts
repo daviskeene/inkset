@@ -175,6 +175,22 @@ describe("document references", () => {
     expect(findElements(section[0], "strong").map(extractText)).toEqual(["b"]);
   });
 
+  it("keeps an indented continuation paragraph with its footnote", () => {
+    const parsed = parseDocument([
+      "Text[^1].",
+      "[^1]: First paragraph.",
+      "    Second paragraph.",
+      "After.",
+    ]);
+    expect(parsed.map((p) => p.block.type)).toEqual(["paragraph", "paragraph", "footnotes"]);
+    expect(extractText(parsed[1].node)).toContain("After.");
+    expect(findElements(parsed[1].node, "pre")).toHaveLength(0);
+    const paragraphs = findElements(parsed[2].node, "p").map(extractText);
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]).toContain("First paragraph.");
+    expect(paragraphs[1]).toContain("Second paragraph.");
+  });
+
   it("renders nothing for unreferenced footnote definitions", () => {
     const parsed = parseDocument(["Plain text.", "[^x]: unused"]);
     expect(parsed[1].block.type).toBe("footnotes");

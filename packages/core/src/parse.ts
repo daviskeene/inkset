@@ -25,6 +25,9 @@ const MATH_ENV_RE =
   /^\\begin\{(equation|align|aligned|gather|gathered|alignat|alignedat|multline|split|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|Bmatrix|cases|dcases|rcases|smallmatrix|subarray|CD)\*?\}/;
 
 const FOOTNOTE_DEFINITION_RE = /^ {0,3}\[\^([^\]\s]+)\]:/;
+// A paragraph indented four spaces after a blank line continues the footnote
+// above it (GFM); the splitter has already cut it into its own block.
+const FOOTNOTE_CONTINUATION_RE = /^(?: {4}|\t)/;
 
 const detectBlockType = (raw: string): BlockType => {
   const trimmed = raw.trimStart();
@@ -111,6 +114,7 @@ export const collectDocumentReferences = (
   const footnoteDefinitions: string[] = [];
   const definedLabels = new Set<string>();
   const kept: string[] = [];
+  let previousWasFootnote = false;
 
   for (const raw of rawBlocks) {
     if (FOOTNOTE_DEFINITION_RE.test(raw)) {
@@ -120,8 +124,16 @@ export const collectDocumentReferences = (
       while ((match = FOOTNOTE_DEFINITION_LINE_RE.exec(raw)) !== null) {
         definedLabels.add(normalizeFootnoteLabel(match[1]));
       }
+      previousWasFootnote = true;
       continue;
     }
+
+    if (previousWasFootnote && FOOTNOTE_CONTINUATION_RE.test(raw)) {
+      // Left in the main flow it would render as an indented code block.
+      footnoteDefinitions[footnoteDefinitions.length - 1] += `\n\n${raw}`;
+      continue;
+    }
+    previousWasFootnote = false;
 
     if (raw.includes("]:") && !raw.trimStart().startsWith("```")) {
       const definitions = extractLinkDefinitions(raw);

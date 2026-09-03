@@ -103,6 +103,28 @@ describe("<Inkset> raw HTML and footnotes", () => {
     expect(reactErrors()).toEqual([]);
   });
 
+  it("keeps the pair rule between the blocks around a zero-height anchor", async () => {
+    await act(async () => {
+      root.render(
+        <Inkset
+          content={'Intro.\n\n<a id="s"></a>\n\n## Section'}
+          streaming={false}
+          width={480}
+          blockSpacing={{ default: 8, pairs: [{ from: "paragraph", to: "heading2", gap: 40 }] }}
+        />,
+      );
+    });
+    await settle();
+
+    const intro = container.querySelector<HTMLElement>('[data-block-id="0"]');
+    const heading = container.querySelector<HTMLElement>('[data-block-id="2"]');
+    const introHeight = Number.parseInt(intro?.style.minHeight ?? "0", 10);
+    expect(introHeight).toBeGreaterThan(0);
+    // The anchor between them is transparent: paragraph → heading2 applies.
+    expect(heading?.style.transform).toBe(`translate(0px, ${introHeight + 40}px)`);
+    expect(reactErrors()).toEqual([]);
+  });
+
   it("resolves a footnote reference and renders the footnote list", async () => {
     await act(async () => {
       root.render(

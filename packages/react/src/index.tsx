@@ -654,6 +654,14 @@ type ResolvedBlockHeight = {
 
 type ObservedHeightCache = Map<number, Map<number, number>>;
 
+/** Index of the first height at or after `from` that is positive, or -1. */
+const nextVisibleIndex = (heights: readonly number[], from: number): number => {
+  for (let i = from; i < heights.length; i++) {
+    if (heights[i] > 0) return i;
+  }
+  return -1;
+};
+
 const resolveLayout = (
   layout: readonly LayoutBlock[],
   heightMap: ReadonlyMap<number, ResolvedBlockHeight>,
@@ -662,12 +670,10 @@ const resolveLayout = (
 ): LayoutBlock[] => {
   if (layout.length === 0) return [];
 
-  let currentY = layout[0]?.y ?? 0;
-
-  return layout.map((block, index) => {
+  // Heights first, positions second: the gap after a block goes to the next
+  // block that takes space, which needs every height resolved.
+  const heights = layout.map((block) => {
     const resolved = heightMap.get(block.blockId);
-    let height = block.height;
-
     // Only trust DOM-resolved heights when captured for the same block instance
     // at the same width, preventing stale-height lag during interactive resize
     if (
@@ -676,24 +682,25 @@ const resolveLayout = (
       resolved.height > 0 &&
       resolved.width === block.width
     ) {
-      height = resolved.height;
-    } else {
-      const cachedHeight = observedHeightCache.get(block.blockId)?.get(block.width);
-      if (cachedHeight && cachedHeight > 0) {
-        height = cachedHeight;
-      }
+      return resolved.height;
     }
+    const cachedHeight = observedHeightCache.get(block.blockId)?.get(block.width);
+    return cachedHeight && cachedHeight > 0 ? cachedHeight : block.height;
+  });
 
-    const nextBlock: LayoutBlock = {
-      ...block,
-      y: currentY,
-      height,
-    };
+  let currentY = layout[0]?.y ?? 0;
+
+  return layout.map((block, index) => {
+    const height = heights[index];
+    const nextBlock: LayoutBlock = { ...block, y: currentY, height };
 
     // Mirrors computeLayout: a zero-height block (anchor, comment, bare
-    // definitions) takes no space and owes no gap to its successor.
-    if (index < layout.length - 1 && height > 0) {
-      currentY += height + resolveBlockGap(block.kind, layout[index + 1].kind, blockSpacing);
+    // definitions) takes no space, owes no gap, and is transparent to the
+    // pair rule between its visible neighbours.
+    if (height > 0) {
+      const next = nextVisibleIndex(heights, index + 1);
+      const gap = next === -1 ? 0 : resolveBlockGap(block.kind, layout[next].kind, blockSpacing);
+      currentY += height + gap;
     }
     return nextBlock;
   });
