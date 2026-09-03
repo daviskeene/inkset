@@ -1,5 +1,5 @@
 // Table plugin: renders markdown tables with horizontal scroll and CSV copy support.
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   extractText,
   nodeToHtml,
@@ -40,7 +40,7 @@ export type TablePluginOptions = {
 
 // ── Table component ───────────────────────────────────────────────
 
-const TableBlock = ({ node }: PluginComponentProps) => {
+const TableBlock = ({ node, onContentSettled }: PluginComponentProps) => {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tableHtml = (node.pluginData?.html as string) ?? "";
@@ -49,6 +49,14 @@ const TableBlock = ({ node }: PluginComponentProps) => {
   const borderStyle = (node.pluginData?.borderStyle as TableBorderStyle) ?? "horizontal";
   const zebra = (node.pluginData?.zebra as boolean) ?? false;
   const stickyHeader = (node.pluginData?.stickyHeader as boolean) ?? false;
+
+  // The table renders synchronously from `pluginData.html`, so its DOM is
+  // final the moment it commits. Settling tells the host to adopt the real
+  // height right away: the estimate is a per-row guess, and until a plugin
+  // settles, observer readings may only grow the reservation.
+  useLayoutEffect(() => {
+    onContentSettled?.();
+  }, [node, onContentSettled]);
 
   const handleCopy = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;

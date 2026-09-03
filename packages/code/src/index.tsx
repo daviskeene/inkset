@@ -88,23 +88,23 @@ const getHighlighter = async (
   const uniqueLangs = [...new Set(langs.filter(Boolean))].filter((l) => !failedLangs.has(l));
 
   if (!highlighterPromise) {
-    const initialThemes = uniqueThemes.length > 0 ? uniqueThemes : [FALLBACK_THEME];
     highlighterPromise = (async () => {
       const shiki = await import("shiki");
+      // Only the fallback theme goes into `createHighlighter`: one bad theme
+      // in that list rejects the whole highlighter. Requested themes load one
+      // at a time below, so a typo'd light theme costs exactly that theme —
+      // and the theme every failure degrades to is always loaded.
       const instance = (await shiki.createHighlighter({
-        themes: initialThemes,
+        themes: [FALLBACK_THEME],
         langs: DEFAULT_LANGS,
       })) as ShikiHighlighter;
-      initialThemes.forEach((t) => loadedThemes.add(t));
+      loadedThemes.add(FALLBACK_THEME);
       DEFAULT_LANGS.forEach((l) => loadedLangs.add(l));
       return instance;
     })().catch((err: unknown) => {
       // A rejected promise must not stay cached: every later highlight would
       // rethrow it and no code on the page would ever be highlighted again.
-      // Blame the requested themes (the usual cause) and let the next call
-      // start over with the fallback theme.
       highlighterPromise = null;
-      initialThemes.forEach((t) => failedThemes.add(t));
       if (isDev) console.warn("[inkset/code] shiki failed to initialize:", err);
       throw err;
     });
