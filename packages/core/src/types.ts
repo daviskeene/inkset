@@ -187,9 +187,12 @@ export interface PluginComponentProps {
   node: EnrichedNode;
   isStreaming?: boolean;
   /**
-   * Optional callback for plugins whose rendered DOM can settle after the
-   * first paint (e.g. async syntax highlight / KaTeX render). Calling this
-   * asks the host renderer to re-read the block's actual height immediately.
+   * Tell the host the block's DOM is final. The call re-reads the block's
+   * real height immediately, in both directions. Until a plugin settles for
+   * its current input, the host treats observer readings of the block as
+   * provisional and lets them only grow the reservation — an async render
+   * (shiki, KaTeX) paints a shorter fallback first — so a plugin that renders
+   * synchronously should call this on mount to let an over-estimate shrink.
    */
   onContentSettled?: () => void;
 }

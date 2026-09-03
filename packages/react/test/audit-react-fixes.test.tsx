@@ -1,11 +1,11 @@
 // Regression tests for the React-renderer audit: reveal gate rebuilds,
 // stale heights across document replacement, hot→frozen identity, partial
 // copy, mount cost, and downward height correction.
-import React, { StrictMode } from "react";
+import React, { StrictMode, useEffect, useLayoutEffect, useState } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StreamingPipeline, type InksetPlugin } from "@inkset/core";
+import { StreamingPipeline, type InksetPlugin, type PluginComponentProps } from "@inkset/core";
 import { Inkset } from "../src/index.js";
 
 class MockResizeObserver {
@@ -38,6 +38,30 @@ const tallPlugin = (height: number): InksetPlugin => ({
   component: ({ node }) => (
     <div data-measured-height={String((node.pluginData?.height as number) ?? 0)}>tall</div>
   ),
+});
+
+/** A block whose DOM starts as a short raw fallback and settles taller later. */
+const makeSettlingBlock = (provisional: number, settled: number, delayMs: number) => {
+  const SettlingBlock = ({ onContentSettled }: PluginComponentProps) => {
+    const [done, setDone] = useState(false);
+    useEffect(() => {
+      const timer = setTimeout(() => setDone(true), delayMs);
+      return () => clearTimeout(timer);
+    }, []);
+    useLayoutEffect(() => {
+      if (done) onContentSettled?.();
+    }, [done, onContentSettled]);
+    return <div data-measured-height={String(done ? settled : provisional)}>settling</div>;
+  };
+  return SettlingBlock;
+};
+
+const settlingPlugin = (provisional: number, settled: number, delayMs: number): InksetPlugin => ({
+  name: "settling",
+  handles: ["code"],
+  transform: (node) => ({ ...node, pluginData: {} }),
+  measure: () => ({ width: 0, height: 100 }),
+  component: makeSettlingBlock(provisional, settled, delayMs),
 });
 
 describe("React renderer audit fixes", () => {
@@ -272,5 +296,49 @@ describe("React renderer audit fixes", () => {
     expect(container.querySelector<HTMLElement>('[data-block-id="0"]')?.style.minHeight).toBe(
       "10px",
     );
+  });
+
+  it("holds a plugin block at its estimate until the plugin settles", async () => {
+    const plugins = [settlingPlugin(20, 80, 1000)];
+    await act(async () => {
+      root.render(
+        <Inkset
+          content={"```js\nx\n```\n\nAfter"}
+          streaming={false}
+          width={480}
+          plugins={plugins}
+        />,
+      );
+    });
+    await settle(3);
+    const block = container.querySelector<HTMLElement>('[data-block-id="0"]');
+    // The 20px raw fallback is provisional: the 100px reservation stands.
+    expect(block?.style.minHeight).toBe("100px");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    await settle();
+    // The settled report is trusted in both directions.
+    expect(block?.style.minHeight).toBe("80px");
+  });
+
+  it("does not duplicate a chunk the gate emitted synchronously when StrictMode rebuilds it", async () => {
+    await act(async () => {
+      root.render(
+        <StrictMode>
+          <Inkset
+            content="Hello world "
+            streaming
+            width={480}
+            reveal={{ throttle: { delayInMs: 0 } }}
+          />
+        </StrictMode>,
+      );
+    });
+    await settle();
+    // The block itself, not the root: the aria-live mirror repeats the text.
+    const text = container.querySelector('[data-block-id="0"]')?.textContent ?? "";
+    expect(text.match(/Hello/g)).toHaveLength(1);
   });
 });

@@ -1033,6 +1033,22 @@ const BlockRenderer = memo(
 
     const PluginComponent = plugin?.component;
 
+    // The input the plugin last called `onContentSettled` for. Until it
+    // settles for the current input its DOM is provisional: shiki and KaTeX
+    // paint a raw fallback first, and that fallback is usually shorter than
+    // the reserved estimate. Width is part of the input — plugins re-render
+    // (and re-settle) when the block is laid out at a new width.
+    const settledForRef = useRef<{
+      node: EnrichedNode;
+      isStreaming: boolean;
+      width: number;
+    } | null>(null);
+    // Read through a ref so `reportHeight` — and the `onContentSettled`
+    // callback plugins key their settle effects on — keeps its identity while
+    // the reserved height moves.
+    const reservedHeightRef = useRef(height);
+    reservedHeightRef.current = height;
+
     const reportHeight = useCallback(
       (priority: "sync" | "deferred") => {
         const element = blockRef.current;
@@ -1044,16 +1060,28 @@ const BlockRenderer = memo(
         const measureTarget =
           element.firstElementChild instanceof HTMLElement ? element.firstElementChild : element;
         const nextHeight = Math.ceil(measureTarget.getBoundingClientRect().height);
-        if (nextHeight > 0) {
-          onHeightChange(block.blockId, node, width, nextHeight, priority);
+        if (nextHeight <= 0) return;
+        // An observer reading of provisional plugin DOM may only grow the
+        // reservation; shrinking waits for the settled report.
+        const settled = settledForRef.current;
+        const provisional =
+          PluginComponent !== undefined &&
+          (settled === null ||
+            settled.node !== node ||
+            settled.isStreaming !== isStreaming ||
+            settled.width !== width);
+        if (priority === "deferred" && provisional && nextHeight < reservedHeightRef.current) {
+          return;
         }
+        onHeightChange(block.blockId, node, width, nextHeight, priority);
       },
-      [block.blockId, node, onHeightChange, width],
+      [block.blockId, isStreaming, node, onHeightChange, PluginComponent, width],
     );
 
     const handleContentSettled = useCallback(() => {
+      settledForRef.current = { node, isStreaming, width };
       reportHeight("sync");
-    }, [reportHeight]);
+    }, [isStreaming, node, reportHeight, width]);
 
     // Shrinkwrap narrows the text content without changing the block's allocated
     // width, so positioning math and plugin-rendered blocks stay unaffected.
@@ -1664,6 +1692,14 @@ export const Inkset = ({
   const pendingShaderTokensRef = useRef<ShaderToken[]>([]);
   const lastShaderEmitTickRef = useRef<number>(-1);
   const lastPushedContentRef = useRef<string>("");
+  // Everything handed to `displayedContent` so far, kept in step synchronously
+  // (a gate with `delayInMs: 0` emits inside `push`, before React commits), so
+  // a gate rebuild rewinds to what was delivered, not to the last render.
+  const deliveredContentRef = useRef<string>(revealConfig.throttle ? "" : (content ?? ""));
+  const showContent = useCallback((next: string) => {
+    deliveredContentRef.current = next;
+    setDisplayedContent(next);
+  }, []);
   // Tracks whether the current document is in a throttled stream session.
   // Stays true for the streaming -> settled transition so the final append can
   // drain through the gate instead of fast-forwarding and replaying reveal.
@@ -1681,8 +1717,6 @@ export const Inkset = ({
     [revealThrottleDelay, revealThrottleChunking, revealIsUndefined],
   );
   const shaderTokenBatchRef = useRef<ShaderToken[]>([]);
-  const displayedContentRef = useRef<string>("");
-  displayedContentRef.current = displayedContent ?? "";
 
   // Build / rebuild the gate when throttle config changes.
   useEffect(() => {
@@ -1695,6 +1729,7 @@ export const Inkset = ({
       delayInMs: revealThrottleConfig.delayInMs,
       chunking: revealThrottleConfig.chunking,
       onEmit: (chunk) => {
+        deliveredContentRef.current += chunk;
         setDisplayedContent((prev) => (prev ?? "") + chunk);
       },
     });
@@ -1702,10 +1737,10 @@ export const Inkset = ({
     return () => {
       gate.reset();
       // Whatever the gate had not emitted yet is gone with it. Rewind the
-      // push cursor to what is actually on screen so the feed effect re-queues
-      // the undelivered tail into the next gate (StrictMode replays this
-      // cleanup on mount; without the rewind the first chunk vanished).
-      lastPushedContentRef.current = displayedContentRef.current;
+      // push cursor to what was delivered so the feed effect re-queues the
+      // undelivered tail into the next gate (StrictMode replays this cleanup
+      // on mount; without the rewind the first chunk vanished).
+      lastPushedContentRef.current = deliveredContentRef.current;
     };
   }, [revealThrottleConfig]);
 
@@ -1713,7 +1748,7 @@ export const Inkset = ({
   useEffect(() => {
     if (content === undefined) return;
     if (!revealThrottleConfig) {
-      setDisplayedContent(content);
+      showContent(content);
       lastPushedContentRef.current = content;
       streamSessionActiveRef.current = false;
       setRevealDrainActive(false);
@@ -1731,7 +1766,7 @@ export const Inkset = ({
       tokenGateRef.current?.reset();
       streamSessionActiveRef.current = streaming;
       lastPushedContentRef.current = content;
-      setDisplayedContent(content);
+      showContent(content);
       setRevealDrainActive(false);
       return;
     }
@@ -1741,7 +1776,7 @@ export const Inkset = ({
     // session that just flipped to settled.
     if (!continuingStream) {
       lastPushedContentRef.current = content;
-      setDisplayedContent(content);
+      showContent(content);
       setRevealDrainActive(false);
       return;
     }
@@ -1756,7 +1791,7 @@ export const Inkset = ({
     if (delta.length > 0) {
       tokenGateRef.current?.push(delta);
     }
-  }, [content, streaming, revealThrottleConfig]);
+  }, [content, streaming, revealThrottleConfig, showContent]);
 
   // Flush the gate when streaming ends so the tail chunk (which may lack a
   // trailing word boundary) makes it to the pipeline.
@@ -2063,19 +2098,12 @@ export const Inkset = ({
       }
       const cachedHeight = cachedByWidth.get(width);
 
-      if (priority === "deferred") {
-        if (cachedHeight === height) return;
-        // Plugin-owned blocks settle through `onContentSettled` (a sync
-        // report, which may shrink); a deferred report from one of them can
-        // be a provisional state — raw LaTeX before KaTeX loads — so it may
-        // only grow the cached height. Default-rendered blocks have no settle
-        // callback: their deferred report is the truth in both directions,
-        // otherwise an over-estimate (a blockquote's phantom padding, a
-        // heading that wrapped a line early) would never be corrected.
-        if (node.transformedBy && cachedHeight !== undefined && height < cachedHeight) {
-          return;
-        }
-      }
+      // A deferred report is the DOM's truth in both directions: an
+      // over-estimate (a blockquote's phantom padding, a heading that wrapped
+      // a line early) must come down as readily as an under-estimate grows.
+      // Provisional plugin DOM never gets this far — `BlockRenderer` holds
+      // those readings back until the plugin settles.
+      if (priority === "deferred" && cachedHeight === height) return;
 
       cachedByWidth.set(width, height);
 
