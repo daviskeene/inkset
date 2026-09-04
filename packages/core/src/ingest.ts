@@ -80,13 +80,45 @@ const ATX_HEADING_RE = /^(?: {0,3})(?:#{1,6})(?:\s+.*)?$/;
 const STANDALONE_MATH_FENCE_RE = /^\$\$\s*$/;
 const CODE_FENCE_RE = /^(`{3,}|~{3,})/;
 
+type CodeFence = { char: string; length: number };
+type CodeFenceLine = CodeFence & { rest: string };
+
+// A fence nested in a blockquote or list item (`> ```js`, `- ~~~`) is still a
+// fence: the container markers come off before the fence itself is matched.
+const CONTAINER_PREFIX_RE = /^(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+)+/;
+
+/** The fence marker on a (left-trimmed) line, or null. */
+const matchCodeFence = (trimmed: string): CodeFenceLine | null => {
+  const line = trimmed.replace(CONTAINER_PREFIX_RE, "").trimStart();
+  const match = line.match(CODE_FENCE_RE);
+  if (!match) return null;
+  const rest = line.slice(match[1].length);
+  // CommonMark: the info string of a backtick fence cannot contain backticks,
+  // so "```code``` inline" is a code span, not an opener that swallows the
+  // rest of the document.
+  if (match[1][0] === "`" && rest.includes("`")) return null;
+  return { char: match[1][0], length: match[1].length, rest };
+};
+
 /**
- * Whether a fence-shaped line closes the fence opened with `fenceChar`.
- * Shared by the splitter and the repair passes so every stage agrees on
- * where code regions begin and end.
+ * CommonMark §4.5: a closing fence uses the same character as the opener, is
+ * at least as long, and carries nothing but whitespace. Shared by the splitter
+ * and every repair pass so all stages agree on where code regions begin and
+ * end — a ```` ```` ```` block that *shows* a ```` ``` ```` block must stay one block.
  */
-const closesCodeFence = (trimmed: string, fenceMatch: RegExpMatchArray, fenceChar: string) =>
-  trimmed.startsWith(fenceChar.repeat(3)) && trimmed.trim().length <= fenceMatch[1].length + 1;
+const closesCodeFence = (fence: CodeFenceLine, open: CodeFence | null): boolean =>
+  open !== null &&
+  fence.char === open.char &&
+  fence.length >= open.length &&
+  fence.rest.trim() === "";
+
+/** Advances fence state for one line; returns the state after the line. */
+const stepCodeFence = (trimmed: string, open: CodeFence | null): CodeFence | null => {
+  const fence = matchCodeFence(trimmed);
+  if (!fence) return open;
+  if (open === null) return { char: fence.char, length: fence.length };
+  return closesCodeFence(fence, open) ? null : open;
+};
 
 /** Splits a markdown document into block-level chunks, preserving fenced regions. */
 export const splitBlocks = (document: string): string[] => {
@@ -95,29 +127,23 @@ export const splitBlocks = (document: string): string[] => {
   const lines = document.split("\n");
   const blocks: string[] = [];
   let current: string[] = [];
-  let inCodeFence = false;
+  let openFence: CodeFence | null = null;
   let inMathBlock = false;
   let latexEnvDepth = 0;
-  let fenceChar = "";
 
   for (const line of lines) {
     const trimmed = line.trimStart();
     const isStandaloneMathFence = STANDALONE_MATH_FENCE_RE.test(line.trim());
     const startsLatexMathEnv =
-      !inCodeFence && !inMathBlock && latexEnvDepth === 0 && LATEX_MATH_ENV_START_RE.test(trimmed);
+      openFence === null &&
+      !inMathBlock &&
+      latexEnvDepth === 0 &&
+      LATEX_MATH_ENV_START_RE.test(trimmed);
 
     if (!inMathBlock && latexEnvDepth === 0) {
-      const fenceMatch = trimmed.match(CODE_FENCE_RE);
-      if (fenceMatch) {
-        if (!inCodeFence) {
-          inCodeFence = true;
-          fenceChar = fenceMatch[1][0];
-        } else if (closesCodeFence(trimmed, fenceMatch, fenceChar)) {
-          inCodeFence = false;
-          fenceChar = "";
-        }
-      }
+      openFence = stepCodeFence(trimmed, openFence);
     }
+    const inCodeFence = openFence !== null;
 
     if (!inCodeFence && !inMathBlock && latexEnvDepth === 0 && ATX_HEADING_RE.test(line)) {
       if (current.length > 0) {
@@ -148,6 +174,15 @@ export const splitBlocks = (document: string): string[] => {
             blocks.push(current.join("\n"));
             current = [];
           }
+
+          if (segment.type === "open") {
+            // `$$a$$ and $$b` — the tail opens a second display block that
+            // continues on the next lines.
+            current.push(segment.value.trim());
+            inMathBlock = true;
+            continue;
+          }
+
           blocks.push(segment.value.trim());
         }
         continue;
@@ -193,10 +228,16 @@ export const splitBlocks = (document: string): string[] => {
       }
     }
 
+    // Bare `\begin{env} … \end{env}` blocks (no `$$` around them) are tracked
+    // by nesting depth. Only a line that *starts* a math environment can open
+    // that tracking: a `\begin{…}` mentioned in prose or inline code must not
+    // swallow the rest of the document, and environments inside a `$$` block
+    // are the math plugin's business, not the splitter's.
     const wasInLatexEnv = latexEnvDepth > 0 || startsLatexMathEnv;
-    if (!inCodeFence) {
-      const begins = (line.match(LATEX_BEGIN_RE) ?? []).length;
-      const ends = (line.match(LATEX_END_RE) ?? []).length;
+    if (!inCodeFence && !inMathBlock && wasInLatexEnv) {
+      const prose = maskInlineCodeSpans(line);
+      const begins = (prose.match(LATEX_BEGIN_RE) ?? []).length;
+      const ends = (prose.match(LATEX_END_RE) ?? []).length;
       latexEnvDepth = Math.max(0, latexEnvDepth + begins - ends);
     }
 
@@ -222,7 +263,8 @@ export const splitBlocks = (document: string): string[] => {
 };
 
 type DisplayMathSegment = {
-  type: "text" | "math";
+  /** `open` is an unclosed trailing `$$…` that starts a multi-line block. */
+  type: "text" | "math" | "open";
   value: string;
 };
 
@@ -239,8 +281,14 @@ const splitCompleteDisplayMathSpans = (line: string): DisplayMathSegment[] | nul
     if (start === -1) break;
 
     const end = findDisplayMathFence(line, start + 2);
-    if (end === -1)
-      return foundMath ? segments.concat({ type: "text", value: line.slice(cursor) }) : null;
+    if (end === -1) {
+      if (!foundMath) return null;
+      if (start > cursor) {
+        segments.push({ type: "text", value: line.slice(cursor, start) });
+      }
+      segments.push({ type: "open", value: line.slice(start) });
+      return segments;
+    }
 
     if (start > cursor) {
       segments.push({ type: "text", value: line.slice(cursor, start) });
@@ -259,10 +307,15 @@ const splitCompleteDisplayMathSpans = (line: string): DisplayMathSegment[] | nul
   return segments;
 };
 
+/**
+ * Index of the next `$$` fence at or after `fromIndex`. A fence is exactly two
+ * dollars: `\$$` is escaped, `$$$` ("pricing: $$$") is prose, and anything
+ * inside an inline code span is literal.
+ */
 const findDisplayMathFence = (line: string, fromIndex: number): number => {
   for (let index = fromIndex; index < line.length - 1; index++) {
     if (line[index] !== "$" || line[index + 1] !== "$") continue;
-    if (line[index - 1] === "\\") continue;
+    if (line[index - 1] === "\\" || line[index - 1] === "$" || line[index + 2] === "$") continue;
     if (isInsideInlineCodeSpan(line, index)) continue;
     return index;
   }
@@ -407,8 +460,7 @@ const normalizeDelimiters = (text: string): string => {
   const lines = text.split("\n");
   const out: string[] = [];
   let region: string[] = [];
-  let inCodeFence = false;
-  let fenceChar = "";
+  let openFence: CodeFence | null = null;
 
   const flushRegion = (isDocumentTail: boolean) => {
     if (region.length === 0) return;
@@ -418,22 +470,13 @@ const normalizeDelimiters = (text: string): string => {
 
   for (const line of lines) {
     const trimmed = line.trimStart();
-    const fenceMatch = trimmed.match(CODE_FENCE_RE);
+    const nextFence = stepCodeFence(trimmed, openFence);
 
-    if (inCodeFence) {
+    if (openFence !== null || nextFence !== null) {
+      // Inside a fence, or on the line that opens one: verbatim.
+      if (openFence === null) flushRegion(false);
       out.push(line);
-      if (fenceMatch && closesCodeFence(trimmed, fenceMatch, fenceChar)) {
-        inCodeFence = false;
-        fenceChar = "";
-      }
-      continue;
-    }
-
-    if (fenceMatch) {
-      flushRegion(false);
-      out.push(line);
-      inCodeFence = true;
-      fenceChar = fenceMatch[1][0];
+      openFence = nextFence;
       continue;
     }
 
@@ -588,42 +631,35 @@ const maskMathSpans = (line: string): string =>
     .replace(/(?<![\\$])\$(?!\$)[^$\n]*?(?<!\\)\$(?![\d$])/g, (span) => " ".repeat(span.length));
 
 const repairCodeFences = (text: string): string => {
-  const lines = text.split("\n");
-  let openFence: string | null = null;
+  let openFence: CodeFence | null = null;
 
-  for (const line of lines) {
-    const trimmed = line.trimStart();
-    const match = trimmed.match(/^(`{3,}|~{3,})/);
-    if (match) {
-      if (!openFence) {
-        openFence = match[1][0].repeat(match[1].length);
-      } else {
-        openFence = null;
-      }
-    }
+  for (const line of text.split("\n")) {
+    openFence = stepCodeFence(line.trimStart(), openFence);
   }
 
   if (openFence) {
-    return text + "\n" + openFence;
+    return text + "\n" + openFence.char.repeat(openFence.length);
   }
   return text;
 };
 
 const repairMathBlocks = (text: string): string => {
   let count = 0;
-  let inCodeFence = false;
+  let openFence: CodeFence | null = null;
 
   for (const line of text.split("\n")) {
     const trimmed = line.trimStart();
-    if (trimmed.match(/^(`{3,}|~{3,})/)) {
-      inCodeFence = !inCodeFence;
+    const nextFence = stepCodeFence(trimmed, openFence);
+    if (nextFence !== openFence || matchCodeFence(trimmed)) {
+      openFence = nextFence;
       continue;
     }
-    if (!inCodeFence && trimmed.includes("$$")) {
-      // `$$` inside inline code (``use `$$` for display math``) or escaped as
-      // `\$$` is not a fence; the splitter ignores those too, so counting them
-      // here would append a closer that never pairs with anything.
-      const matches = maskInlineCodeSpans(trimmed).match(/(?<!\\)\$\$/g);
+    if (openFence === null && trimmed.includes("$$")) {
+      // `$$` inside inline code (``use `$$` for display math``), escaped as
+      // `\$$`, or part of a `$$$` run is not a fence; the splitter ignores
+      // those too, so counting them here would append a closer that never
+      // pairs with anything.
+      const matches = maskInlineCodeSpans(trimmed).match(/(?<![\\$])\$\$(?!\$)/g);
       if (matches) count += matches.length;
     }
   }
@@ -642,7 +678,7 @@ const repairInlineFormatting = (text: string): string => {
   const prefix = lastNewline >= 0 ? result.slice(0, lastNewline + 1) : "";
 
   // A fence line is structure, not prose; its `~~~` is not strikethrough.
-  if (CODE_FENCE_RE.test(lastLine.trimStart())) return result;
+  if (matchCodeFence(lastLine.trimStart())) return result;
 
   let repairedLine = lastLine;
 
