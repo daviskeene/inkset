@@ -66,3 +66,26 @@ describe("createCodePlugin", () => {
     );
   });
 });
+
+describe("createCodePlugin audit fixes", () => {
+  it("includes extra languages in the plugin key and pluginData", () => {
+    const plugin = createCodePlugin({ langs: ["diff", "xml"] });
+    expect(plugin.key).toContain("diff,xml");
+    const enriched = plugin.transform(makeCodeNode("a"), ctx);
+    expect(enriched.pluginData?.langs).toEqual(["diff", "xml"]);
+  });
+
+  it("measures without a phantom trailing line and without a header it will not render", () => {
+    const withHeader = createCodePlugin();
+    const twoLines = withHeader.transform(makeCodeNode("foo\nbar\n"), ctx);
+    // 2 lines × 21 + header 29 + padding 24
+    expect(withHeader.measure?.(twoLines, 600)).toEqual({ width: 600, height: 2 * 21 + 29 + 24 });
+
+    const bare = createCodePlugin({ showLangLabel: false, showCopy: false });
+    const bareNode = bare.transform(makeCodeNode("foo\nbar\n"), ctx);
+    expect(bare.measure?.(bareNode, 600)).toEqual({
+      width: 600,
+      height: Math.max(2 * 21 + 24, 48),
+    });
+  });
+});

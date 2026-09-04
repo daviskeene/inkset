@@ -67,3 +67,22 @@ describe("createMathPlugin", () => {
     expect(enriched.pluginData?.latex).toContain("(?)");
   });
 });
+
+describe("createMathPlugin audit fixes", () => {
+  it("routes a custom renderer through its renderToString", () => {
+    const renderToString = (latex: string) => `<i>${latex}</i>`;
+    const plugin = createMathPlugin({ renderer: { name: "custom", renderToString } });
+    const enriched = plugin.transform(makeMathNode("x"), ctx);
+    const render = enriched.pluginData?.render as (l: string, o: unknown) => string;
+    expect(typeof render).toBe("function");
+    expect(render("x", { displayMode: true })).toBe("<i>x</i>");
+    expect(createMathPlugin().transform(makeMathNode("x"), ctx).pluginData?.render).toBeUndefined();
+  });
+
+  it("reserves KaTeX's display margins", () => {
+    const plugin = createMathPlugin();
+    const enriched = plugin.transform(makeMathNode("x^2"), ctx);
+    // 44 line + 16 padding + 2 × 1em at 1.21em ≈ 98.7 → whole pixels.
+    expect(plugin.measure?.(enriched, 600)).toEqual({ width: 600, height: 99 });
+  });
+});
