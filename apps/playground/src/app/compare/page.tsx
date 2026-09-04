@@ -208,17 +208,23 @@ const BUNDLE_NOTES = {
 
 // ── Page ───────────────────────────────────────────────────────────
 
+// Commit count stays internal: it only feeds the average. Shown on its own it
+// misleads — inkset lays out in JS across many tiny commits where the others
+// take one big browser reflow, so its count is higher while its cost is lower.
 type Metrics = {
-  lastRenderMs: number;
+  totalRenderMs: number;
   peakRenderMs: number;
   renderCount: number;
 };
 
 const INITIAL_METRICS: Metrics = {
-  lastRenderMs: 0,
+  totalRenderMs: 0,
   peakRenderMs: 0,
   renderCount: 0,
 };
+
+const averageRenderMs = (metrics: Metrics): number =>
+  metrics.renderCount === 0 ? 0 : metrics.totalRenderMs / metrics.renderCount;
 
 const ComparePage = () => {
   const { themeKey } = useThemeKey();
@@ -309,7 +315,7 @@ const ComparePage = () => {
   const onToggleRecording = useCallback(() => {
     setRecording((prev) => {
       if (!prev) {
-        // Starting fresh — wipe old counts so the new session is legible.
+        // Starting fresh — wipe old numbers so the new session is legible.
         streamdownMetricsRef.current = { ...INITIAL_METRICS };
         reactMarkdownMetricsRef.current = { ...INITIAL_METRICS };
         inksetMetricsRef.current = { ...INITIAL_METRICS };
@@ -357,7 +363,7 @@ const ComparePage = () => {
     (ref: React.MutableRefObject<Metrics>): ProfilerOnRenderCallback =>
       (_id, _phase, actualDuration) => {
         const m = ref.current;
-        m.lastRenderMs = actualDuration;
+        m.totalRenderMs += actualDuration;
         m.peakRenderMs = Math.max(m.peakRenderMs, actualDuration);
         m.renderCount += 1;
       },
@@ -471,7 +477,9 @@ const ComparePage = () => {
           onClick={onToggleRecording}
           leadingDot
           title={
-            recording ? "Metrics update 4×/sec while on" : "Enable to see live render-time + count"
+            recording
+              ? "Metrics update 4×/sec while on"
+              : "Enable to see live avg + peak render time"
           }
         />
       </div>
@@ -641,9 +649,8 @@ const Column = ({
             opacity: 0.7,
           }}
         >
-          <MetricCell label="render" value={`${metrics.lastRenderMs.toFixed(5)}ms`} />
-          <MetricCell label="peak" value={`${metrics.peakRenderMs.toFixed(5)}ms`} />
-          <MetricCell label="count" value={`${metrics.renderCount}`} />
+          <MetricCell label="avg" value={`${averageRenderMs(metrics).toFixed(2)}ms`} />
+          <MetricCell label="peak" value={`${metrics.peakRenderMs.toFixed(2)}ms`} />
         </div>
         {note ? (
           <div
