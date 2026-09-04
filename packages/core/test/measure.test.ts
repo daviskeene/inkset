@@ -79,12 +79,19 @@ describe("LRUCache", () => {
 });
 
 const makeListNode = (text: string): EnrichedNode => {
+  const item = (value: string): EnrichedNode => ({
+    type: "element",
+    tagName: "li",
+    blockId: 0,
+    blockType: "list",
+    children: [{ type: "text", value, blockId: 0, blockType: "list" }],
+  });
   return {
     type: "element",
     tagName: "ul",
     blockId: 0,
     blockType: "list",
-    children: [{ type: "text", value: text, blockId: 0, blockType: "list" }],
+    children: text.split("\n").map(item),
   };
 };
 
@@ -99,8 +106,10 @@ describe("MeasureLayer", () => {
     const single = await layer.measureBlock(makeListNode("Alpha"), 1000);
     const double = await layer.measureBlock(makeListNode("Alpha\nBeta"), 1000);
 
+    // The default stylesheet puts no margin between items: two one-line
+    // items are exactly two lines.
     expect(single.dimensions.height).toBe(24);
-    expect(double.dimensions.height).toBe(24 + 24 + 4);
+    expect(double.dimensions.height).toBe(24 + 24);
   });
 });
 

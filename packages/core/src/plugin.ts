@@ -45,12 +45,23 @@ export class PluginRegistry {
     // (e.g. a diagram plugin matching `lang === "mermaid"`), it runs alone.
     // Prevents the diagram output from being stomped by an unguarded code
     // plugin that would otherwise also transform the same block type.
-    const specific = handlers.find((p) => p.canHandle && p.canHandle(node));
+    const specific = handlers.find((p) => {
+      if (!p.canHandle) return false;
+      try {
+        return p.canHandle(node);
+      } catch (err) {
+        console.warn(
+          `[inkset] Plugin "${p.name}" threw during canHandle for block ${node.blockId}:`,
+          err,
+        );
+        return false;
+      }
+    });
     if (specific) {
       try {
-        const enriched = specific.transform(node as EnrichedNode, ctx);
-        enriched.transformedBy = specific.name;
-        return enriched;
+        // Copy rather than mutate: a plugin may return its input node, which
+        // is the cached parse AST.
+        return { ...specific.transform(node as EnrichedNode, ctx), transformedBy: specific.name };
       } catch (err) {
         console.warn(
           `[inkset] Plugin "${specific.name}" threw during transform for block ${node.blockId}:`,
@@ -67,8 +78,7 @@ export class PluginRegistry {
     for (const plugin of handlers) {
       if (plugin.canHandle) continue;
       try {
-        enriched = plugin.transform(enriched, ctx);
-        enriched.transformedBy = plugin.name;
+        enriched = { ...plugin.transform(enriched, ctx), transformedBy: plugin.name };
       } catch (err) {
         console.warn(
           `[inkset] Plugin "${plugin.name}" threw during transform for block ${node.blockId}:`,

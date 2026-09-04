@@ -242,6 +242,8 @@ export type ShrinkwrapOption = boolean | "headings" | "paragraphs";
 export type HeadingSizeTuple = readonly [number, number, number, number];
 export type HeadingWeightTuple = readonly [number, number, number, number];
 export type HeadingLineHeightTuple = readonly [number, number, number, number];
+/** Letter-spacing per heading level (h1..h4) in em; negative tightens. */
+export type HeadingTrackingTuple = readonly [number, number, number, number];
 
 export interface InksetOptions {
   plugins?: InksetPlugin[];
@@ -272,6 +274,13 @@ export interface InksetOptions {
    * heading's computed fontSize.
    */
   headingLineHeights?: HeadingLineHeightTuple;
+  /**
+   * Letter-spacing per heading level (h1..h4) in em. Canvas measurement has
+   * no letter-spacing, so this is folded into the measuring width; must match
+   * the CSS `--inkset-heading-N-tracking` the consumer renders with. Defaults
+   * to the stylesheet's `[-0.04, -0.035, -0.02, 0]`.
+   */
+  headingTracking?: HeadingTrackingTuple;
   /**
    * Balance text by narrowing each applicable block to its longest greedy
    * line. Cheaper and more compatible than CSS `text-wrap: balance` since

@@ -12,6 +12,7 @@ export type {
   EnrichedNode,
   HeadingLineHeightTuple,
   HeadingSizeTuple,
+  HeadingTrackingTuple,
   HeadingWeightTuple,
   HyphenationOption,
   LayoutBlock,
@@ -47,6 +48,7 @@ export {
   DEFAULT_HEADING_SIZES,
   DEFAULT_HEADING_WEIGHTS,
   DEFAULT_HEADING_LINE_HEIGHTS,
+  DEFAULT_HEADING_TRACKING,
   getPretextSync,
 } from "./measure";
 export { buildGlyphLookup } from "./glyph-positions";
