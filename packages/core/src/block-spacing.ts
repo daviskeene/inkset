@@ -52,6 +52,8 @@ export const getNodeBlockKind = (node: EnrichedNode): BuiltinBlockKind => {
       return "hr";
     case "html":
       return "html";
+    case "footnotes":
+      return "footnotes";
     default:
       return "unknown";
   }

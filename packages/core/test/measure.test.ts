@@ -103,3 +103,25 @@ describe("MeasureLayer", () => {
     expect(double.dimensions.height).toBe(24 + 24 + 4);
   });
 });
+
+describe("textless blocks", () => {
+  const layer = new MeasureLayer({ font: "sans-serif", fontSize: 16, lineHeight: 24 });
+
+  const node = (blockType: EnrichedNode["blockType"], tagName: string): EnrichedNode => ({
+    type: "root",
+    blockId: 0,
+    blockType,
+    children: [{ type: "element", tagName, properties: {}, children: [], blockId: 0, blockType }],
+  });
+
+  it("reserves nothing for an anchor-only or empty block", async () => {
+    const measured = await layer.measureBlock(node("html", "a"), 600);
+    expect(measured.dimensions.height).toBe(0);
+  });
+
+  it("keeps the 1px rule of a thematic break so the gap after it survives", async () => {
+    const measured = await layer.measureBlock(node("thematic-break", "hr"), 600);
+    expect(measured.dimensions.height).toBe(1);
+    expect(await layer.relayout(measured, 300)).toEqual({ width: 300, height: 1 });
+  });
+});

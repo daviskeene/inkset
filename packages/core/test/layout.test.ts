@@ -232,3 +232,47 @@ describe("layout performance", () => {
     expect(elapsedMedian).toBeLessThan(10);
   });
 });
+
+describe("zero-height blocks", () => {
+  it("take no vertical space and owe no gap to the next block", () => {
+    const measured: MeasuredBlock[] = [
+      {
+        blockId: 0,
+        node: makeNode(0),
+        kind: "paragraph",
+        dimensions: { width: 800, height: 100 },
+      },
+      {
+        blockId: 1,
+        node: makeNode(1, "html"),
+        kind: "html",
+        dimensions: { width: 800, height: 0 },
+      },
+      {
+        blockId: 2,
+        node: makeNode(2, "heading2"),
+        kind: "heading2",
+        dimensions: { width: 800, height: 40 },
+      },
+    ];
+    const layout = computeLayout(measured, { containerWidth: 800 });
+    expect(layout.map((block) => block.y)).toEqual([0, 116, 116]);
+    expect(getLayoutHeight(layout)).toBe(156);
+  });
+
+  it("let the pair rule between their visible neighbours apply", () => {
+    const measured = [
+      makeMeasured(0, 100, "paragraph"),
+      makeMeasured(1, 0, "html"),
+      makeMeasured(2, 40, "heading2"),
+      makeMeasured(3, 0, "html"),
+    ];
+    const layout = computeLayout(measured, {
+      containerWidth: 800,
+      blockSpacing: { default: 8, pairs: [{ from: "paragraph", to: "heading2", gap: 40 }] },
+    });
+    expect(layout.map((block) => block.y)).toEqual([0, 140, 140, 180]);
+    // A trailing anchor adds no gap after the last visible block.
+    expect(getLayoutHeight(layout)).toBe(180);
+  });
+});

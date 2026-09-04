@@ -1,6 +1,9 @@
 // Tests for the ingest layer: block splitting, syntax repair, and streaming token accumulation.
 import { describe, it, expect } from "vitest";
 import { Ingest, splitBlocks, repair } from "../src/ingest.js";
+import { createBlocks } from "../src/parse.js";
+
+const createBlocksForTest = (raw: string[]) => createBlocks(raw).map((block) => block.type);
 
 describe("splitBlocks", () => {
   it("splits on blank lines", () => {
@@ -320,5 +323,133 @@ describe("Ingest block-merge events", () => {
 
     expect(events.length).toBeGreaterThan(0);
     expect(events).toContainEqual({ type: "block:update", blockId: 0 });
+  });
+});
+
+describe("normalizeDelimiters (CommonMark escapes vs LaTeX delimiters)", () => {
+  it("keeps escaped brackets around prose as literal escapes", () => {
+    const input =
+      "Escaped characters: \\*not italic\\*, \\_not italic\\_, \\[brackets\\], \\(parens\\)";
+    expect(repair(input, { closed: true })).toBe(input);
+    expect(repair("see \\[citation needed\\] and \\[1\\]", { closed: true })).toBe(
+      "see \\[citation needed\\] and \\[1\\]",
+    );
+  });
+
+  it("promotes bracketed math to dollar delimiters", () => {
+    expect(repair("Let \\(x^2 + y^2 = r^2\\) hold.")).toBe("Let $x^2 + y^2 = r^2$ hold.");
+    expect(repair("Then \\[ E = mc^2 \\] follows.")).toBe("Then $$ E = mc^2 $$ follows.");
+    expect(repair("\\(\\alpha\\) and \\(n\\) and \\(f(x)\\)")).toBe("$\\alpha$ and $n$ and $f(x)$");
+  });
+
+  it("promotes multi-line display math", () => {
+    expect(repair("\\[\nE = mc^2\n\\]")).toBe("$$\nE = mc^2\n$$");
+  });
+
+  it("leaves fenced code untouched", () => {
+    const input = "```js\nconst re = /\\[a-z\\]/;\n```";
+    expect(repair(input)).toBe(input);
+  });
+
+  it("leaves inline code untouched and appends no math fence", () => {
+    const input = "Use `\\[` to escape.";
+    expect(repair(input, { closed: true })).toBe(input);
+  });
+
+  it("does not treat a LaTeX line break like \\\\[2pt] as a delimiter", () => {
+    const input = "$$\n\\begin{aligned}\na \\\\[2pt]\nb\n\\end{aligned}\n$$";
+    expect(repair(input)).toBe(input);
+  });
+
+  it("promotes an unclosed display opener at the end of a stream", () => {
+    expect(repair("Then \\[ E = mc^")).toBe("Then $$ E = mc^\n$$");
+  });
+
+  it("leaves an unclosed escape before prose alone", () => {
+    expect(repair("see \\[brackets")).toBe("see \\[brackets");
+  });
+
+  it("does not pair delimiters across a blank line", () => {
+    const input = "a \\(x\n\nb y\\)";
+    expect(repair(input, { closed: true })).toBe(input);
+  });
+});
+
+describe("repair false positives", () => {
+  it("does not append a stray * after single-line display math", () => {
+    expect(repair("$$ a * b $$")).toBe("$$ a * b $$");
+  });
+
+  it("ignores delimiters inside inline code and inline math", () => {
+    expect(repair("Use `SELECT *` sparingly.")).toBe("Use `SELECT *` sparingly.");
+    expect(repair("The optimum is $x^*$.")).toBe("The optimum is $x^*$.");
+  });
+
+  it("still closes unbalanced emphasis outside protected spans", () => {
+    expect(repair("`SELECT *` and *emph")).toBe("`SELECT *` and *emph*");
+  });
+
+  it("skips inline repair once the document is closed", () => {
+    expect(repair("The answer is 2 * 3")).toBe("The answer is 2 * 3*");
+    expect(repair("The answer is 2 * 3", { closed: true })).toBe("The answer is 2 * 3");
+  });
+
+  it("does not treat a closing tilde fence as strikethrough", () => {
+    expect(repair("~~~\ncode\n~~~")).toBe("~~~\ncode\n~~~");
+  });
+
+  it("does not count $$ inside inline code as a math fence", () => {
+    const input = "Wrap display math in `$$`.\n\nNext.";
+    expect(repair(input)).toBe(input);
+  });
+
+  it("stops applying inline repair after the stream ends", () => {
+    const ingest = new Ingest();
+    ingest.append("2 * 3");
+    expect(ingest.getRepaired()).toBe("2 * 3*");
+    ingest.end();
+    expect(ingest.getRepaired()).toBe("2 * 3");
+  });
+});
+
+describe("single-line display math (issue #14 regression)", () => {
+  const M = "$$ \\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi} $$";
+  const mathBlocks = (doc: string) =>
+    createBlocksForTest(splitBlocks(repair(doc, { closed: true })));
+
+  it("is a math-display block in every surrounding context", () => {
+    const docs = [
+      M,
+      `The Gaussian integral:\n${M}`,
+      `Intro\n\n${M}\n\nDone.`,
+      `- Gaussian: ${M}`,
+      `Intro\r\n\r\n${M}\r\n\r\nDone.`,
+      `    ${M}`,
+      `Let $x\\in\\mathbb{R}$. Then ${M}`,
+      `Result: ${M}`,
+      `${M}.`,
+    ];
+    for (const doc of docs) {
+      const types = mathBlocks(doc);
+      expect(types, doc).toContain("math-display");
+    }
+  });
+
+  it("survives token-by-token streaming", () => {
+    const doc = `Intro paragraph.\n\n${M}\n\nAfter.`;
+    const ingest = new Ingest();
+    for (let i = 0; i < doc.length; i += 3) ingest.append(doc.slice(i, i + 3));
+    ingest.end();
+    expect(createBlocksForTest(splitBlocks(ingest.getRepaired()))).toEqual([
+      "paragraph",
+      "math-display",
+      "paragraph",
+    ]);
+  });
+
+  it("treats tilde fences as code", () => {
+    expect(
+      createBlocksForTest(splitBlocks(repair("~~~\nsome code\n~~~", { closed: true }))),
+    ).toEqual(["code"]);
   });
 });

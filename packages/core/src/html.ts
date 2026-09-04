@@ -19,6 +19,9 @@ export const nodeToHtml = (node: Readonly<ASTNode>): string => {
   if (node.type === "root" && node.children) {
     return node.children.map(nodeToHtml).join("");
   }
+  // Raw HTML and comments are never serialized into markup (see the raw HTML
+  // policy in parse.ts); anything that is not an element contributes nothing.
+  if (node.type !== "element") return "";
 
   const tag = node.tagName ?? "div";
   const attrs = propsToAttrs(node.properties);
@@ -38,7 +41,8 @@ export const propsToAttrs = (props?: Readonly<Record<string, unknown>>): string 
     .map(([k, v]) => {
       const attr = k === "className" ? "class" : k;
       if (v === true) return ` ${attr}`;
-      return ` ${attr}="${escapeHtml(String(v))}"`;
+      const value = Array.isArray(v) ? v.join(" ") : String(v);
+      return ` ${attr}="${escapeHtml(value)}"`;
     })
     .join("");
 };

@@ -7,7 +7,13 @@ import type {
   PluginContext,
 } from "./types";
 import { Ingest, splitBlocks } from "./ingest";
-import { createBlocks, parseBlocks, extractText, type ParseCacheEntry } from "./parse";
+import {
+  collectDocumentReferences,
+  createBlocks,
+  parseBlocks,
+  extractText,
+  type ParseCacheEntry,
+} from "./parse";
 import { transformBlocks, retransformWidthSensitive } from "./transform";
 import { MeasureLayer } from "./measure";
 import { computeLayout, getLayoutHeight } from "./layout";
@@ -361,8 +367,8 @@ export class StreamingPipeline {
     const pipelineStart = performance.now();
 
     const repaired = this.ingest.getRepaired();
-    const rawBlocks = splitBlocks(repaired);
-    const blocks = createBlocks(rawBlocks);
+    const { blocks: rawBlocks, references } = collectDocumentReferences(splitBlocks(repaired));
+    const blocks = createBlocks(rawBlocks, references);
 
     if (this.ingest.isStreaming) {
       for (let i = 0; i < blocks.length - 1; i++) {

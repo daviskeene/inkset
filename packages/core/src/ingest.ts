@@ -27,7 +27,7 @@ export class Ingest {
   }
 
   getRepaired(): string {
-    return repair(this.document);
+    return repair(this.document, { closed: this.closed });
   }
 
   getRaw(): string {
@@ -78,6 +78,15 @@ const LATEX_MATH_ENV_START_RE =
   /^\\begin\{(equation|align|aligned|gather|gathered|alignat|alignedat|multline|split|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|Bmatrix|cases|dcases|rcases|smallmatrix|subarray|CD)\*?\}/;
 const ATX_HEADING_RE = /^(?: {0,3})(?:#{1,6})(?:\s+.*)?$/;
 const STANDALONE_MATH_FENCE_RE = /^\$\$\s*$/;
+const CODE_FENCE_RE = /^(`{3,}|~{3,})/;
+
+/**
+ * Whether a fence-shaped line closes the fence opened with `fenceChar`.
+ * Shared by the splitter and the repair passes so every stage agrees on
+ * where code regions begin and end.
+ */
+const closesCodeFence = (trimmed: string, fenceMatch: RegExpMatchArray, fenceChar: string) =>
+  trimmed.startsWith(fenceChar.repeat(3)) && trimmed.trim().length <= fenceMatch[1].length + 1;
 
 /** Splits a markdown document into block-level chunks, preserving fenced regions. */
 export const splitBlocks = (document: string): string[] => {
@@ -98,15 +107,12 @@ export const splitBlocks = (document: string): string[] => {
       !inCodeFence && !inMathBlock && latexEnvDepth === 0 && LATEX_MATH_ENV_START_RE.test(trimmed);
 
     if (!inMathBlock && latexEnvDepth === 0) {
-      const fenceMatch = trimmed.match(/^(`{3,}|~{3,})/);
+      const fenceMatch = trimmed.match(CODE_FENCE_RE);
       if (fenceMatch) {
         if (!inCodeFence) {
           inCodeFence = true;
           fenceChar = fenceMatch[1][0];
-        } else if (
-          trimmed.startsWith(fenceChar.repeat(3)) &&
-          trimmed.trim().length <= fenceMatch[1].length + 1
-        ) {
+        } else if (closesCodeFence(trimmed, fenceMatch, fenceChar)) {
           inCodeFence = false;
           fenceChar = "";
         }
@@ -291,15 +297,28 @@ const isInsideInlineCodeSpan = (line: string, targetIndex: number): boolean => {
 
 // ── Syntax repair ──────────────────────────────────────────────────
 
+export type RepairOptions = {
+  /**
+   * Whether the document is complete. Structural repairs (fences, `$$`
+   * blocks, delimiter normalization) always run; the speculative inline
+   * closers (`**`, `*`, `` ` ``, `~~`) only make sense while text is still
+   * arriving and are skipped for a settled document so a genuine trailing
+   * `*` or `` ` `` is never rewritten.
+   */
+  closed?: boolean;
+};
+
 /** Closes unclosed fences, math delimiters, and inline formatting for mid-stream display. */
-export const repair = (text: string): string => {
+export const repair = (text: string, options?: RepairOptions): string => {
   let result = text;
 
   result = normalizeDelimiters(result);
   result = repairCodeFences(result);
   result = repairMathBlocks(result);
   result = resolveEquationRefs(result);
-  result = repairInlineFormatting(result);
+  if (!options?.closed) {
+    result = repairInlineFormatting(result);
+  }
 
   return result;
 };
@@ -364,14 +383,209 @@ const replaceEqref = (text: string, labels: Map<string, string>, wrap: boolean):
     return wrap ? `$(${tag})$` : `(${tag})`;
   });
 
+// ── Delimiter normalization ────────────────────────────────────────
+
+/**
+ * Rewrites LaTeX-style math delimiters (`\(…\)`, `\[…\]`) to the `$…$` and
+ * `$$…$$` forms the rest of the pipeline understands. Two guards keep the
+ * CommonMark contract intact:
+ *
+ * - Code is never touched. Fenced blocks and inline code spans pass through
+ *   verbatim, so a regex like `/\[a-z\]/` in a JS snippet survives.
+ * - Escaped brackets around prose stay escapes. `\[brackets\]` renders as the
+ *   literal "[brackets]"; only content that reads as math (a TeX command, an
+ *   operator, a short identifier) is promoted to a math span.
+ *
+ * A `\[` with no closer at the end of the document is still promoted when its
+ * tail looks like math, so a display equation that is mid-stream renders as a
+ * math block instead of flipping block type once `\]` arrives. An unclosed
+ * `\(` is left alone.
+ */
 const normalizeDelimiters = (text: string): string => {
-  // $$ in replacement string is special (inserts literal $), so use $$$$
-  let result = text.replace(/\\\[/g, "$$$$");
-  result = result.replace(/\\\]/g, "$$$$");
-  result = result.replace(/\\\(/g, "$$");
-  result = result.replace(/\\\)/g, "$$");
-  return result;
+  if (!text.includes("\\[") && !text.includes("\\(")) return text;
+
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let region: string[] = [];
+  let inCodeFence = false;
+  let fenceChar = "";
+
+  const flushRegion = (isDocumentTail: boolean) => {
+    if (region.length === 0) return;
+    out.push(rewriteMathDelimiters(region.join("\n"), isDocumentTail));
+    region = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    const fenceMatch = trimmed.match(CODE_FENCE_RE);
+
+    if (inCodeFence) {
+      out.push(line);
+      if (fenceMatch && closesCodeFence(trimmed, fenceMatch, fenceChar)) {
+        inCodeFence = false;
+        fenceChar = "";
+      }
+      continue;
+    }
+
+    if (fenceMatch) {
+      flushRegion(false);
+      out.push(line);
+      inCodeFence = true;
+      fenceChar = fenceMatch[1][0];
+      continue;
+    }
+
+    region.push(line);
+  }
+
+  flushRegion(true);
+  return out.join("\n");
 };
+
+const rewriteMathDelimiters = (text: string, isDocumentTail: boolean): string => {
+  let out = "";
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const char = text[cursor];
+
+    if (char === "`") {
+      // Inline code passes through verbatim.
+      let tickCount = 1;
+      while (text[cursor + tickCount] === "`") tickCount++;
+      const delimiter = "`".repeat(tickCount);
+      const end = text.indexOf(delimiter, cursor + tickCount);
+      if (end === -1) {
+        out += delimiter;
+        cursor += tickCount;
+        continue;
+      }
+      out += text.slice(cursor, end + tickCount);
+      cursor = end + tickCount;
+      continue;
+    }
+
+    if (char !== "\\") {
+      out += char;
+      cursor++;
+      continue;
+    }
+
+    const next = text[cursor + 1];
+    if (next === "\\") {
+      // `\\` is an escaped backslash (or a LaTeX line break such as `\\[2pt]`);
+      // whatever follows it is not a delimiter.
+      out += "\\\\";
+      cursor += 2;
+      continue;
+    }
+
+    if (next !== "(" && next !== "[") {
+      out += char;
+      cursor++;
+      continue;
+    }
+
+    const display = next === "[";
+    const closer = display ? "\\]" : "\\)";
+    const end = findDelimiterCloser(text, closer, cursor + 2);
+
+    if (end === -1) {
+      if (display && isDocumentTail && !isEscapedProse(text.slice(cursor + 2))) {
+        out += "$$";
+        cursor += 2;
+        continue;
+      }
+      out += text.slice(cursor, cursor + 2);
+      cursor += 2;
+      continue;
+    }
+
+    const inner = text.slice(cursor + 2, end);
+    if (isEscapedProse(inner)) {
+      out += text.slice(cursor, cursor + 2);
+      cursor += 2;
+      continue;
+    }
+
+    out += display ? `$$${inner}$$` : `$${inner}$`;
+    cursor = end + 2;
+  }
+
+  return out;
+};
+
+/**
+ * Finds `closer` at or after `fromIndex`, skipping inline code spans. Stops at
+ * a blank line: neither inline nor display math may span paragraphs, so a
+ * closer in a later paragraph is not a match.
+ */
+const findDelimiterCloser = (text: string, closer: string, fromIndex: number): number => {
+  let cursor = fromIndex;
+
+  while (cursor < text.length) {
+    const char = text[cursor];
+
+    if (char === "\n" && /^[ \t]*\n/.test(text.slice(cursor + 1))) return -1;
+
+    if (char === "`") {
+      let tickCount = 1;
+      while (text[cursor + tickCount] === "`") tickCount++;
+      const delimiter = "`".repeat(tickCount);
+      const end = text.indexOf(delimiter, cursor + tickCount);
+      cursor = end === -1 ? cursor + tickCount : end + tickCount;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (text.startsWith(closer, cursor)) return cursor;
+      cursor += 2;
+      continue;
+    }
+
+    cursor++;
+  }
+
+  return -1;
+};
+
+const STRONG_MATH_SIGNAL_RE = /[\\^_={}+*/|<>]/;
+const PROSE_WORD_RE = /[A-Za-z]{3,}/;
+
+/**
+ * Decides whether the content between `\(`…`\)` / `\[`…`\]` reads as prose,
+ * in which case the brackets are CommonMark escapes and must be left alone.
+ * Anything carrying a TeX command, operator, brace, sub/superscript or
+ * comparison is math; so are one- and two-letter identifiers (`x`, `dx`) and
+ * function application (`f(x)`). A bare number (`\[1\]`) or any three-letter
+ * word (`\[citation needed\]`) is prose.
+ */
+const isEscapedProse = (inner: string): boolean => {
+  const content = inner.trim();
+  if (content.length === 0) return true;
+  if (STRONG_MATH_SIGNAL_RE.test(content)) return false;
+  if (/^[A-Za-z]{1,2}$/.test(content)) return false;
+  if (/^[A-Za-z]['′]*\s*\(.*\)$/.test(content)) return false;
+  if (/^[0-9][0-9.,]*$/.test(content)) return true;
+  if (PROSE_WORD_RE.test(content)) return true;
+  return false;
+};
+
+/** Replaces inline code spans with spaces so delimiter counting ignores them. */
+const maskInlineCodeSpans = (line: string): string =>
+  line.replace(/(`+)[^`]*?\1/g, (span) => " ".repeat(span.length));
+
+/**
+ * Replaces `$$…$$` and `$…$` spans with spaces. The inline rule mirrors the
+ * parser's: an opener is a `$` not preceded by `\` or `$` and not followed by
+ * `$`; a closer is a `$` not followed by a digit (so `$5 and $10` stays prose).
+ */
+const maskMathSpans = (line: string): string =>
+  line
+    .replace(/(?<!\\)\$\$[^$]*?\$\$/g, (span) => " ".repeat(span.length))
+    .replace(/(?<![\\$])\$(?!\$)[^$\n]*?(?<!\\)\$(?![\d$])/g, (span) => " ".repeat(span.length));
 
 const repairCodeFences = (text: string): string => {
   const lines = text.split("\n");
@@ -406,7 +620,10 @@ const repairMathBlocks = (text: string): string => {
       continue;
     }
     if (!inCodeFence && trimmed.includes("$$")) {
-      const matches = trimmed.match(/\$\$/g);
+      // `$$` inside inline code (``use `$$` for display math``) or escaped as
+      // `\$$` is not a fence; the splitter ignores those too, so counting them
+      // here would append a closer that never pairs with anything.
+      const matches = maskInlineCodeSpans(trimmed).match(/(?<!\\)\$\$/g);
       if (matches) count += matches.length;
     }
   }
@@ -424,25 +641,33 @@ const repairInlineFormatting = (text: string): string => {
   const lastLine = lastNewline >= 0 ? result.slice(lastNewline + 1) : result;
   const prefix = lastNewline >= 0 ? result.slice(0, lastNewline + 1) : "";
 
+  // A fence line is structure, not prose; its `~~~` is not strikethrough.
+  if (CODE_FENCE_RE.test(lastLine.trimStart())) return result;
+
   let repairedLine = lastLine;
 
-  const boldMatches = repairedLine.match(/\*\*/g);
+  // Count delimiters with code and math spans masked out, so `$$ a * b $$`,
+  // `` `SELECT *` `` or `$x^*$` never earn a stray closer. The masked copy is
+  // only for counting; the appended closers go on the real line.
+  const countable = maskMathSpans(maskInlineCodeSpans(lastLine));
+
+  const boldMatches = countable.match(/\*\*/g);
   if (boldMatches && boldMatches.length % 2 !== 0) {
     repairedLine += "**";
   }
 
-  const withoutBold = repairedLine.replace(/\*\*/g, "");
+  const withoutBold = countable.replace(/\*\*/g, "");
   const italicMatches = withoutBold.match(/\*/g);
   if (italicMatches && italicMatches.length % 2 !== 0) {
     repairedLine += "*";
   }
 
-  const backtickMatches = repairedLine.match(/(?<!`)`(?!`)/g);
+  const backtickMatches = countable.match(/(?<!`)`(?!`)/g);
   if (backtickMatches && backtickMatches.length % 2 !== 0) {
     repairedLine += "`";
   }
 
-  const strikeMatches = repairedLine.match(/~~/g);
+  const strikeMatches = countable.match(/~~/g);
   if (strikeMatches && strikeMatches.length % 2 !== 0) {
     repairedLine += "~~";
   }
