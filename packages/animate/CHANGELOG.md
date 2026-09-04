@@ -1,5 +1,14 @@
 # @inkset/animate
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [73ed98e]
+- Updated dependencies [7593ba1]
+- Updated dependencies [76a1f66]
+  - @inkset/core@0.1.7
+
 ## 0.1.7
 
 ### Patch Changes

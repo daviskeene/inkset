@@ -1,6 +1,6 @@
 {
   "name": "@inkset/table",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Responsive markdown table plugin for Inkset.",
   "type": "module",
   "sideEffects": false,
