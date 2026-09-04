@@ -1,5 +1,17 @@
 # @inkset/react
 
+## 0.1.9
+
+### Patch Changes
+
+- cbc9c1a: React renderer fixes from the rendering-engine audit: the reveal gate no longer drops streamed text when React StrictMode replays effects or when `reveal.component` is an inline arrow (the first chunk, or nearly everything, went missing); a replaced document no longer inherits the previous document's observed heights (a 200px math block left a 200px gap above the new first paragraph); the shader WebGL instance is no longer disposed and re-created on every height change; the hot block keeps its DOM element and plugin state when it freezes instead of remounting (code blocks flashed unstyled at every block boundary); frozen default-rendered blocks can now shrink to their real height instead of keeping an over-estimate forever, while a plugin block no longer collapses to its raw fallback height (a one-line LaTeX source before KaTeX renders) before the plugin settles; a gate with `delayInMs: 0` no longer duplicates the stream under StrictMode; the `shrinkwrap` stylesheet selector actually matches the rendered tree; deferred height flushes survive StrictMode's double-invoked updaters; static content is submitted to the pipeline once per mount instead of twice; long unbreakable tokens wrap like pretext assumes; and smart copy only substitutes source text for a code/math/table block when the whole block is selected.
+- 73ed98e: Fix the renderer gaps reported in #14: resolve GFM footnotes and reference-style links across blocks (with document-order numbering, a footnote section at the end, and indented continuation paragraphs kept with their footnote), stop raw HTML from rendering as empty `<div>` wrappers (scroll anchors and `<br>` are kept, everything else is dropped, and zero-height blocks take no layout space and are transparent to `blockSpacing` pair rules between their visible neighbours), keep CommonMark escapes like `\[brackets\]` literal while still promoting LaTeX `\(…\)`/`\[…\]` math, never rewrite delimiters inside code, and stop the streaming inline repair from adding stray `*`/`` ` ``/`~~` closers inside math or code spans or after the document has settled.
+- Updated dependencies [73ed98e]
+- Updated dependencies [7593ba1]
+- Updated dependencies [76a1f66]
+  - @inkset/core@0.1.7
+  - @inkset/animate@0.1.8
+
 ## 0.1.8
 
 ### Patch Changes
