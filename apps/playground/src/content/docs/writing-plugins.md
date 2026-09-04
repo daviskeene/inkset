@@ -59,7 +59,7 @@ export const createChartPlugin = (): InksetPlugin => ({
 
 ## The `measure` contract
 
-`measure` must return synchronously. For async content like syntax highlighting or Mermaid, return a good estimate and let the rendered component call `onContentSettled()` when the real DOM height is ready. The React layer will then re-read and patch the block height.
+`measure` must return synchronously. For async content like syntax highlighting or Mermaid, return a good estimate and let the rendered component call `onContentSettled()` when the real DOM height is ready. The React layer will then re-read and patch the block height. Until a component settles, the React layer treats the block's DOM as provisional and only lets it grow the reserved height, so a component that renders synchronously should call `onContentSettled()` on mount to let an over-estimate shrink.
 
 ## Dispatch behavior
 

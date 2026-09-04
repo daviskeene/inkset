@@ -193,7 +193,7 @@ const INKSET_STYLES = `
   /* Shrinkwrap: a per-block CSS var set inline by BlockRenderer. Routes to
      max-width on the text-level child so the block's allocated width stays
      intact (for positioning math) while the text column narrows. */
-  :where(.inkset-root) > [data-block-id][style*="--inkset-shrinkwrap-width"] > :where(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol) {
+  :where(.inkset-root) > [data-block-id][style*="--inkset-shrinkwrap-width"] > .inkset-default-block > :where(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol) {
     max-width: var(--inkset-shrinkwrap-width);
   }
 
@@ -1033,25 +1033,55 @@ const BlockRenderer = memo(
 
     const PluginComponent = plugin?.component;
 
+    // The input the plugin last called `onContentSettled` for. Until it
+    // settles for the current input its DOM is provisional: shiki and KaTeX
+    // paint a raw fallback first, and that fallback is usually shorter than
+    // the reserved estimate. Width is part of the input — plugins re-render
+    // (and re-settle) when the block is laid out at a new width.
+    const settledForRef = useRef<{
+      node: EnrichedNode;
+      isStreaming: boolean;
+      width: number;
+    } | null>(null);
+    // Read through a ref so `reportHeight` — and the `onContentSettled`
+    // callback plugins key their settle effects on — keeps its identity while
+    // the reserved height moves.
+    const reservedHeightRef = useRef(height);
+    reservedHeightRef.current = height;
+
     const reportHeight = useCallback(
       (priority: "sync" | "deferred") => {
         const element = blockRef.current;
         if (!element) return;
+        // Measure the content, not the wrapper: the wrapper carries
+        // `min-height: <reserved>` for frozen blocks, so its own height can
+        // never come in *below* the estimate and an over-reservation would
+        // stick forever.
         const measureTarget =
-          priority === "sync" && element.firstElementChild instanceof HTMLElement
-            ? element.firstElementChild
-            : element;
+          element.firstElementChild instanceof HTMLElement ? element.firstElementChild : element;
         const nextHeight = Math.ceil(measureTarget.getBoundingClientRect().height);
-        if (nextHeight > 0) {
-          onHeightChange(block.blockId, node, width, nextHeight, priority);
+        if (nextHeight <= 0) return;
+        // An observer reading of provisional plugin DOM may only grow the
+        // reservation; shrinking waits for the settled report.
+        const settled = settledForRef.current;
+        const provisional =
+          PluginComponent !== undefined &&
+          (settled === null ||
+            settled.node !== node ||
+            settled.isStreaming !== isStreaming ||
+            settled.width !== width);
+        if (priority === "deferred" && provisional && nextHeight < reservedHeightRef.current) {
+          return;
         }
+        onHeightChange(block.blockId, node, width, nextHeight, priority);
       },
-      [block.blockId, node, onHeightChange, width],
+      [block.blockId, isStreaming, node, onHeightChange, PluginComponent, width],
     );
 
     const handleContentSettled = useCallback(() => {
+      settledForRef.current = { node, isStreaming, width };
       reportHeight("sync");
-    }, [reportHeight]);
+    }, [isStreaming, node, reportHeight, width]);
 
     // Shrinkwrap narrows the text content without changing the block's allocated
     // width, so positioning math and plugin-rendered blocks stay unaffected.
@@ -1623,6 +1653,32 @@ export const Inkset = ({
     ],
   );
 
+  // Stable sub-configs for the effects below. Keyed on values, not on
+  // `revealConfig` identity, which changes whenever an inline
+  // `reveal.component` arrow does — and a shader effect keyed on it tore down
+  // and re-created the WebGL instance on every render.
+  const timelineConfig = useMemo(
+    () => revealConfig.timeline,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      revealTimelineDuration,
+      revealTimelineStagger,
+      revealTimelineSep,
+      revealTimelineOrder,
+      revealTimelineMaxSpan,
+      revealIsUndefined,
+    ],
+  );
+  const shaderConfig = useMemo(
+    () => revealConfig.shader,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [revealShaderSignature],
+  );
+  // Height the shader canvas should cover; read through a ref so the resize
+  // callback (and the init effect that depends on it) stay stable while the
+  // document grows.
+  const shaderHeightRef = useRef(0);
+
   // Throttled content mirrors the `content` prop but only advances at the
   // gate's cadence. When throttling is disabled it passes through unchanged.
   const [displayedContent, setDisplayedContent] = useState<string | undefined>(
@@ -1636,6 +1692,14 @@ export const Inkset = ({
   const pendingShaderTokensRef = useRef<ShaderToken[]>([]);
   const lastShaderEmitTickRef = useRef<number>(-1);
   const lastPushedContentRef = useRef<string>("");
+  // Everything handed to `displayedContent` so far, kept in step synchronously
+  // (a gate with `delayInMs: 0` emits inside `push`, before React commits), so
+  // a gate rebuild rewinds to what was delivered, not to the last render.
+  const deliveredContentRef = useRef<string>(revealConfig.throttle ? "" : (content ?? ""));
+  const showContent = useCallback((next: string) => {
+    deliveredContentRef.current = next;
+    setDisplayedContent(next);
+  }, []);
   // Tracks whether the current document is in a throttled stream session.
   // Stays true for the streaming -> settled transition so the final append can
   // drain through the gate instead of fast-forwarding and replaying reveal.
@@ -1644,7 +1708,14 @@ export const Inkset = ({
   // enough for the tail chunk's wrap tick + blur-in keyframes to play out
   // before data-inkset-reveal is torn down. Cleared on re-entry or unmount.
   const drainHoldTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const revealThrottleConfig = revealConfig.throttle;
+  // Keyed on the throttle *values*, not on `revealConfig` identity: an inline
+  // `reveal.component` arrow re-creates `revealConfig` every render, and a
+  // rebuilt gate drops whatever it was still holding.
+  const revealThrottleConfig = useMemo(
+    () => revealConfig.throttle,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [revealThrottleDelay, revealThrottleChunking, revealIsUndefined],
+  );
   const shaderTokenBatchRef = useRef<ShaderToken[]>([]);
 
   // Build / rebuild the gate when throttle config changes.
@@ -1658,20 +1729,26 @@ export const Inkset = ({
       delayInMs: revealThrottleConfig.delayInMs,
       chunking: revealThrottleConfig.chunking,
       onEmit: (chunk) => {
+        deliveredContentRef.current += chunk;
         setDisplayedContent((prev) => (prev ?? "") + chunk);
       },
     });
     tokenGateRef.current = gate;
     return () => {
       gate.reset();
+      // Whatever the gate had not emitted yet is gone with it. Rewind the
+      // push cursor to what was delivered so the feed effect re-queues the
+      // undelivered tail into the next gate (StrictMode replays this cleanup
+      // on mount; without the rewind the first chunk vanished).
+      lastPushedContentRef.current = deliveredContentRef.current;
     };
   }, [revealThrottleConfig]);
 
   // Feed external content through the gate (or pass through if no throttle).
   useEffect(() => {
     if (content === undefined) return;
-    if (!revealConfig.throttle) {
-      setDisplayedContent(content);
+    if (!revealThrottleConfig) {
+      showContent(content);
       lastPushedContentRef.current = content;
       streamSessionActiveRef.current = false;
       setRevealDrainActive(false);
@@ -1689,7 +1766,7 @@ export const Inkset = ({
       tokenGateRef.current?.reset();
       streamSessionActiveRef.current = streaming;
       lastPushedContentRef.current = content;
-      setDisplayedContent(content);
+      showContent(content);
       setRevealDrainActive(false);
       return;
     }
@@ -1699,7 +1776,7 @@ export const Inkset = ({
     // session that just flipped to settled.
     if (!continuingStream) {
       lastPushedContentRef.current = content;
-      setDisplayedContent(content);
+      showContent(content);
       setRevealDrainActive(false);
       return;
     }
@@ -1714,7 +1791,7 @@ export const Inkset = ({
     if (delta.length > 0) {
       tokenGateRef.current?.push(delta);
     }
-  }, [content, streaming, revealConfig.throttle]);
+  }, [content, streaming, revealThrottleConfig, showContent]);
 
   // Flush the gate when streaming ends so the tail chunk (which may lack a
   // trailing word boundary) makes it to the pipeline.
@@ -1726,7 +1803,7 @@ export const Inkset = ({
     const timeline = revealConfig.timeline;
     const revealTokenEffectsConfigured =
       timeline != null &&
-      (revealConfig.css != null || revealConfig.component != null || revealConfig.shader != null);
+      (revealConfig.css != null || revealConfig.component != null || shaderConfig != null);
     if (revealTokenEffectsConfigured) {
       setRevealDrainActive(true);
     }
@@ -1764,13 +1841,7 @@ export const Inkset = ({
         drainHoldTimeoutRef.current = null;
       }
     };
-  }, [
-    streaming,
-    revealConfig.timeline,
-    revealConfig.css,
-    revealConfig.component,
-    revealConfig.shader,
-  ]);
+  }, [streaming, revealConfig.timeline, revealConfig.css, revealConfig.component, shaderConfig]);
 
   const effectiveContent = revealConfig.throttle ? displayedContent : content;
 
@@ -1788,6 +1859,15 @@ export const Inkset = ({
   const observedHeightsRef = useRef<ObservedHeightCache>(new Map());
   const pendingHeightUpdatesRef = useRef<Map<number, ResolvedBlockHeight>>(new Map());
   const heightFlushFrameRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
+  // True from a document replacement until the pipeline delivers the new
+  // document's first state; height reports in that window come from the old
+  // DOM and are ignored (see handleHeightChange).
+  const replacementInFlightRef = useRef(false);
+  const lastSeenStateRef = useRef<PipelineState | null>(null);
+  if (state !== lastSeenStateRef.current) {
+    lastSeenStateRef.current = state;
+    replacementInFlightRef.current = false;
+  }
 
   // Reveal bookkeeping. All refs (not state) because advancing them must not
   // retrigger renders — the render cycle reads them, then the layout effect
@@ -1813,6 +1893,11 @@ export const Inkset = ({
 
   useEffect(() => {
     if (effectiveContent === undefined) return;
+    // Version 0 is the pipeline-less first render; useInkset bumps the
+    // version as soon as it has built a pipeline, and that bump is the one
+    // submission we want. Without this guard every mount ran the whole cold
+    // pipeline twice.
+    if (pipelineVersion === 0) return;
     if (
       prevContentRef.current.content === effectiveContent &&
       prevContentRef.current.pipelineVersion === pipelineVersion
@@ -1841,6 +1926,7 @@ export const Inkset = ({
 
     // Document replacement (first content, rebuilt pipeline, non-monotonic
     // edit, or static content change outside a stream session).
+    replacementInFlightRef.current = true;
     observedHeightsRef.current = new Map();
     pendingHeightUpdatesRef.current.clear();
     setResolvedHeights(new Map());
@@ -1890,20 +1976,27 @@ export const Inkset = ({
           continue;
         }
 
+        let kept = false;
         if (currentBlock.node === value.node) {
           next.set(blockId, value);
+          kept = true;
         } else if (streaming && currentBlock.width === value.width) {
+          // Same block re-parsed mid-stream (a repair rewrite, the hot→frozen
+          // transition): its observed height is still the best estimate.
           changed = true;
           next.set(blockId, {
             ...value,
             node: currentBlock.node,
             width: currentBlock.width,
           });
+          kept = true;
         } else {
           changed = true;
         }
 
-        const observedWidths = observedHeightsRef.current.get(blockId);
+        // The per-width cache follows the same rule: an id that now holds an
+        // unrelated block must not inherit the previous occupant's heights.
+        const observedWidths = kept ? observedHeightsRef.current.get(blockId) : undefined;
         if (observedWidths) {
           nextObservedHeights.set(blockId, new Map(observedWidths));
         }
@@ -1917,12 +2010,14 @@ export const Inkset = ({
   const flushPendingHeightUpdates = useCallback(() => {
     heightFlushFrameRef.current = null;
 
-    setResolvedHeights((prev) => {
-      const pending = pendingHeightUpdatesRef.current;
-      if (pending.size === 0) {
-        return prev;
-      }
+    // Snapshot and clear *outside* the updater: React may invoke an updater
+    // twice (StrictMode) and keep only the second result, and an updater that
+    // drains the pending map would return `prev` on that second call.
+    const pending = new Map(pendingHeightUpdatesRef.current);
+    pendingHeightUpdatesRef.current.clear();
+    if (pending.size === 0) return;
 
+    setResolvedHeights((prev) => {
       let changed = false;
       const next = new Map(prev);
 
@@ -1947,7 +2042,6 @@ export const Inkset = ({
         changed = true;
       }
 
-      pending.clear();
       return changed ? next : prev;
     });
   }, []);
@@ -1989,6 +2083,12 @@ export const Inkset = ({
       height: number,
       priority: "sync" | "deferred" = "deferred",
     ) => {
+      // Between a document replacement and the first state for the new
+      // document, the *old* DOM re-renders once with cleared heights and
+      // reports its own heights again; those belong to blocks that are about
+      // to disappear and must not seed the new document's cache.
+      if (replacementInFlightRef.current) return;
+
       const nextValue = { node, width, height };
 
       let cachedByWidth = observedHeightsRef.current.get(blockId);
@@ -1998,9 +2098,12 @@ export const Inkset = ({
       }
       const cachedHeight = cachedByWidth.get(width);
 
-      if (priority === "deferred" && cachedHeight !== undefined && height <= cachedHeight) {
-        return;
-      }
+      // A deferred report is the DOM's truth in both directions: an
+      // over-estimate (a blockquote's phantom padding, a heading that wrapped
+      // a line early) must come down as readily as an under-estimate grows.
+      // Provisional plugin DOM never gets this far — `BlockRenderer` holds
+      // those readings back until the plugin settles.
+      if (priority === "deferred" && cachedHeight === height) return;
 
       cachedByWidth.set(width, height);
 
@@ -2045,12 +2148,13 @@ export const Inkset = ({
   const displayNodes = new Map<number, EnrichedNode>();
   const shaderTokenBatch: ShaderToken[] = [];
   let pendingAriaMirrorText = "";
-  const timelineConfig = revealConfig.timeline;
+  const shaderHeight = resolvedHeight || state?.totalHeight || 0;
+  shaderHeightRef.current = shaderHeight;
   const cssRevealConfig = revealConfig.css;
   const revealSessionActive = streaming || streamSessionActiveRef.current || revealDrainActive;
   const revealTokenEffectsConfigured =
     timelineConfig != null &&
-    (cssRevealConfig != null || revealConfig.component != null || revealConfig.shader != null);
+    (cssRevealConfig != null || revealConfig.component != null || shaderConfig != null);
   const revealTokenEffectsActive = revealTokenEffectsConfigured && revealSessionActive;
   const defaultCssRevealActive =
     timelineConfig != null &&
@@ -2076,7 +2180,7 @@ export const Inkset = ({
         // Second render for the same tick — reuse.
         if (cached !== block.node) {
           displayNodes.set(block.blockId, cached);
-          if (revealConfig.shader) {
+          if (shaderConfig) {
             collectShaderTokens(cached, block, timelineConfig?.durationMs ?? 320, shaderTokenBatch);
           }
         }
@@ -2103,7 +2207,7 @@ export const Inkset = ({
       wrapCacheRef.current.set(block.blockId, wrapped);
       if (wrapped !== block.node) {
         displayNodes.set(block.blockId, wrapped);
-        if (revealConfig.shader) {
+        if (shaderConfig) {
           collectShaderTokens(wrapped, block, timelineConfig?.durationMs ?? 320, shaderTokenBatch);
         }
       }
@@ -2160,7 +2264,10 @@ export const Inkset = ({
     ...themeToCssVars(theme),
     hyphens: hyphenation ? "manual" : undefined,
     WebkitHyphens: hyphenation ? "manual" : undefined,
-    overflowWrap: hyphenation ? "break-word" : undefined,
+    // pretext breaks a token wider than the column at grapheme boundaries;
+    // the browser must do the same or a long URL overflows (and is clipped by
+    // `overflow: hidden`) while layout reserved a wrapped line for it.
+    overflowWrap: "break-word",
     textWrap,
     ...(timelineConfig && cssRevealConfig
       ? {
@@ -2188,13 +2295,13 @@ export const Inkset = ({
   }, []);
 
   const resizeShaderCanvas = useCallback(() => {
-    if (!revealConfig.shader || !timelineConfig) return;
+    if (!shaderConfig || !timelineConfig) return;
     const canvas = shaderCanvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
 
     const cssWidth = Math.max(1, Math.ceil(container.getBoundingClientRect().width));
-    const cssHeight = Math.max(1, Math.ceil(resolvedHeight || state?.totalHeight || 0));
+    const cssHeight = Math.max(1, Math.ceil(shaderHeightRef.current));
     const dpr = window.devicePixelRatio || 1;
     const nextWidth = Math.max(1, Math.round(cssWidth * dpr));
     const nextHeight = Math.max(1, Math.round(cssHeight * dpr));
@@ -2207,15 +2314,15 @@ export const Inkset = ({
     }
     canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${cssHeight}px`;
-  }, [containerRef, revealConfig.shader, resolvedHeight, state?.totalHeight, timelineConfig]);
+  }, [containerRef, shaderConfig, timelineConfig]);
 
   useLayoutEffect(() => {
-    if (!revealConfig.shader || !timelineConfig) return;
+    if (!shaderConfig || !timelineConfig) return;
     resizeShaderCanvas();
-  }, [revealConfig.shader, resizeShaderCanvas, timelineConfig]);
+  }, [shaderConfig, resizeShaderCanvas, timelineConfig, shaderHeight]);
 
   useEffect(() => {
-    if (!revealConfig.shader || !timelineConfig) {
+    if (!shaderConfig || !timelineConfig) {
       shaderDisabledRef.current = false;
       pendingShaderTokensRef.current = [];
       lastShaderEmitTickRef.current = -1;
@@ -2228,7 +2335,6 @@ export const Inkset = ({
     if (!container || !canvas) return;
 
     let cancelled = false;
-    const shaderConfig = revealConfig.shader;
     shaderDisabledRef.current = false;
     resizeShaderCanvas();
 
@@ -2275,7 +2381,7 @@ export const Inkset = ({
   }, [
     containerRef,
     disposeShaderInstance,
-    revealConfig.shader,
+    shaderConfig,
     revealShaderSignature,
     resolvedShaderRegistry,
     resizeShaderCanvas,
@@ -2283,7 +2389,7 @@ export const Inkset = ({
   ]);
 
   useEffect(() => {
-    if (!revealConfig.shader || !timelineConfig) return;
+    if (!shaderConfig || !timelineConfig) return;
     const container = containerRef.current;
     if (!container) return;
 
@@ -2292,10 +2398,10 @@ export const Inkset = ({
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, [containerRef, revealConfig.shader, resizeShaderCanvas, timelineConfig]);
+  }, [containerRef, shaderConfig, resizeShaderCanvas, timelineConfig]);
 
   useLayoutEffect(() => {
-    if (!revealConfig.shader || !timelineConfig) return;
+    if (!shaderConfig || !timelineConfig) return;
     const tokenBatch = shaderTokenBatchRef.current;
     if (tokenBatch.length === 0) return;
     if (currentRevealTick === lastShaderEmitTickRef.current) return;
@@ -2310,7 +2416,7 @@ export const Inkset = ({
     } else {
       pendingShaderTokensRef.current.push(...tokenBatch);
     }
-  }, [currentRevealTick, revealConfig.shader, timelineConfig]);
+  }, [currentRevealTick, shaderConfig, timelineConfig]);
 
   // When reveal token effects are active, per-token wrappers would otherwise
   // fragment `aria-live`. We move announcements to a visually-hidden mirror
@@ -2331,7 +2437,7 @@ export const Inkset = ({
 
       {isLoading && fallbackNode}
 
-      {revealConfig.shader && timelineConfig && (
+      {shaderConfig && timelineConfig && (
         <canvas
           ref={shaderCanvasRef}
           aria-hidden
@@ -2348,46 +2454,55 @@ export const Inkset = ({
         />
       )}
 
-      {frozenBlocks.map((block: LayoutBlock) => (
-        <BlockRenderer
-          key={block.blockId}
-          block={block}
-          registry={registry}
-          isStreaming={false}
-          positioning="absolute"
-          observeHeight
-          onHeightChange={handleHeightChange}
-          displayNode={displayNodes.get(block.blockId)}
-          revealComponent={revealConfig.component}
-          revealDurationMs={timelineConfig?.durationMs ?? 320}
-          linkAttrs={linkAttrs}
-        />
-      ))}
-
-      {hotBlock && (
-        <>
-          <div
-            aria-hidden
-            style={{
-              height: spacerHeight,
-              pointerEvents: "none",
-            }}
-          />
+      {/*
+        Frozen blocks, the spacer and the hot block live in ONE keyed array.
+        Keys only match within a parent slot, so rendering the hot block in a
+        separate fragment made every block unmount and remount the moment it
+        froze — plugin state (highlighted HTML, copy feedback, in-flight
+        settle callbacks) was lost and code blocks flashed unstyled.
+      */}
+      {[
+        ...frozenBlocks.map((block: LayoutBlock) => (
           <BlockRenderer
-            key={hotBlock.blockId}
-            block={hotBlock}
+            key={block.blockId}
+            block={block}
             registry={registry}
-            isStreaming={true}
-            positioning="flow"
+            isStreaming={false}
+            positioning="absolute"
             observeHeight
             onHeightChange={handleHeightChange}
-            displayNode={displayNodes.get(hotBlock.blockId)}
+            displayNode={displayNodes.get(block.blockId)}
             revealComponent={revealConfig.component}
             revealDurationMs={timelineConfig?.durationMs ?? 320}
             linkAttrs={linkAttrs}
           />
-        </>
-      )}
+        )),
+        ...(hotBlock
+          ? [
+              <div
+                key="inkset-hot-spacer"
+                aria-hidden
+                style={{
+                  height: spacerHeight,
+                  pointerEvents: "none",
+                }}
+              />,
+              <BlockRenderer
+                key={hotBlock.blockId}
+                block={hotBlock}
+                registry={registry}
+                isStreaming={true}
+                positioning="flow"
+                observeHeight
+                onHeightChange={handleHeightChange}
+                displayNode={displayNodes.get(hotBlock.blockId)}
+                revealComponent={revealConfig.component}
+                revealDurationMs={timelineConfig?.durationMs ?? 320}
+                linkAttrs={linkAttrs}
+              />,
+            ]
+          : []),
+      ]}
 
       {revealTokenEffectsActive && (
         <div className="inkset-aria-mirror" role="status" aria-live="polite" aria-atomic={false}>
