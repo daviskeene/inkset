@@ -4,7 +4,7 @@ Rendering infrastructure for streaming AI output. Markdown today, generative UI 
 
 Most chat UIs stream tokens into the page and let the browser figure out where things go. That works until the stream gets fast, the response mixes code and math, someone rotates their phone, or the conversation gets long. At that point the DOM becomes part of the problem. The browser recalculates layout for the whole thread on every new token. Lines the user is reading shift under them. Long conversations start to feel heavy. Anything async that mounts into the column forces another pass.
 
-Inkset uses [pretext](https://github.com/chenglou/pretext) to measure text once, then re-layout with arithmetic. Completed blocks do not reflow when new tokens arrive. Resize runs in microseconds because no DOM reads happen on the hot path. The same cost model extends to code, math, tables, Mermaid diagrams, and the generative UI components (json-render, A2UI) arriving in streams.
+Inkset uses [pretext](https://github.com/chenglou/pretext) to measure text once, then re-layout with arithmetic. Completed blocks do not reflow when new tokens arrive. Resize is arithmetic over cached measurements, with no DOM reads on the hot path. The same cost model extends to code, math, tables, Mermaid diagrams, and the generative UI components (json-render, A2UI) arriving in streams.
 
 ## Install
 
@@ -56,7 +56,7 @@ const inkset = useInkset({ plugins: [createCodePlugin(), createMathPlugin()] });
 
 Three shifts in the cost model.
 
-**Layout without reflow.** Pretext measures text via Canvas once. After that, re-layout at a new width is pure arithmetic over cached segment widths. A thousand blocks relayout in under a millisecond, with no DOM reads on the hot path. Good for INP. Good for mobile.
+**Layout without reflow.** Pretext measures text via Canvas once. After that, re-layout at a new width is pure arithmetic over cached segment widths. A thousand blocks relayout in about 2 ms on a laptop (`pnpm bench`), with no DOM reads on the hot path. Good for INP. Good for mobile.
 
 **Stable streaming.** The block currently receiving tokens rides in normal document flow, so the browser handles its height natively. Every block above it is frozen onto absolute coordinates computed by pretext. New tokens do not shift what the user is already reading, because frozen blocks never re-measure.
 
@@ -135,7 +135,10 @@ pnpm test                             # Full monorepo test suite
 pnpm --filter @inkset/core test       # Core-only tests
 pnpm --filter @inkset/core build      # Build core
 pnpm --filter @inkset/playground dev  # Playground at localhost:3333
+pnpm build && pnpm bench              # Performance scenarios in headless Chrome
 ```
+
+See [`bench/`](./bench) for what each scenario measures.
 
 ## Status
 

@@ -31,6 +31,10 @@ const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });
 />;
 ```
 
+## Pacing
+
+`throttle` releases one word (or character) per `delayInMs`. A model that streams faster than that would leave the display further and further behind, so the gate has a lag budget, `maxLagMs` (default 600). While the backlog fits in it, pacing is unchanged. Past it, each tick releases a share of the backlog, which keeps the display about `maxLagMs` behind the stream however fast it arrives, and a tick that fires late (background tabs clamp timers to about once a second) releases what it missed. Pass `maxLagMs: Infinity` for strict one-unit-per-tick pacing.
+
 ## Example
 
 The preview below streams a short sentence through the built-in `ink-dither` reveal configuration.

@@ -59,7 +59,7 @@ Frozen blocks sit on absolute coordinates computed from pretext measurements. Th
 
 Inkset uses pretext to measure text with one `Canvas.measureText` call per run. No `getBoundingClientRect`, no forced reflow. The output is a flat list of block extents — width, height, baseline — cached per block.
 
-On resize, only `pretext.layout()` re-runs per block. That's roughly 0.0002 ms per block, which means a thousand-block response relayouts in under a millisecond.
+On resize, only `pretext.layout()` re-runs, over handles each block already holds. A thousand-block response relayouts in about 2 ms on a laptop.
 
 ## Packages
 

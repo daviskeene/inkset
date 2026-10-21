@@ -8,7 +8,7 @@ Most chat UIs stream tokens into the page and let the browser figure out where t
 
 The same failure mode scales up. Long conversations get heavy because the browser is recalculating layout for the whole thread on every new message. Mobile feels it first, because reflow is cheaper on a desktop CPU than on a phone.
 
-Inkset treats this as a layout problem, not a parsing problem. Pretext measures text once with Canvas, then re-layouts with arithmetic. No DOM reads in the hot path. A thousand blocks relayout in under a millisecond.
+Inkset treats this as a layout problem, not a parsing problem. Pretext measures text once with Canvas, then re-layouts with arithmetic. No DOM reads in the hot path. A thousand blocks relayout in about 2 ms on a laptop.
 
 ## What you get
 

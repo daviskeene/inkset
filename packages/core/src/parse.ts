@@ -257,7 +257,10 @@ export const parseBlock = (block: Readonly<Block>): ASTNode => {
   }
 
   const processor = getProcessor();
-  const protectedInlineMath = block.type === "code" ? null : protectInlineMath(block.raw);
+  // Inline math only ever starts at a `$` (repair already rewrote `\(…\)`),
+  // so the hot block skips the protect/restore passes when it has none.
+  const protectedInlineMath =
+    block.type === "code" || !block.raw.includes("$") ? null : protectInlineMath(block.raw);
   const references = block.references;
 
   let markdown = protectedInlineMath?.markdown ?? block.raw;

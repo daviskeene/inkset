@@ -14,7 +14,7 @@ All of that is arithmetic over numbers. No DOM reads. No `getBoundingClientRect`
 
 ## The cost
 
-On a modern laptop, layout is roughly **0.0002 ms per block**. A response with a thousand blocks lays out in under a millisecond. That's the budget Inkset spends on every window resize, every container width change, every theme swap that rebreaks lines.
+Each block keeps its prepared handles, so a resize lays them out again and sums heights without preparing anything. On a laptop, a response with a thousand blocks relayouts in about **2 ms** (`pnpm bench`, `relayout1000`). That's the budget Inkset spends on every window resize, every container width change, every theme swap that rebreaks lines.
 
 ## Variable-width reflow
 

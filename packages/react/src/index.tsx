@@ -706,6 +706,18 @@ const resolveLayout = (
   });
 };
 
+// Text of a block, memoized per (immutable) node: the reveal pass rebuilds the
+// aria mirror every render, and only the streaming block's text changes.
+const blockTextCache = new WeakMap<EnrichedNode, string>();
+const blockText = (node: EnrichedNode): string => {
+  let text = blockTextCache.get(node);
+  if (text === undefined) {
+    text = extractText(node);
+    blockTextCache.set(node, text);
+  }
+  return text;
+};
+
 const getLayoutHeight = (layout: readonly LayoutBlock[]): number => {
   if (layout.length === 0) return 0;
   const lastBlock = layout[layout.length - 1];
@@ -760,7 +772,9 @@ const shaderConfigSignature = (shader: ShaderConfig | false | undefined): string
 const resolveRevealConfig = (
   reveal: RevealProp | undefined,
 ): {
-  throttle: Required<ThrottleOptions> | null;
+  throttle:
+    | (Required<Omit<ThrottleOptions, "maxLagMs">> & Pick<ThrottleOptions, "maxLagMs">)
+    | null;
   timeline: ResolvedTimeline | null;
   css: ResolvedCss | null;
   component: RevealComponent | null;
@@ -777,6 +791,7 @@ const resolveRevealConfig = (
       : {
           delayInMs: throttleRaw?.delayInMs ?? 30,
           chunking: throttleRaw?.chunking ?? "word",
+          maxLagMs: throttleRaw?.maxLagMs,
         };
 
   const timeline: ResolvedTimeline | null =
@@ -1095,7 +1110,6 @@ const BlockRenderer = memo(
             transform: `translate(${x}px, ${y}px)`,
             width,
             minHeight: height,
-            willChange: "transform",
             contain: "layout style",
           }
         : {
@@ -1620,6 +1634,7 @@ export const Inkset = ({
     reveal?.throttle === false ? -1 : (reveal?.throttle?.delayInMs ?? (reveal ? 30 : -1));
   const revealThrottleChunking =
     reveal?.throttle === false ? "word" : (reveal?.throttle?.chunking ?? "word");
+  const revealThrottleMaxLag = reveal?.throttle === false ? -1 : (reveal?.throttle?.maxLagMs ?? -1);
   const revealTimelineDuration =
     reveal?.timeline === false ? -1 : (reveal?.timeline?.durationMs ?? (reveal ? 320 : -1));
   const revealTimelineStagger =
@@ -1640,6 +1655,7 @@ export const Inkset = ({
     [
       revealThrottleDelay,
       revealThrottleChunking,
+      revealThrottleMaxLag,
       revealTimelineDuration,
       revealTimelineStagger,
       revealTimelineSep,
@@ -1714,7 +1730,7 @@ export const Inkset = ({
   const revealThrottleConfig = useMemo(
     () => revealConfig.throttle,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [revealThrottleDelay, revealThrottleChunking, revealIsUndefined],
+    [revealThrottleDelay, revealThrottleChunking, revealThrottleMaxLag, revealIsUndefined],
   );
   const shaderTokenBatchRef = useRef<ShaderToken[]>([]);
 
@@ -1728,6 +1744,7 @@ export const Inkset = ({
     const gate = createTokenGate({
       delayInMs: revealThrottleConfig.delayInMs,
       chunking: revealThrottleConfig.chunking,
+      maxLagMs: revealThrottleConfig.maxLagMs,
       onEmit: (chunk) => {
         deliveredContentRef.current += chunk;
         setDisplayedContent((prev) => (prev ?? "") + chunk);
@@ -1887,6 +1904,12 @@ export const Inkset = ({
   //                             empty wraps and drop the reveal spans).
   const revealedOffsetsRef = useRef<Map<number, number>>(new Map());
   const pendingRevealOffsetsRef = useRef<Map<number, number>>(new Map());
+  // The node each block was last wrapped from. A wrap reveals everything up to
+  // the end of the node's text, so once that commits, the same node has
+  // nothing left to animate: skipping it keeps a tick's cost proportional to
+  // what changed instead of re-measuring and re-walking every frozen block.
+  const revealedNodesRef = useRef<Map<number, EnrichedNode>>(new Map());
+  const pendingRevealNodesRef = useRef<Map<number, EnrichedNode>>(new Map());
   const lastProcessedRevealTickRef = useRef<number>(-1);
   const wrapCacheRef = useRef<Map<number, EnrichedNode>>(new Map());
   const wrapCacheTickRef = useRef<number>(-1);
@@ -1934,6 +1957,7 @@ export const Inkset = ({
     // this, a fresh document would inherit stale per-block offsets and
     // suppress the reveal animation entirely.
     revealedOffsetsRef.current = new Map();
+    revealedNodesRef.current = new Map();
 
     pipelineStreamOpenRef.current = streaming;
     setContent(effectiveContent, { streaming });
@@ -2167,6 +2191,7 @@ export const Inkset = ({
       wrapCacheRef.current = new Map();
       wrapCacheTickRef.current = currentRevealTick;
       pendingRevealOffsetsRef.current = new Map();
+      pendingRevealNodesRef.current = new Map();
     }
     for (const block of resolvedLayout) {
       if (block.node.transformedBy) {
@@ -2186,6 +2211,7 @@ export const Inkset = ({
         }
         continue;
       }
+      if (revealedNodesRef.current.get(block.blockId) === block.node) continue;
 
       const prevOffset = revealedOffsetsRef.current.get(block.blockId) ?? 0;
       // Phase 3: build a glyph lookup per block so the wrap's second pass can
@@ -2212,10 +2238,11 @@ export const Inkset = ({
         }
       }
       pendingRevealOffsetsRef.current.set(block.blockId, newOffset);
+      pendingRevealNodesRef.current.set(block.blockId, block.node);
     }
     // Build aria mirror text from original (unwrapped) nodes so screen readers
     // announce coherent block content instead of tokenised span runs.
-    pendingAriaMirrorText = resolvedLayout.map((block) => extractText(block.node)).join("\n\n");
+    pendingAriaMirrorText = resolvedLayout.map((block) => blockText(block.node)).join("\n\n");
   }
   shaderTokenBatchRef.current = shaderTokenBatch;
 
@@ -2228,6 +2255,9 @@ export const Inkset = ({
     lastProcessedRevealTickRef.current = currentRevealTick;
     for (const [id, offset] of pendingRevealOffsetsRef.current) {
       revealedOffsetsRef.current.set(id, offset);
+    }
+    for (const [id, node] of pendingRevealNodesRef.current) {
+      revealedNodesRef.current.set(id, node);
     }
   }, [currentRevealTick, revealTokenEffectsConfigured]);
 
@@ -2433,7 +2463,18 @@ export const Inkset = ({
       aria-hidden={revealTokenEffectsActive ? true : undefined}
       data-inkset-reveal={defaultCssRevealActive ? "" : undefined}
     >
-      {!unstyled && <style>{INKSET_STYLES}</style>}
+      {/*
+        `href` + `precedence` make React 19 hoist this into <head> once for the
+        whole page. Rendered inline per instance, every message in a long
+        thread added another copy, and each insert invalidated the style of
+        the entire document. React 18 ignores both props and renders it inline
+        as before.
+      */}
+      {!unstyled && (
+        <style href="inkset-styles" precedence="inkset">
+          {INKSET_STYLES}
+        </style>
+      )}
 
       {isLoading && fallbackNode}
 

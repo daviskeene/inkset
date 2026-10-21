@@ -8,7 +8,7 @@ Pretext's `prepare()` walks the text once, calls `Canvas.measureText` per run, a
 
 ## The cache
 
-Prepared handles are keyed by `(text, font, options)`. When a block's text is unchanged, its prepared handle is reused. This is why you should create your plugin list once at module scope: re-instantiating a plugin invalidates the cache.
+Each block keeps the prepared handles for its own text, so a resize lays them out at the new width without preparing anything again, however long the document is. A shared cache keyed by `(text, font)` also lets a re-parsed block with unchanged text reuse its handles. The block that is still streaming stays out of that cache, since its text changes every frame. This is why you should create your plugin list once at module scope: re-instantiating a plugin rebuilds the pipeline and its caches.
 
 ## Mixed fonts
 

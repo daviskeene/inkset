@@ -7,11 +7,20 @@ export class Ingest {
   private lastBlockCount = 0;
 
   append(token: string): StreamEvent[] {
-    if (this.closed) return [];
-    if (!token) return [];
-
-    this.document += token;
+    if (!this.appendText(token)) return [];
     return this.detectChanges();
+  }
+
+  /**
+   * Appends without block-boundary detection. `append()` re-splits the whole
+   * document to report events, which makes a stream O(n²) in its length; the
+   * pipeline re-splits once per frame anyway and only needs to know whether
+   * anything arrived.
+   */
+  appendText(token: string): boolean {
+    if (this.closed || !token) return false;
+    this.document += token;
+    return true;
   }
 
   end(): StreamEvent[] {

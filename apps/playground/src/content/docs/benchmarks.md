@@ -10,7 +10,9 @@ A resize of a 1000-block response. Measurement is cached; layout runs fresh.
 | ---------------- | --------------- |
 | `react-markdown` | 180–240 ms      |
 | `streamdown`     | 40–60 ms        |
-| **`inkset`**     | **0.6–0.9 ms**  |
+| **`inkset`**     | **~2 ms**       |
+
+Inkset's row was re-measured with `pnpm bench` (`relayout1000`) on a loaded laptop. Before `@inkset/core` 0.1.8, a document with more than ~450 measured texts missed the handle cache on every resize and took 30–80 ms.
 
 The reason is structural, not micro-optimized: react-markdown and streamdown both call `getBoundingClientRect` as part of their reflow path; Inkset runs arithmetic over cached glyphs.
 
