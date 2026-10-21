@@ -8,6 +8,16 @@ export interface ThrottleOptions {
   delayInMs?: number;
   /** Chunking boundary. Word defers emission to whitespace; char emits per codepoint. */
   chunking?: ChunkingMode;
+  /**
+   * Lag budget in ms. While the backlog fits in it the gate releases one unit
+   * per tick; past it, each tick releases a share of the backlog sized to
+   * drain it over the budget. A stream faster than one unit per `delayInMs`
+   * then settles at roughly this much lag instead of falling further behind
+   * for as long as it runs, and a tick that fires late (background tabs clamp
+   * timers to about one per second) releases the ticks it missed. Default
+   * 600. `Infinity` keeps strict one-unit-per-tick pacing.
+   */
+  maxLagMs?: number;
 }
 
 export type CssRevealPreset = "fadeIn" | "blurIn" | "slideUp";

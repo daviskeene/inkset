@@ -35,18 +35,25 @@ export function Message({ text, streaming }: { text: string; streaming: boolean 
 
 ## Options
 
-| Option          | Type      | Default         | What it does                                            |
-| --------------- | --------- | --------------- | ------------------------------------------------------- |
-| `theme`         | `string`  | `"github-dark"` | Shiki theme name for the primary rendering.             |
-| `lightTheme`    | `string`  | same as `theme` | Optional second theme used when dual-theme mode is on.  |
-| `showHeader`    | `boolean` | `true`          | Show the language label + copy button strip.            |
-| `showCopy`      | `boolean` | `true`          | Show the copy-to-clipboard action.                      |
-| `showLangLabel` | `boolean` | `true`          | Show the language label.                                |
-| `wrapLongLines` | `boolean` | `false`         | Wrap lines at the container width instead of scrolling. |
+| Option          | Type       | Default         | What it does                                            |
+| --------------- | ---------- | --------------- | ------------------------------------------------------- |
+| `theme`         | `string`   | `"github-dark"` | Shiki theme name for the primary rendering.             |
+| `lightTheme`    | `string`   | same as `theme` | Optional second theme used when dual-theme mode is on.  |
+| `langs`         | `string[]` | `[]`            | Grammars to load during `preload()`.                    |
+| `showHeader`    | `boolean`  | `true`          | Show the language label + copy button strip.            |
+| `showCopy`      | `boolean`  | `true`          | Show the copy-to-clipboard action.                      |
+| `showLangLabel` | `boolean`  | `true`          | Show the language label.                                |
+| `wrapLongLines` | `boolean`  | `false`         | Wrap lines at the container width instead of scrolling. |
 
 ## Streaming behavior
 
-While a code fence is still streaming, the block keeps its streaming indicator visible. Once Shiki is ready, partial code can still be highlighted before the fence fully closes.
+While a code fence is still streaming, the block keeps its streaming indicator visible. Once Shiki is ready, partial code is highlighted on every update, before the fence closes.
+
+Highlighting is incremental: lines that have finished are tokenized once and cached together with Shiki's grammar state, so an update only tokenizes the lines completed since the last one plus the line still being written. A long block costs about the same per update as a short one, and the output matches a full `codeToHtml` pass exactly.
+
+## Languages
+
+Grammars load on demand: the first block in a language fetches its grammar, and later blocks reuse it. Any language Shiki bundles works without configuration. Pass `langs` to fetch specific grammars during `preload()` so their first block highlights without waiting. Fences in a language Shiki doesn't know render as plain text.
 
 ## Dual-theme mode
 

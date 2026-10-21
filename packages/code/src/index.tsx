@@ -1,7 +1,15 @@
 // Code block plugin: syntax highlighting via shiki with streaming support.
 declare const process: { env: { NODE_ENV?: string } };
 
-import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import React, {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import {
   extractText,
   type InksetPlugin,
@@ -11,6 +19,14 @@ import {
   type Dimensions,
   type PluginComponentProps,
 } from "@inkset/core";
+import {
+  createHighlightCache,
+  highlightIncremental,
+  type HastToHtml,
+  type HighlightCache,
+  type HighlightedCode,
+  type IncrementalHighlighter,
+} from "./incremental";
 
 // `process` only exists for bundled consumers; an unbundled ESM import must
 // not throw a ReferenceError from inside a catch block.
@@ -24,22 +40,28 @@ const CODE_MIN_HEIGHT = 48;
 const COPY_FEEDBACK_DURATION_MS = 2000;
 const FALLBACK_THEME = "github-dark";
 const PLAIN_LANG = "text";
-// While a code block streams, re-highlighting the whole block on every token
-// is the heaviest per-frame work in the pipeline. Throttle to this interval
-// (leading + trailing, so the latest code always gets highlighted) and let
-// the settled render highlight immediately.
-const STREAMING_HIGHLIGHT_THROTTLE_MS = 120;
+// Languages shiki renders as plain text without loading a grammar.
+const PLAIN_LANGS = new Set(["", "text", "txt", "plain", "plaintext"]);
 
 // ── Shiki lazy loading ─────────────────────────────────────────────
 
-type ShikiHighlighter = {
-  codeToHtml: (code: string, options: { lang: string; theme: string }) => string;
+type ShikiHighlighter = IncrementalHighlighter & {
   loadTheme?: (theme: string) => Promise<void>;
   loadLanguage?: (lang: string) => Promise<void>;
-  getLoadedLanguages?: () => string[];
+};
+
+type ShikiModule = {
+  createHighlighter: (options: { themes: string[]; langs: string[] }) => Promise<unknown>;
+  hastToHtml?: HastToHtml;
+  bundledLanguages?: Record<string, unknown>;
 };
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
+// Set once shiki resolves, so blocks can highlight synchronously while they
+// render instead of a frame later.
+let readyHighlighter: ShikiHighlighter | null = null;
+let hastToHtml: HastToHtml | null = null;
+let bundledLanguages: Record<string, unknown> | null = null;
 const loadedThemes = new Set<string>();
 const loadedLangs = new Set<string>();
 // Themes/languages shiki rejected. Remembered so a typo is logged once and
@@ -48,58 +70,43 @@ const loadedLangs = new Set<string>();
 const failedThemes = new Set<string>();
 const failedLangs = new Set<string>();
 
-const DEFAULT_LANGS = [
-  "javascript",
-  "typescript",
-  "python",
-  "rust",
-  "go",
-  "java",
-  "c",
-  "cpp",
-  "csharp",
-  "ruby",
-  "php",
-  "swift",
-  "kotlin",
-  "html",
-  "css",
-  "json",
-  "yaml",
-  "toml",
-  "markdown",
-  "bash",
-  "shell",
-  "sql",
-  "graphql",
-  "dockerfile",
-  "tsx",
-  "jsx",
-];
+/** Whether shiki has a grammar to load for `lang` (an id or an alias). */
+const isLoadableLang = (lang: string): boolean =>
+  !PLAIN_LANGS.has(lang) && (bundledLanguages === null || lang in bundledLanguages);
 
-// Load shiki once and lazily extend it with any extra themes or languages
-// requested by later plugin instances. We don't know all of them up front —
-// callers can pass any shiki-supported theme or language name.
+/** Whether `lang` needs no more loading: loaded, failed, or plain text. */
+const isLangSettled = (lang: string): boolean =>
+  !isLoadableLang(lang) || loadedLangs.has(lang) || failedLangs.has(lang);
+
+const isThemeSettled = (theme: string): boolean =>
+  loadedThemes.has(theme) || failedThemes.has(theme);
+
+// Load shiki once and lazily extend it with the themes and languages blocks
+// ask for. Callers can pass any shiki-supported theme or language name.
 const getHighlighter = async (
   themes: string[],
   langs: string[] = [],
 ): Promise<ShikiHighlighter> => {
   const uniqueThemes = [...new Set(themes.filter(Boolean))].filter((t) => !failedThemes.has(t));
-  const uniqueLangs = [...new Set(langs.filter(Boolean))].filter((l) => !failedLangs.has(l));
 
   if (!highlighterPromise) {
     highlighterPromise = (async () => {
-      const shiki = await import("shiki");
+      const shiki = (await import("shiki")) as unknown as ShikiModule;
       // Only the fallback theme goes into `createHighlighter`: one bad theme
       // in that list rejects the whole highlighter. Requested themes load one
       // at a time below, so a typo'd light theme costs exactly that theme —
-      // and the theme every failure degrades to is always loaded.
+      // and the theme every failure degrades to is always loaded. No
+      // grammars either: each language loads the first time a block uses
+      // it, where a fixed default list fetched ~2.4 MB of grammars before
+      // the first block could highlight.
       const instance = (await shiki.createHighlighter({
         themes: [FALLBACK_THEME],
-        langs: DEFAULT_LANGS,
+        langs: [],
       })) as ShikiHighlighter;
       loadedThemes.add(FALLBACK_THEME);
-      DEFAULT_LANGS.forEach((l) => loadedLangs.add(l));
+      hastToHtml = shiki.hastToHtml ?? null;
+      bundledLanguages = shiki.bundledLanguages ?? null;
+      readyHighlighter = instance;
       return instance;
     })().catch((err: unknown) => {
       // A rejected promise must not stay cached: every later highlight would
@@ -112,9 +119,8 @@ const getHighlighter = async (
 
   const instance = await highlighterPromise;
 
-  // Lazy-load anything that wasn't in the initial createHighlighter call.
   const missingThemes = uniqueThemes.filter((t) => !loadedThemes.has(t));
-  const missingLangs = uniqueLangs.filter((l) => !loadedLangs.has(l));
+  const missingLangs = [...new Set(langs)].filter((l) => !isLangSettled(l));
   await Promise.all([
     ...missingThemes.map((t) =>
       typeof instance.loadTheme === "function"
@@ -147,26 +153,73 @@ const resolveTheme = (theme: string): string =>
   failedThemes.has(theme) || !loadedThemes.has(theme) ? FALLBACK_THEME : theme;
 
 /**
- * Highlights with the requested language, falling back to plain text when
- * the grammar isn't available (shiki throws for languages it hasn't loaded).
+ * Highlights through the block's incremental cache, falling back to plain
+ * text when the grammar isn't available. Null when shiki can't render the
+ * block at all, in which case the raw source shows instead.
  */
-const highlightSafe = (
-  highlighter: ShikiHighlighter,
+const highlightBlock = (
   code: string,
   lang: string,
   theme: string,
-): string => {
+  cache: HighlightCache,
+): HighlightedCode | null => {
+  if (!readyHighlighter || !hastToHtml) return null;
   const resolvedTheme = resolveTheme(theme);
   const useLang = loadedLangs.has(lang) && !failedLangs.has(lang) ? lang : PLAIN_LANG;
   try {
-    return highlighter.codeToHtml(code, { lang: useLang, theme: resolvedTheme });
+    return highlightIncremental(readyHighlighter, hastToHtml, code, useLang, resolvedTheme, cache);
   } catch (err) {
-    if (useLang === PLAIN_LANG) throw err;
-    failedLangs.add(lang);
-    if (isDev) console.warn(`[inkset/code] language "${lang}" unavailable; rendering as text`, err);
-    return highlighter.codeToHtml(code, { lang: PLAIN_LANG, theme: resolvedTheme });
+    if (useLang !== PLAIN_LANG) {
+      failedLangs.add(lang);
+      if (isDev)
+        console.warn(`[inkset/code] language "${lang}" unavailable; rendering as text`, err);
+      return highlightBlock(code, PLAIN_LANG, theme, cache);
+    }
+    if (isDev) console.debug("[inkset/code] Highlight failed, falling back to plain text:", err);
+    return null;
   }
 };
+
+const parseInlineStyle = (style: string): React.CSSProperties => {
+  const out: Record<string, string> = {};
+  for (const declaration of style.split(";")) {
+    const colon = declaration.indexOf(":");
+    if (colon === -1) continue;
+    const property = declaration.slice(0, colon).trim();
+    if (!property) continue;
+    const key = property.startsWith("--")
+      ? property
+      : property.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase());
+    out[key] = declaration.slice(colon + 1).trim();
+  }
+  return out;
+};
+
+/**
+ * shiki's `<pre><code>` markup with one element per line. While a block
+ * streams, completed lines keep their DOM nodes (and any text selected in
+ * them); only the growing last line updates.
+ */
+const HighlightedLines = ({
+  className,
+  result,
+}: {
+  className: string;
+  result: HighlightedCode;
+}) => (
+  <div className={className}>
+    <pre className={result.preClassName} style={parseInlineStyle(result.preStyle)} tabIndex={0}>
+      <code>
+        {result.lines.map((html, index) => (
+          <Fragment key={index}>
+            {index > 0 && "\n"}
+            <span className="line" dangerouslySetInnerHTML={{ __html: html }} />
+          </Fragment>
+        ))}
+      </code>
+    </pre>
+  </div>
+);
 
 // ── Code block component ──────────────────────────────────────────
 
@@ -175,10 +228,13 @@ export interface CodeBlockProps extends PluginComponentProps {
 }
 
 const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps) => {
-  const [htmlDark, setHtmlDark] = useState<string | null>(null);
-  const [htmlLight, setHtmlLight] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Re-render once shiki, or a theme or grammar this block needs, has loaded.
+  const [, onLoaded] = useReducer((count: number) => count + 1, 0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [darkCache] = useState(createHighlightCache);
+  const [lightCache] = useState(createHighlightCache);
 
   const code = (node.pluginData?.code as string) ?? "";
   const lang = (node.pluginData?.lang as string) ?? "text";
@@ -190,59 +246,46 @@ const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps
   const wrapLongLines = (node.pluginData?.wrapLongLines as boolean) ?? false;
   const extraLangs = (node.pluginData?.langs as string[] | undefined) ?? [];
 
-  const lastHighlightAtRef = useRef(0);
-  const [highlightFailed, setHighlightFailed] = useState(false);
+  const themes = lightTheme ? [theme, lightTheme] : [theme];
+  const ready = readyHighlighter !== null && themes.every(isThemeSettled) && isLangSettled(lang);
+  // Until the first line of code arrives, a streaming fence's info string may
+  // still be a prefix of the real language ("c" on the way to "cpp"); don't
+  // fetch a grammar for it.
+  const langPending = isStreaming && code === "";
 
   useEffect(() => {
+    if (ready || langPending) return;
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const themes = lightTheme ? [theme, lightTheme] : [theme];
-
-    const highlight = () => {
-      lastHighlightAtRef.current = Date.now();
-      getHighlighter(themes, [lang, ...extraLangs])
-        .then((highlighter) => {
-          if (cancelled) return;
-          // Render both variants before touching state so a failing light
-          // theme cannot wipe a dark render that already succeeded.
-          const dark = highlightSafe(highlighter, code, lang, theme);
-          const light = lightTheme ? highlightSafe(highlighter, code, lang, lightTheme) : null;
-          setHtmlDark(dark);
-          setHtmlLight(light);
-          setHighlightFailed(false);
-        })
-        .catch((err: unknown) => {
-          // Fall through to the raw <pre> below when shiki can't highlight —
-          // and still settle the block's height, which used to stay
-          // provisional forever on this path.
-          if (cancelled) return;
-          if (isDev)
-            console.debug("[inkset/code] Highlight failed, falling back to plain text:", err);
-          setHtmlDark(null);
-          setHtmlLight(null);
-          setHighlightFailed(true);
-        });
-    };
-
-    const sinceLast = Date.now() - lastHighlightAtRef.current;
-    if (!isStreaming || sinceLast >= STREAMING_HIGHLIGHT_THROTTLE_MS) {
-      highlight();
-    } else {
-      timer = setTimeout(highlight, STREAMING_HIGHLIGHT_THROTTLE_MS - sinceLast);
-    }
-
+    getHighlighter(themes, [lang, ...extraLangs]).then(
+      () => {
+        if (!cancelled) onLoaded();
+      },
+      (err: unknown) => {
+        // Fall through to the raw <pre> below when shiki can't load — and
+        // still settle the block's height, which would otherwise stay
+        // provisional forever.
+        if (cancelled) return;
+        if (isDev)
+          console.debug("[inkset/code] Highlight failed, falling back to plain text:", err);
+        setLoadFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
-      if (timer !== null) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, lang, theme, lightTheme, isStreaming, extraLangs.join(",")]);
+  }, [ready, langPending, lang, theme, lightTheme, extraLangs.join(",")]);
+
+  // Highlighting runs in render: incremental tokenization costs a line or two
+  // per update, so there is no throttle and no frame of stale output.
+  const dark = ready ? highlightBlock(code, lang, theme, darkCache) : null;
+  const light = ready && lightTheme ? highlightBlock(code, lang, lightTheme, lightCache) : null;
 
   useLayoutEffect(() => {
     if (isStreaming) return;
-    if (htmlDark === null && htmlLight === null && !highlightFailed) return;
+    if (!ready && !loadFailed) return;
     onContentSettled?.();
-  }, [htmlDark, htmlLight, highlightFailed, isStreaming, onContentSettled]);
+  }, [ready, loadFailed, isStreaming, code, lang, theme, lightTheme, onContentSettled]);
 
   const handleCopy = useCallback(() => {
     // Insecure contexts have no clipboard API; a denied permission rejects.
@@ -263,7 +306,7 @@ const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps
     <div
       className="inkset-code-block"
       data-wrap={wrapLongLines ? "true" : undefined}
-      data-has-light={lightTheme ? "true" : undefined}
+      data-has-light={light ? "true" : undefined}
       style={{ position: "relative" }}
     >
       {hasHeader && (
@@ -281,22 +324,16 @@ const CodeBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps
         </div>
       )}
 
-      {htmlDark ? (
-        <div
-          className="inkset-code-content inkset-code-dark"
-          dangerouslySetInnerHTML={{ __html: htmlDark }}
-        />
+      {dark ? (
+        <HighlightedLines className="inkset-code-content inkset-code-dark" result={dark} />
       ) : (
         <pre className="inkset-code-content">
           <code>{code}</code>
         </pre>
       )}
 
-      {htmlLight && (
-        <div
-          className="inkset-code-content inkset-code-light"
-          dangerouslySetInnerHTML={{ __html: htmlLight }}
-        />
+      {light && (
+        <HighlightedLines className="inkset-code-content inkset-code-light" result={light} />
       )}
 
       {isStreaming && <div className="inkset-code-streaming">...</div>}
@@ -315,9 +352,9 @@ export type CodePluginOptions = {
    */
   lightTheme?: string;
   /**
-   * Extra shiki grammars to load on top of the built-in set (JavaScript,
-   * TypeScript, Python, Rust, Go, …). Any fence language that has no loaded
-   * grammar renders as plain text.
+   * Grammars to load during `preload()`, so their first block highlights
+   * without waiting for a fetch. Every other language shiki bundles loads the
+   * first time a block uses it; names shiki doesn't know render as plain text.
    */
   langs?: string[];
   /** Show the language label + copy button bar above the code. Default `true`. */

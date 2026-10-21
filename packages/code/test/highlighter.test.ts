@@ -4,7 +4,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { createHighlighter } = vi.hoisted(() => ({ createHighlighter: vi.fn() }));
-vi.mock("shiki", () => ({ createHighlighter }));
+vi.mock("shiki", () => ({
+  createHighlighter,
+  hastToHtml: () => "",
+  bundledLanguages: { typescript: {}, rust: {} },
+}));
 
 const makeInstance = (failingTheme?: string) => ({
   codeToHtml: () => "<pre></pre>",
@@ -54,5 +58,17 @@ describe("shiki loading", () => {
     instance.loadTheme.mockClear();
     await plugin.preload();
     expect(instance.loadTheme).not.toHaveBeenCalled();
+  });
+
+  it("creates the highlighter with no grammars and loads only what is asked for", async () => {
+    const createCodePlugin = await loadPlugin();
+    const instance = makeInstance();
+    createHighlighter.mockResolvedValue(instance);
+
+    // `langs` preloads; plain-text names and names shiki doesn't bundle are
+    // never fetched.
+    await createCodePlugin({ langs: ["rust", "text", "not-a-language"] }).preload();
+    expect(createHighlighter.mock.calls[0][0].langs).toEqual([]);
+    expect(instance.loadLanguage.mock.calls.map(([lang]) => lang)).toEqual(["rust"]);
   });
 });

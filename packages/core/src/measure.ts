@@ -19,11 +19,6 @@ import {
 
 // ── LRU Cache ──────────────────────────────────────────────────────
 
-type CacheEntry = {
-  handle: unknown;
-  lastAccessed: number;
-};
-
 const LRU_DEFAULT_MAX_SIZE = 500;
 
 // Block-type measurement constants, mirroring the default stylesheet in
@@ -64,26 +59,28 @@ const measureTextlessBlock = (
 };
 
 export class LRUCache {
-  private entries = new Map<string, CacheEntry>();
-  private accessCounter = 0;
+  // Map iteration order is insertion order: re-inserting on access keeps the
+  // least recently used key first, so eviction is O(1) instead of a scan.
+  private entries = new Map<string, unknown>();
 
   constructor(private maxSize: number = LRU_DEFAULT_MAX_SIZE) {}
 
   get(key: string): unknown | undefined {
-    const entry = this.entries.get(key);
-    if (!entry) return undefined;
-    entry.lastAccessed = ++this.accessCounter;
-    return entry.handle;
+    const handle = this.entries.get(key);
+    if (handle === undefined) return undefined;
+    this.entries.delete(key);
+    this.entries.set(key, handle);
+    return handle;
   }
 
   set(key: string, handle: unknown): void {
-    if (this.entries.size >= this.maxSize) {
-      this.evictOldest();
+    if (this.entries.has(key)) {
+      this.entries.delete(key);
+    } else if (this.entries.size >= this.maxSize) {
+      const oldest = this.entries.keys().next();
+      if (!oldest.done) this.entries.delete(oldest.value);
     }
-    this.entries.set(key, {
-      handle,
-      lastAccessed: ++this.accessCounter,
-    });
+    this.entries.set(key, handle);
   }
 
   has(key: string): boolean {
@@ -92,27 +89,10 @@ export class LRUCache {
 
   clear(): void {
     this.entries.clear();
-    this.accessCounter = 0;
   }
 
   get size(): number {
     return this.entries.size;
-  }
-
-  private evictOldest(): void {
-    let oldestKey: string | null = null;
-    let oldestAccess = Infinity;
-
-    for (const [key, entry] of this.entries) {
-      if (entry.lastAccessed < oldestAccess) {
-        oldestAccess = entry.lastAccessed;
-        oldestKey = key;
-      }
-    }
-
-    if (oldestKey) {
-      this.entries.delete(oldestKey);
-    }
   }
 }
 
@@ -208,6 +188,19 @@ export type MeasureOptions = {
   headingTracking?: HeadingTrackingTuple;
 };
 
+/**
+ * Prepared handles for one block, in the order its texts are measured. A node
+ * is immutable and measures its texts in the same order at every width, so a
+ * relayout reuses them by position without rebuilding cache keys or touching
+ * the shared LRU, whose capacity a long document can exceed.
+ */
+type HandleSlots = {
+  handles: unknown[];
+  next: number;
+  /** The streaming block: its text is gone next frame, so keep it out of the LRU. */
+  transient: boolean;
+};
+
 type TypographySpec = {
   font: string;
   fontSize: number;
@@ -245,6 +238,9 @@ export class MeasureLayer {
   private options: MeasureOptions;
   private initialized = false;
   private pretextUnavailable = false;
+  private handlesByNode = new WeakMap<EnrichedNode, unknown[]>();
+  // Shrinkwrap needs segment-level handles; keyed by node like `handlesByNode`.
+  private segmentHandlesByNode = new WeakMap<EnrichedNode, unknown>();
 
   constructor(options?: Partial<MeasureOptions>) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -261,6 +257,7 @@ export class MeasureLayer {
     node: EnrichedNode,
     maxWidth: number,
     plugin?: InksetPlugin,
+    options?: { transient?: boolean },
   ): Promise<MeasuredBlock> {
     await this.init();
 
@@ -284,8 +281,15 @@ export class MeasureLayer {
       };
     }
 
+    let handles = this.handlesByNode.get(node);
+    if (!handles) {
+      handles = [];
+      this.handlesByNode.set(node, handles);
+    }
+    const slots: HandleSlots = { handles, next: 0, transient: options?.transient ?? false };
+
     // Use block-type-aware measurement
-    const dimensions = await this.measureBlockByType(node, text, maxWidth);
+    const dimensions = await this.measureBlockByType(node, text, maxWidth, slots);
     return { blockId: node.blockId, node, kind: getNodeBlockKind(node), dimensions };
   }
 
@@ -300,6 +304,7 @@ export class MeasureLayer {
     node: EnrichedNode,
     text: string,
     maxWidth: number,
+    slots?: HandleSlots,
   ): Promise<Dimensions> {
     const baseTypography = this.getBaseTypography();
 
@@ -309,6 +314,7 @@ export class MeasureLayer {
           text,
           maxWidth,
           this.getHeadingTypography(getHeadingLevel(node)),
+          slots,
         );
       }
 
@@ -325,7 +331,7 @@ export class MeasureLayer {
       }
 
       case "list": {
-        const height = await this.measureListContainer(node, maxWidth, baseTypography);
+        const height = await this.measureListContainer(node, maxWidth, baseTypography, slots);
         return { width: maxWidth, height: Math.max(height, this.options.lineHeight) };
       }
 
@@ -336,7 +342,7 @@ export class MeasureLayer {
           1,
           maxWidth - (this.options.fontSize + BLOCKQUOTE_BORDER_WIDTH),
         );
-        const dims = await this.measureTextWithTypography(text, innerWidth, baseTypography);
+        const dims = await this.measureTextWithTypography(text, innerWidth, baseTypography, slots);
         return { width: maxWidth, height: dims.height };
       }
 
@@ -349,7 +355,7 @@ export class MeasureLayer {
         // the notes measure like list items, and the stylesheet adds the rule,
         // the top padding, and a gap between notes.
         const items = countElements(node, "li");
-        const list = await this.measureListContainer(node, maxWidth, baseTypography);
+        const list = await this.measureListContainer(node, maxWidth, baseTypography, slots);
         const chrome =
           FOOTNOTES_RULE_HEIGHT +
           (FOOTNOTES_PADDING_EM + Math.max(0, items - 1) * FOOTNOTES_ITEM_GAP_EM) *
@@ -358,7 +364,7 @@ export class MeasureLayer {
       }
 
       default:
-        return this.measureTextWithTypography(text, maxWidth, baseTypography);
+        return this.measureTextWithTypography(text, maxWidth, baseTypography, slots);
     }
   }
 
@@ -371,6 +377,7 @@ export class MeasureLayer {
     node: EnrichedNode,
     width: number,
     typography: TypographySpec,
+    slots?: HandleSlots,
   ): Promise<number> {
     const indent = this.options.fontSize * LIST_INDENT_EM;
     let total = 0;
@@ -379,12 +386,17 @@ export class MeasureLayer {
       if (child.type !== "element") continue;
 
       if (child.tagName === "ul" || child.tagName === "ol") {
-        total += await this.measureListContainer(child, Math.max(1, width - indent), typography);
+        total += await this.measureListContainer(
+          child,
+          Math.max(1, width - indent),
+          typography,
+          slots,
+        );
         continue;
       }
 
       if (child.tagName !== "li") {
-        total += await this.measureListContainer(child, width, typography);
+        total += await this.measureListContainer(child, width, typography, slots);
         continue;
       }
 
@@ -394,12 +406,19 @@ export class MeasureLayer {
       const flushRun = async () => {
         const text = run.trim();
         run = "";
-        if (text) total += (await this.measureTextWithTypography(text, width, typography)).height;
+        if (text) {
+          total += (await this.measureTextWithTypography(text, width, typography, slots)).height;
+        }
       };
       for (const part of child.children ?? []) {
         if (part.tagName === "ul" || part.tagName === "ol") {
           await flushRun();
-          total += await this.measureListContainer(part, Math.max(1, width - indent), typography);
+          total += await this.measureListContainer(
+            part,
+            Math.max(1, width - indent),
+            typography,
+            slots,
+          );
         } else if (part.tagName === "p") {
           await flushRun();
           run = extractText(part);
@@ -429,11 +448,14 @@ export class MeasureLayer {
    *
    * @param headingLevel 1..4 when measuring headings so the typography
    *   matches what `getHeadingTypography` uses; omit for body text.
+   * @param node the block `text` came from; when given, its prepared handle is
+   *   reused on later calls (a resize) instead of re-preparing the text.
    */
   async measureShrinkwrapWidth(
     text: string,
     maxWidth: number,
     headingLevel?: number,
+    node?: EnrichedNode,
   ): Promise<{ width: number; lineCount: number } | null> {
     await this.init();
     if (!text) return null;
@@ -447,7 +469,11 @@ export class MeasureLayer {
       : this.getBaseTypography();
 
     try {
-      const prepared = pretext.prepareWithSegments(text, typography.font);
+      let prepared = node ? this.segmentHandlesByNode.get(node) : undefined;
+      if (!prepared) {
+        prepared = pretext.prepareWithSegments(text, typography.font);
+        if (node) this.segmentHandlesByNode.set(node, prepared);
+      }
       // Wrap at the same tracking-compensated width the height estimate used,
       // then scale the result back into DOM pixels: the tracked glyphs the DOM
       // draws are narrower than the untracked ones pretext measured.
@@ -471,6 +497,7 @@ export class MeasureLayer {
     text: string,
     maxWidth: number,
     typography: TypographySpec,
+    slots?: HandleSlots,
   ): Promise<Dimensions> {
     const pretext = await getPretext();
 
@@ -478,13 +505,18 @@ export class MeasureLayer {
       return this.fallbackMeasure(text, maxWidth, typography);
     }
 
-    const cacheKey = `${text}|${typography.font}`;
-    let handle = this.cache.get(cacheKey);
+    const slot = slots ? slots.next++ : -1;
+    let handle = slots ? slots.handles[slot] : undefined;
 
     try {
       if (!handle) {
-        handle = pretext.prepare(text, typography.font);
-        this.cache.set(cacheKey, handle);
+        const cacheKey = `${text}|${typography.font}`;
+        handle = this.cache.get(cacheKey);
+        if (!handle) {
+          handle = pretext.prepare(text, typography.font);
+          if (!slots?.transient) this.cache.set(cacheKey, handle);
+        }
+        if (slots) slots.handles[slot] = handle;
       }
       const result = pretext.layout(
         handle,
@@ -540,6 +572,8 @@ export class MeasureLayer {
 
   clearCache(): void {
     this.cache.clear();
+    this.handlesByNode = new WeakMap();
+    this.segmentHandlesByNode = new WeakMap();
   }
 
   /**
