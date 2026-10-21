@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createTokenGate } from "../src/gate";
 
 type ScheduleEntry = { cb: () => void; delayMs: number };
@@ -194,5 +194,82 @@ describe("createTokenGate — emission order", () => {
     advanceAll();
     await gate.flush();
     expect(emitted).toEqual(["one ", "two ", "three "]);
+  });
+});
+
+describe("createTokenGate — lag budget", () => {
+  const words = (count: number) => Array.from({ length: count }, (_, i) => `w${i} `).join("");
+
+  it("keeps one word per tick while the backlog fits the budget", () => {
+    const emitted: string[] = [];
+    const { scheduler, advance } = makeManualScheduler();
+    const gate = createTokenGate({
+      delayInMs: 30,
+      maxLagMs: 300,
+      onEmit: (chunk) => void emitted.push(chunk),
+      scheduler,
+    });
+
+    gate.push(words(10));
+    advance();
+    expect(emitted).toEqual(["w0 "]);
+  });
+
+  it("releases enough per tick to drain a large backlog within the budget", () => {
+    const emitted: string[] = [];
+    const { scheduler, advance, advanceAll } = makeManualScheduler();
+    const gate = createTokenGate({
+      delayInMs: 30,
+      maxLagMs: 300,
+      onEmit: (chunk) => void emitted.push(chunk),
+      scheduler,
+    });
+
+    // 50 words against a 10-tick budget: the first tick releases a tenth.
+    gate.push(words(50));
+    advance();
+    expect(emitted).toEqual(["w0 w1 w2 w3 w4 "]);
+
+    // Shares shrink with the backlog until it fits the budget, then one word
+    // per tick: about half the 50 ticks strict pacing would take.
+    const ticks = advanceAll();
+    expect(ticks).toBeLessThan(25);
+    expect(emitted.join("")).toBe(words(50));
+  });
+
+  it("releases the ticks a late timer missed", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const emitted: string[] = [];
+      const { scheduler, advance } = makeManualScheduler();
+      const gate = createTokenGate({
+        delayInMs: 30,
+        onEmit: (chunk) => void emitted.push(chunk),
+        scheduler,
+      });
+
+      gate.push(words(10));
+      // A background tab clamps the 30ms timer to ~1s: it owes 33 ticks.
+      vi.advanceTimersByTime(1000);
+      advance();
+      expect(emitted).toEqual([words(10)]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps strict one-unit pacing with maxLagMs: Infinity", () => {
+    const emitted: string[] = [];
+    const { scheduler, advance } = makeManualScheduler();
+    const gate = createTokenGate({
+      delayInMs: 30,
+      maxLagMs: Infinity,
+      onEmit: (chunk) => void emitted.push(chunk),
+      scheduler,
+    });
+
+    gate.push(words(50));
+    advance();
+    expect(emitted).toEqual(["w0 "]);
   });
 });

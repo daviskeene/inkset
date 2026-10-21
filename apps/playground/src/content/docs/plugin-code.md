@@ -27,7 +27,7 @@ export function Message({ text, streaming }: { text: string; streaming: boolean 
 | --------------- | ---------- | --------------- | --------------------------------------------------------------- |
 | `theme`         | `string`   | `"github-dark"` | The Shiki theme.                                                |
 | `lightTheme`    | `string`   | None            | A second Shiki theme for a light color scheme.                  |
-| `langs`         | `string[]` | `[]`            | More Shiki languages to load, in addition to the default set.   |
+| `langs`         | `string[]` | `[]`            | Shiki languages to load with the highlighter, in `preload()`.   |
 | `showHeader`    | `boolean`  | `true`          | Shows the bar above the code with the language and copy button. |
 | `showCopy`      | `boolean`  | `true`          | Shows the copy button.                                          |
 | `showLangLabel` | `boolean`  | `true`          | Shows the language name.                                        |
@@ -35,11 +35,13 @@ export function Message({ text, streaming }: { text: string; streaming: boolean 
 
 ## Languages
 
-The plugin loads a default set of common languages, such as JavaScript, TypeScript, Python, Rust, Go, and Java. To highlight other languages, add their Shiki names to `langs`. A code block in a language that is not loaded shows as plain text.
+The plugin loads the grammar for a language when the first code block in that language appears. Later code blocks in the same language use the same grammar. All of the languages that Shiki includes work without configuration. To load grammars earlier, add their Shiki names to `langs`, and the plugin loads them with the highlighter. A code block in a language that Shiki does not include shows as plain text.
 
 ## Streaming
 
 While a code block streams, it shows a streaming indicator. The plugin highlights the partial code before the code fence closes, and it highlights the code again when more code arrives.
+
+The plugin keeps the highlighting of each completed line. When more code arrives, it highlights only the new lines and the line that is still incomplete. Thus, each update of a long code block costs approximately the same as each update of a short one. The result is the same as when Shiki highlights all of the code at once.
 
 ## Light and dark themes
 

@@ -12,6 +12,7 @@
 import type { ChunkingMode, TokenEmitter, ThrottleOptions } from "./types";
 
 const DEFAULT_DELAY_MS = 30;
+const DEFAULT_MAX_LAG_MS = 600;
 const DEFAULT_CHUNKING: ChunkingMode = "word";
 
 export interface TokenGate {
@@ -40,6 +41,7 @@ const defaultScheduler = {
 export const createTokenGate = (options: CreateTokenGateOptions): TokenGate => {
   const delayMs = options.delayInMs ?? DEFAULT_DELAY_MS;
   const chunking = options.chunking ?? DEFAULT_CHUNKING;
+  const maxLagMs = options.maxLagMs ?? DEFAULT_MAX_LAG_MS;
   const { onEmit } = options;
   const scheduler = options.scheduler ?? defaultScheduler;
 
@@ -86,6 +88,46 @@ export const createTokenGate = (options: CreateTokenGateOptions): TokenGate => {
   const takeChunk = (): string | null =>
     chunking === "word" ? sliceWordBoundary() : sliceCharBoundary();
 
+  const countUnits = (): number => {
+    if (chunking === "char") return buffer.length;
+    let units = 0;
+    for (let i = 1; i < buffer.length; i++) {
+      if (isWhitespaceChar(buffer.charCodeAt(i)) && !isWhitespaceChar(buffer.charCodeAt(i - 1))) {
+        units += 1;
+      }
+    }
+    return units;
+  };
+
+  let scheduledAt = 0;
+  const schedule = (cb: () => void): void => {
+    scheduledAt = Date.now();
+    pendingHandle = scheduler.schedule(cb, delayMs);
+  };
+  // One unit per tick while the backlog fits in the lag budget; otherwise a
+  // share sized to drain it over the budget, so a fast stream holds steady at
+  // about `maxLagMs` behind. A tick that fires late (a clamped background-tab
+  // timer) also owes the ticks it missed.
+  const unitsDue = (): number => {
+    const firedFor = scheduledAt;
+    scheduledAt = 0;
+    // Zero delay emits synchronously, so nothing can fall behind.
+    if (delayMs <= 0 || !Number.isFinite(maxLagMs)) return 1;
+    const ticksElapsed = firedFor > 0 ? Math.floor((Date.now() - firedFor) / delayMs) : 1;
+    const budgetTicks = Math.max(1, Math.floor(maxLagMs / delayMs));
+    return Math.max(1, ticksElapsed, Math.ceil(countUnits() / budgetTicks));
+  };
+
+  const takeChunks = (count: number): string | null => {
+    let out: string | null = null;
+    for (let i = 0; i < count; i++) {
+      const chunk = takeChunk();
+      if (chunk === null) break;
+      out = (out ?? "") + chunk;
+    }
+    return out;
+  };
+
   const emit = (chunk: string): void => {
     // Call synchronously so sync consumers see state update in the same tick.
     const result = onEmit(chunk);
@@ -96,7 +138,7 @@ export const createTokenGate = (options: CreateTokenGateOptions): TokenGate => {
 
   const tick = (): void => {
     pendingHandle = null;
-    const chunk = takeChunk();
+    const chunk = takeChunks(unitsDue());
     if (chunk !== null && chunk.length > 0) {
       emit(chunk);
     }
@@ -118,7 +160,7 @@ export const createTokenGate = (options: CreateTokenGateOptions): TokenGate => {
       tick();
       return;
     }
-    pendingHandle = scheduler.schedule(tick, delayMs);
+    schedule(tick);
   };
 
   return {
@@ -149,7 +191,7 @@ export const createTokenGate = (options: CreateTokenGateOptions): TokenGate => {
             resolve();
             return;
           }
-          let chunk = takeChunk();
+          let chunk = takeChunks(unitsDue());
           if (chunk === null) {
             // Word mode with no boundary left — emit remaining buffer as the
             // final chunk so nothing gets stranded.
@@ -164,7 +206,7 @@ export const createTokenGate = (options: CreateTokenGateOptions): TokenGate => {
           if (delayMs <= 0) {
             drainTick();
           } else {
-            pendingHandle = scheduler.schedule(drainTick, delayMs);
+            schedule(drainTick);
           }
         };
         drainTick();
@@ -184,6 +226,7 @@ export const createTokenGate = (options: CreateTokenGateOptions): TokenGate => {
       }
       buffer = "";
       inflight = [];
+      scheduledAt = 0;
     },
   };
 };
