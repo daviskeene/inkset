@@ -28,9 +28,6 @@ export const SITE_DETAILS = `Inkset measures text once with Pretext and calculat
 
 export const docsMarkdownUrl = (slug: string): string => `${SITE_URL}/docs/${slug}.md`;
 
-// Live examples are React components the HTML page swaps in for a marker
-// comment; an agent reading the Markdown gets a pointer to the page instead.
-
 // Root-relative links resolve against inkset.dev only in a browser. Docs links
 // go to their Markdown version so an agent can keep following them.
 const RELATIVE_LINK_RE = /\]\((\/[^)\s]*)\)/g;
@@ -45,6 +42,8 @@ const absolutize = (href: string): string => {
 export const toAgentMarkdown = (page: DocsPage): string => {
   const markdown = [`# ${page.title}`, page.lede, page.body.trim()].filter(Boolean).join("\n\n");
   return `${markdown
+    // Live examples are React components the HTML page swaps in for a marker
+    // comment; an agent reading the Markdown gets a pointer to the page instead.
     .replace(
       EXAMPLE_MARKER_RE,
       `> This example is interactive. Open ${SITE_URL}/docs/${page.slug} in a browser to try it.`,
