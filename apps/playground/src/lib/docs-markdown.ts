@@ -3,9 +3,22 @@
 // doesn't run JavaScript sees a loading state. These helpers back the
 // /docs/<slug>.md routes, llms.txt, and llms-full.txt.
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { DocsPage } from "./docs-content";
 
 export const SITE_URL = "https://inkset.dev";
+
+export const SKILL_URL = `${SITE_URL}/skill.md`;
+
+// The setup skill lives at the repo root, where `npx skills add
+// daviskeene/inkset` finds it. The site serves the same file.
+const SKILL_PATH = path.join(process.cwd(), "..", "..", "skills", "inkset", "SKILL.md");
+
+export const loadSkill = (): Promise<string> => fs.readFile(SKILL_PATH, "utf-8");
+
+export const stripFrontmatter = (markdown: string): string =>
+  markdown.replace(/^---\n[\s\S]*?\n---\n+/, "");
 
 export const SITE_SUMMARY =
   "Inkset is an open source React library for rendering LLM output. It handles streaming Markdown, code blocks, math, tables, Mermaid diagrams, and generative UI, and it can replace react-markdown or Streamdown.";

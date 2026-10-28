@@ -35,3 +35,13 @@ import "katex/dist/katex.min.css";
 ```
 
 `@inkset/react` includes `@inkset/animate`, which controls how streaming text appears. Install `@inkset/animate` yourself only if you import from it directly. See [@inkset/animate](/docs/plugin-animate).
+
+## Set up with a coding agent
+
+The Inkset skill tells a coding agent how to install and configure Inkset, or how to move a project from react-markdown or Streamdown. Install it in your project:
+
+```bash
+npx skills add daviskeene/inkset
+```
+
+An agent can also read the same instructions at [inkset.dev/skill.md](/skill.md).
