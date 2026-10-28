@@ -26,6 +26,11 @@ export class Ingest {
     return events;
   }
 
+  /** Reopen a finished document so `append()` extends it. */
+  reopen(): void {
+    this.closed = false;
+  }
+
   getRepaired(): string {
     return repair(this.document, { closed: this.closed });
   }

@@ -133,6 +133,58 @@ describe("Inkset incremental streaming", () => {
     expect(container.textContent).toContain("Alpha omega");
   });
 
+  it("extends settled content incrementally when it grows without streaming", async () => {
+    const setContentSpy = vi.spyOn(StreamingPipeline.prototype, "setContent");
+    const appendSpy = vi.spyOn(StreamingPipeline.prototype, "appendToken");
+    const resumeSpy = vi.spyOn(StreamingPipeline.prototype, "resumeStream");
+
+    // A react-markdown-style integration: growing text, no `streaming` prop.
+    await act(async () => {
+      root.render(<Inkset content="Alpha" width={320} />);
+    });
+    await settle();
+    const setContentCallsAfterMount = setContentSpy.mock.calls.length;
+
+    await act(async () => {
+      root.render(<Inkset content="Alpha beta" width={320} />);
+    });
+    await settle();
+    await act(async () => {
+      root.render(<Inkset content="Alpha beta gamma" width={320} />);
+    });
+    await settle();
+
+    expect(setContentSpy.mock.calls.length).toBe(setContentCallsAfterMount);
+    expect(resumeSpy).toHaveBeenCalledTimes(2);
+    expect(appendSpy.mock.calls.map((call) => call[0])).toEqual([" beta", " gamma"]);
+    expect(container.textContent).toContain("Alpha beta gamma");
+  });
+
+  it("resumes a settled document when streaming starts again", async () => {
+    const setContentSpy = vi.spyOn(StreamingPipeline.prototype, "setContent");
+    const appendSpy = vi.spyOn(StreamingPipeline.prototype, "appendToken");
+
+    await act(async () => {
+      root.render(<Inkset content={"# Title\n\nAlpha"} width={320} />);
+    });
+    await settle();
+    const setContentCallsAfterMount = setContentSpy.mock.calls.length;
+
+    await act(async () => {
+      root.render(<Inkset content={"# Title\n\nAlpha"} streaming width={320} />);
+    });
+    await settle();
+    await act(async () => {
+      root.render(<Inkset content={"# Title\n\nAlpha\n\nOmega"} streaming width={320} />);
+    });
+    await settle();
+
+    expect(setContentSpy.mock.calls.length).toBe(setContentCallsAfterMount);
+    expect(appendSpy.mock.calls.map((call) => call[0])).toEqual(["\n\nOmega"]);
+    expect(container.querySelector('[data-block-id="0"]')?.textContent).toBe("Title");
+    expect(container.textContent).toContain("Omega");
+  });
+
   it("falls back to a full replacement for non-monotonic content", async () => {
     const setContentSpy = vi.spyOn(StreamingPipeline.prototype, "setContent");
 

@@ -840,6 +840,12 @@ export type UseInksetResult = {
   appendToken: (token: string) => Promise<void>;
   endStream: () => Promise<void>;
   /**
+   * Reopen a settled document so `appendToken()` extends it, keeping the
+   * caches of unchanged blocks. Without it, appends after `endStream()` are
+   * dropped.
+   */
+  resumeStream: () => void;
+  /**
    * Replace the whole document. `{ streaming: true }` keeps the pipeline's
    * ingest open so later `appendToken()` calls extend it incrementally;
    * finish with `endStream()`. Default settles the content immediately.
@@ -960,6 +966,10 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     await pipelineRef.current?.endStream();
   }, []);
 
+  const resumeStream = useCallback(() => {
+    pipelineRef.current?.resumeStream();
+  }, []);
+
   const setContent = useCallback(async (content: string, options?: { streaming?: boolean }) => {
     await pipelineRef.current?.setContent(content, options);
   }, []);
@@ -978,6 +988,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     containerRef,
     appendToken,
     endStream,
+    resumeStream,
     setContent,
     getGlyphLookup,
   };
@@ -1092,6 +1103,11 @@ const BlockRenderer = memo(
       positioning === "absolute"
         ? {
             position: "absolute",
+            // Pinned inline so the in-flow spacer before the blocks never
+            // shifts their static position, even when `unstyled` drops the
+            // stylesheet.
+            top: 0,
+            left: 0,
             transform: `translate(${x}px, ${y}px)`,
             width,
             minHeight: height,
@@ -1597,6 +1613,7 @@ export const Inkset = ({
     appendToken,
     setContent,
     endStream,
+    resumeStream,
     getGlyphLookup,
   } = useInkset({
     plugins,
@@ -1850,8 +1867,8 @@ export const Inkset = ({
     pipelineVersion?: number;
   }>({});
   // Whether the pipeline's ingest is open (content was submitted with
-  // `streaming: true` and endStream hasn't run). Gates the incremental
-  // appendToken path: appending to a closed ingest is a silent no-op.
+  // `streaming: true` and endStream hasn't run). Appending to a closed ingest
+  // is a silent no-op, so growth resumes the stream first.
   const pipelineStreamOpenRef = useRef(false);
   const [resolvedHeights, setResolvedHeights] = useState<Map<number, ResolvedBlockHeight>>(
     () => new Map(),
@@ -1914,18 +1931,24 @@ export const Inkset = ({
 
     prevContentRef.current = { content: effectiveContent, pipelineVersion };
 
-    // Monotonic growth while the pipeline's ingest is still open: feed only
-    // the delta through the incremental path. Frozen blocks keep their
-    // parse/transform/measure caches instead of re-running the whole
-    // document cold on every update — this is the pipeline the architecture
-    // is built around.
-    if (grewMonotonically && pipelineStreamOpenRef.current) {
+    // Monotonic growth: feed only the delta through the incremental path.
+    // Frozen blocks keep their parse/transform/measure caches and observed
+    // heights instead of re-running the whole document cold on every update
+    // — this is the pipeline the architecture is built around. A settled
+    // document (content growing without `streaming`, or a stream that
+    // resumes) is reopened first; the effect below settles it again when
+    // `streaming` is false.
+    if (grewMonotonically) {
+      if (!pipelineStreamOpenRef.current) {
+        resumeStream();
+        pipelineStreamOpenRef.current = true;
+      }
       appendToken(effectiveContent.slice(prevContent.length));
       return;
     }
 
-    // Document replacement (first content, rebuilt pipeline, non-monotonic
-    // edit, or static content change outside a stream session).
+    // Document replacement (first content, rebuilt pipeline, or non-monotonic
+    // edit).
     replacementInFlightRef.current = true;
     observedHeightsRef.current = new Map();
     pendingHeightUpdatesRef.current.clear();
@@ -1937,7 +1960,7 @@ export const Inkset = ({
 
     pipelineStreamOpenRef.current = streaming;
     setContent(effectiveContent, { streaming });
-  }, [effectiveContent, pipelineVersion, appendToken, setContent, streaming]);
+  }, [effectiveContent, pipelineVersion, appendToken, resumeStream, setContent, streaming]);
 
   useEffect(() => {
     if (streaming) return;
@@ -2237,10 +2260,14 @@ export const Inkset = ({
   const frozenBlocks = hotBlockIndex >= 0 ? resolvedLayout.slice(0, hotBlockIndex) : resolvedLayout;
   const hotBlock = hotBlockIndex >= 0 ? resolvedLayout[hotBlockIndex] : null;
 
-  // Pushes the normal-flow hot block below the absolute-positioned frozen blocks
-  const spacerHeight = hotBlock ? hotBlock.y : 0;
-
   const containerMinHeight = hotBlock ? undefined : resolvedHeight || (state?.totalHeight ?? 0);
+
+  // An in-flow box under the absolutely positioned frozen blocks: while
+  // streaming it pushes the hot block below them, and once settled it spans
+  // the whole layout. Browser scroll anchoring needs it — Chromium never picks
+  // an absolutely positioned element as the anchor, so without it, content
+  // growing above a settled document moved the reader by the full amount.
+  const spacerHeight = hotBlock ? hotBlock.y : containerMinHeight;
 
   const baseFontSize = fontSize ?? DEFAULT_FONT_SIZE;
   const baseLineHeight = lineHeight ?? DEFAULT_LINE_HEIGHT;
@@ -2459,9 +2486,19 @@ export const Inkset = ({
         Keys only match within a parent slot, so rendering the hot block in a
         separate fragment made every block unmount and remount the moment it
         froze — plugin state (highlighted HTML, copy feedback, in-flight
-        settle callbacks) was lost and code blocks flashed unstyled.
+        settle callbacks) was lost and code blocks flashed unstyled. The spacer
+        comes first: Chromium only anchors on it when it precedes the
+        absolutely positioned blocks.
       */}
       {[
+        <div
+          key="inkset-flow-spacer"
+          aria-hidden
+          style={{
+            height: spacerHeight,
+            pointerEvents: "none",
+          }}
+        />,
         ...frozenBlocks.map((block: LayoutBlock) => (
           <BlockRenderer
             key={block.blockId}
@@ -2479,14 +2516,6 @@ export const Inkset = ({
         )),
         ...(hotBlock
           ? [
-              <div
-                key="inkset-hot-spacer"
-                aria-hidden
-                style={{
-                  height: spacerHeight,
-                  pointerEvents: "none",
-                }}
-              />,
               <BlockRenderer
                 key={hotBlock.blockId}
                 block={hotBlock}
@@ -2511,6 +2540,78 @@ export const Inkset = ({
       )}
 
       {children}
+    </div>
+  );
+};
+
+// ── Parts ──────────────────────────────────────────────────────────
+
+export type InksetMarkdownPart = {
+  /** Stable host ID. It keys the part, so it must not change across renders. */
+  id: string;
+  type: "markdown";
+  content: string;
+  streaming?: boolean;
+};
+
+export type InksetSurfacePart<TData = unknown> = {
+  /** Stable host ID. It keys the part, so it must not change across renders. */
+  id: string;
+  type: "surface";
+  data: TData;
+};
+
+export type InksetPart<TData = unknown> = InksetMarkdownPart | InksetSurfacePart<TData>;
+
+export type InksetPartsProps<TData = unknown> = Omit<
+  InksetProps,
+  "content" | "streaming" | "children"
+> & {
+  parts: readonly InksetPart<TData>[];
+  /** Renders an application component for each surface part. */
+  renderSurface: (part: InksetSurfacePart<TData>) => ReactNode;
+};
+
+/**
+ * Renders a message whose Markdown is interleaved with application components.
+ * Each Markdown part runs its own Inkset pipeline. Surfaces sit between them in
+ * normal document flow, outside Inkset's absolute layout, live region, and
+ * reveal wrappers, so the browser keeps their state, focus, and sizing.
+ * `className` and `style` apply to the wrapper; every other prop is shared by
+ * the Markdown parts.
+ */
+export const InksetParts = <TData,>({
+  parts,
+  renderSurface,
+  className,
+  style,
+  loadingFallback,
+  ...inksetProps
+}: InksetPartsProps<TData>) => {
+  const gap = inksetProps.blockSpacing?.default ?? DEFAULT_BLOCK_SPACING.default;
+  const firstMarkdown = parts.find((part) => part.type === "markdown");
+
+  return (
+    <div
+      className={className ? `inkset-parts ${className}` : "inkset-parts"}
+      style={{ display: "flex", flexDirection: "column", gap, ...style }}
+    >
+      {parts.map((part) => (
+        <div key={part.id} data-inkset-part={part.id}>
+          {part.type === "markdown" ? (
+            <Inkset
+              {...inksetProps}
+              content={part.content}
+              streaming={part.streaming}
+              // A spinner appearing for each new part mid-answer would push
+              // everything below it, so only the first part shows one.
+              loadingFallback={part === firstMarkdown ? loadingFallback : null}
+            />
+          ) : (
+            renderSurface(part)
+          )}
+        </div>
+      ))}
     </div>
   );
 };

@@ -38,6 +38,30 @@ describe("StreamingPipeline incremental streaming", () => {
     pipeline.destroy();
   });
 
+  it("resumes a settled document, reusing the parsed nodes of unchanged blocks", async () => {
+    const pipeline = new StreamingPipeline();
+    await pipeline.setWidth(600);
+    await pipeline.setContent("# Title\n\nAlpha");
+    const heading = pipeline.getState().layout[0].node;
+
+    await pipeline.appendToken("\n\nDropped");
+    await flushScheduledUpdate();
+    expect(pipeline.getState().blockCount).toBe(2);
+
+    pipeline.resumeStream();
+    await pipeline.appendToken("\n\nOmega");
+    await flushScheduledUpdate();
+    expect(pipeline.getState().isStreaming).toBe(true);
+    await pipeline.endStream();
+
+    const state = pipeline.getState();
+    expect(state.isStreaming).toBe(false);
+    expect(state.blockCount).toBe(3);
+    expect(state.layout[0].node).toBe(heading);
+    expect(extractText(state.layout[2].node)).toBe("Omega");
+    pipeline.destroy();
+  });
+
   it("treats endStream as a no-op once the document is settled", async () => {
     const pipeline = new StreamingPipeline();
     await pipeline.setWidth(600);

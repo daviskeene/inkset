@@ -259,6 +259,16 @@ export class StreamingPipeline {
     this.schedulePipelineUpdate();
   }
 
+  /**
+   * Reopen a document settled by `endStream()` or a non-streaming
+   * `setContent()`, so `appendToken()` extends it instead of being dropped.
+   * Unchanged blocks keep their parse, transform, and measure caches.
+   */
+  resumeStream(): void {
+    if (this.destroyed) return;
+    this.ingest.reopen();
+  }
+
   async endStream(): Promise<void> {
     if (this.destroyed) return;
     // Already-closed ingest means the document was fully settled by a prior
