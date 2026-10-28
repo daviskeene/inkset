@@ -1,8 +1,8 @@
 # @inkset/animate
 
-Token pacing, reveal timing, and shader garnish for streaming text.
+`@inkset/animate` controls how streaming text appears on the screen. You configure it with the `reveal` prop on `<Inkset>`, and it is not a plugin in the pipeline.
 
-## Install
+`@inkset/react` includes `@inkset/animate`, so the `reveal` prop works without a separate install. Install `@inkset/animate` only if you import from it directly:
 
 ```bash
 npm install @inkset/animate
@@ -10,13 +10,8 @@ npm install @inkset/animate
 
 ## Usage
 
-`@inkset/animate` exports helpers you pass to `<Inkset>` via the `reveal` prop, rather than a plugin registered in the pipeline.
-
 ```tsx
 import { Inkset } from "@inkset/react";
-import { createShaderRegistry } from "@inkset/animate";
-
-const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });
 
 <Inkset
   content={text}
@@ -27,36 +22,60 @@ const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });
     css: { preset: "fadeIn" },
     shader: "ink-dither",
   }}
+/>;
+```
+
+All values in this example except `shader` are the defaults. To use only the defaults, pass `reveal={{}}`.
+
+## Example
+
+This example streams a short sentence with the `ink-dither` shader.
+
+<!-- docs-example:animate -->
+
+## Reveal options
+
+| Option      | What it does                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `throttle`  | Holds new text in a queue and releases it at a fixed interval, one word or one character at a time.                       |
+| `timeline`  | Sets how long each new word takes to appear, and the delay between words.                                                 |
+| `css`       | Sets the CSS animation for new text: `"fadeIn"`, `"blurIn"`, `"slideUp"`, or the name of your own `@keyframes`.           |
+| `component` | Renders each new token with your own React component, in place of the CSS animation.                                      |
+| `shader`    | Draws an effect on a canvas over the new text. The text stays in the DOM for selection, find-in-page, and screen readers. |
+
+Set an option to `false` to turn it off.
+
+## Shaders
+
+Inkset includes two shaders:
+
+- **`ink-dither`** shows new text through an ordered dither pattern, and then makes it sharp.
+- **`dissolve`** fades characters in from a scattered pattern.
+
+To add your own shader, create a registry, register a loader for each shader, and pass the registry to `<Inkset>`:
+
+```tsx
+import { createShaderRegistry } from "@inkset/react";
+
+const shaderRegistry = createShaderRegistry({ includeBuiltIns: true });
+shaderRegistry.register("my-shader", () => import("./my-shader").then((mod) => mod.myShader));
+
+<Inkset
+  content={text}
+  streaming={streaming}
+  reveal={{ shader: "my-shader" }}
   shaderRegistry={shaderRegistry}
 />;
 ```
 
-## Example
-
-The preview below streams a short sentence through the built-in `ink-dither` reveal configuration.
-
-<!-- docs-example:animate -->
-
 ## Exports
 
-| Export                  | What it does                                             |
-| ----------------------- | -------------------------------------------------------- |
-| `createTokenGate`       | Low-level token pacing utility used by the reveal layer. |
-| `createShaderRegistry`  | Register custom shader presets for reveal overlays.      |
-| `defaultShaderRegistry` | Built-in shader registry.                                |
-| `wrapBlockDelta`        | Internal helper for wrapping newly revealed text ranges. |
+| Export                  | What it does                                                           |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `createTokenGate`       | Paces a stream of tokens. The `throttle` option uses it.               |
+| `createShaderRegistry`  | Creates a registry for your own shaders.                               |
+| `defaultShaderRegistry` | The registry with the built-in shaders. `<Inkset>` uses it by default. |
 
-## Built-in shaders
+## Performance
 
-- **ink-dither** — fresh tokens arrive through a cool ordered-dither haze before sharpening.
-- **dissolve** — characters fade from a scatter pattern.
-
-Pick one with `reveal={{ shader: "ink-dither" }}`; pass a `ShaderRegistry` if you're authoring your own.
-
-## When to animate
-
-Token animations cost something. They make the most sense in product surfaces where reveal quality is part of the experience, not in every hot path by default.
-
-## See also
-
-- [Streaming from an LLM](/docs/streaming) — how to pair the token gate with a real stream.
+Reveal animations add rendering work to each update. Use them where the animation is part of the product experience.

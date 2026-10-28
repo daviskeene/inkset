@@ -1,8 +1,6 @@
 # <Inkset>
 
-The React binding's default component. Pass it markdown and a streaming flag; it handles everything else.
-
-Most apps should start here. `<Inkset>` is the complete DOM renderer. It owns the render layer, built-in stylesheet, reveal layer, and loading states on top of the core pipeline.
+`<Inkset>` renders Markdown with the full Inkset pipeline. It includes the default stylesheet, the reveal animations, and a loading state. Use this component unless you need a custom renderer.
 
 ## Basic usage
 
@@ -12,63 +10,56 @@ import { createCodePlugin } from "@inkset/code";
 
 const plugins = [createCodePlugin()];
 
-export function Message({ text, streaming }) {
+export function Message({ text, streaming }: { text: string; streaming: boolean }) {
   return <Inkset content={text} streaming={streaming} plugins={plugins} />;
 }
 ```
 
 ## Props
 
-| Prop                 | Type                     | Default                   | What it does                                                                  |
-| -------------------- | ------------------------ | ------------------------- | ----------------------------------------------------------------------------- |
-| `content`            | `string`                 | —                         | The markdown source. Required.                                                |
-| `streaming`          | `boolean`                | `false`                   | When true, the last block stays in native flow so height updates smoothly.    |
-| `plugins`            | `InksetPlugin[]`         | `[]`                      | Plugins to run during the transform phase.                                    |
-| `width`              | `number`                 | container width           | Layout width in pixels. Pass a fixed width if your container is flexible.     |
-| `font`               | `string`                 | system default            | Font-family stack to measure against.                                         |
-| `fontSize`           | `number`                 | `16`                      | Base font size in px.                                                         |
-| `lineHeight`         | `number`                 | `24`                      | Line height in px.                                                            |
-| `blockSpacing`       | `BlockSpacing`           | `{ default: 16 }`         | Semantic spacing policy between frozen blocks.                                |
-| `textWrap`           | `TextWrapOption`         | —                         | Progressive-enhancement CSS wrapping hints such as `"pretty"` or `"balance"`. |
-| `headingSizes`       | `HeadingSizeTuple`       | `[3, 2.15, 1.3, 1]`       | Em-scale for h1–h4.                                                           |
-| `headingWeights`     | `HeadingWeightTuple`     | `[800, 780, 720, 680]`    | Weight for h1–h4.                                                             |
-| `headingLineHeights` | `HeadingLineHeightTuple` | `[1.05, 1.08, 1.15, 1.2]` | Line-height multipliers for h1–h4.                                            |
-| `hyphenation`        | `HyphenationOption`      | —                         | Whether Inkset inserts manual hyphenation hints.                              |
-| `shrinkwrap`         | `ShrinkwrapOption`       | `false`                   | Narrow applicable text blocks to the width of their longest greedy line.      |
-| `theme`              | `InksetTheme`            | —                         | Color tokens; see [Theming](/docs/theming).                                   |
-| `unstyled`           | `boolean`                | `false`                   | Skip Inkset's built-in stylesheet.                                            |
-| `loadingFallback`    | `ReactNode`              | built-in spinner          | Placeholder shown while plugin deps and the first measure pass load.          |
-| `reveal`             | `RevealProp`             | —                         | Token animation config; see [@inkset/animate](/docs/plugin-animate).          |
-| `shaderRegistry`     | `ShaderRegistry`         | built-in registry         | Registry used to resolve string shader names in `reveal.shader`.              |
+| Prop                 | Type                     | Default                   | What it does                                                                 |
+| -------------------- | ------------------------ | ------------------------- | ---------------------------------------------------------------------------- |
+| `content`            | `string`                 | None                      | The Markdown to render.                                                      |
+| `streaming`          | `boolean`                | `false`                   | Set to `true` while tokens arrive. The last block then stays in normal flow. |
+| `plugins`            | `InksetPlugin[]`         | `[]`                      | The plugins for rich blocks.                                                 |
+| `width`              | `number`                 | Container width           | A fixed layout width in pixels.                                              |
+| `font`               | `string`                 | `"system-ui, sans-serif"` | The font family for measurement and CSS.                                     |
+| `fontSize`           | `number`                 | `16`                      | The base font size in pixels.                                                |
+| `lineHeight`         | `number`                 | `24`                      | The line height in pixels.                                                   |
+| `blockSpacing`       | `BlockSpacing`           | `{ default: 16 }`         | The space between blocks. See [Theming](/docs/theming#spacing).              |
+| `headingSizes`       | `HeadingSizeTuple`       | `[3, 2.15, 1.3, 1]`       | The size of h1 to h4, as a multiple of `fontSize`.                           |
+| `headingWeights`     | `HeadingWeightTuple`     | `[800, 780, 720, 680]`    | The font weight of h1 to h4.                                                 |
+| `headingLineHeights` | `HeadingLineHeightTuple` | `[1.05, 1.08, 1.15, 1.2]` | The line height of h1 to h4, as a multiple of each heading's size.           |
+| `textWrap`           | `TextWrapOption`         | None                      | The CSS `text-wrap` value, such as `"pretty"` or `"balance"`.                |
+| `hyphenation`        | `HyphenationOption`      | None                      | Set to `true` to add hyphenation points to long English words.               |
+| `shrinkwrap`         | `ShrinkwrapOption`       | `false`                   | Makes text blocks as narrow as their lines. See [Layout](/docs/layout).      |
+| `theme`              | `InksetTheme`            | None                      | Colors and other style tokens. See [Theming](/docs/theming).                 |
+| `unstyled`           | `boolean`                | `false`                   | Removes the default stylesheet.                                              |
+| `loadingFallback`    | `ReactNode`              | A small spinner           | Shows while plugins load and Inkset measures the first time.                 |
+| `reveal`             | `RevealProp`             | None                      | The animation for new text. See [@inkset/animate](/docs/plugin-animate).     |
+| `shaderRegistry`     | `ShaderRegistry`         | The built-in shaders      | The shaders that `reveal.shader` can use by name.                            |
+| `cacheSize`          | `number`                 | `500`                     | The number of measured text segments that Inkset keeps.                      |
+| `linkAttrs`          | `LinkAttrsFn`            | None                      | Returns extra attributes for each link.                                      |
+| `className`          | `string`                 | None                      | A class for the root element.                                                |
+| `style`              | `CSSProperties`          | None                      | Styles for the root element. These override `theme`.                         |
 
-`blockSpacing` is the layout-native way to tune rhythm. Set a default gap, then refine it per block kind or per adjacent pair:
+## Width
+
+If you set `width`, Inkset uses that value. If you do not set it, Inkset watches the width of its container and calculates the layout again when the width changes. Most apps do not need to set `width`.
+
+## Links
+
+Use `linkAttrs` to add attributes to the links in the Markdown. For example, this function opens external links in a new tab:
 
 ```tsx
 <Inkset
-  blockSpacing={{
-    default: 8,
-    blocks: {
-      heading2: { top: 18, bottom: 6 },
-      paragraph: { bottom: 4 },
-    },
-    pairs: [{ from: "paragraph", to: "heading2", gap: 20 }],
-  }}
+  content={text}
+  linkAttrs={(href) =>
+    href.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : undefined
+  }
 />
 ```
 
-## Fixed vs. flexible width
+## Styles
 
-If you pass `width`, Inkset uses it directly. If you omit it, Inkset observes the container and re-layouts on resize — the arithmetic cost is small enough that this is the recommended default.
-
-## Styling behavior
-
-`<Inkset>` injects its default stylesheet unless you pass `unstyled`. If you are integrating into an existing design system and want to own the entire visual layer yourself, start there.
-
-## Render targets
-
-By default, `<Inkset>` renders to the DOM with absolute positioning for frozen blocks and native flow for the hot block. To render somewhere else, see [Render targets](/docs/render-targets).
-
-## See also
-
-- [useInkset()](/docs/use-inkset) — the hook form, for when you need to push tokens manually.
-- [Theming](/docs/theming) — styling the output.
+`<Inkset>` adds its default stylesheet to the page. If your design system controls all typography, set `unstyled` to remove the stylesheet. Inkset still sets the position of each block inline, so the layout stays correct.

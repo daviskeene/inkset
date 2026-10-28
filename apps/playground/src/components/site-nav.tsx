@@ -11,7 +11,7 @@ export const SiteNav = ({
   activePage,
   onOpenMobileMenu,
 }: {
-  activePage: Page;
+  activePage?: Page;
   onOpenMobileMenu?: () => void;
 }) => {
   const { themeKey, setThemeKey, cycleTheme } = useThemeKey();

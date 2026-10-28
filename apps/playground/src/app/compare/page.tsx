@@ -170,7 +170,7 @@ const INKSET_THEME: InksetTheme = {
     hr: "var(--pg-divider)",
   },
   code: {
-    headerBorderColor: "var(--pg-border-subtle)",
+    headerBorderColor: "transparent",
   },
   table: {
     border: "var(--pg-border-subtle)",

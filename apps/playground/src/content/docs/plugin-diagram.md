@@ -1,6 +1,6 @@
 # @inkset/diagram
 
-[Mermaid](https://mermaid.js.org) diagrams rendered as SVG.
+`@inkset/diagram` renders [Mermaid](https://mermaid.js.org) code blocks as SVG diagrams.
 
 ## Install
 
@@ -11,48 +11,57 @@ npm install @inkset/diagram mermaid
 ## Usage
 
 ```tsx
+import { createCodePlugin } from "@inkset/code";
 import { createDiagramPlugin } from "@inkset/diagram";
 
-<Inkset content={markdown} plugins={[createDiagramPlugin()]} />;
+const plugins = [createDiagramPlugin(), createCodePlugin()];
+
+<Inkset content={markdown} plugins={plugins} />;
 ```
 
-## What it handles
+The plugin claims only code blocks in the `mermaid` language. `@inkset/code` handles all other code blocks.
 
-Code fences with `lang: mermaid`. Everything else is left for `@inkset/code` (or whichever handler comes next).
+## Example
+
+This Markdown:
 
 ````md
 ```mermaid
 sequenceDiagram
-  User->>API: POST /messages
-  API-->>User: token stream
+  participant User
+  participant App
+  participant Inkset
+  User->>App: send a message
+  App->>Inkset: stream tokens
+  Inkset-->>App: stable rendered blocks
 ```
 ````
 
-## Example
+renders as this diagram:
 
 ```mermaid
 sequenceDiagram
   participant User
   participant App
   participant Inkset
-  User->>App: send markdown
+  User->>App: send a message
   App->>Inkset: stream tokens
   Inkset-->>App: stable rendered blocks
 ```
 
 ## Options
 
-| Option       | Type      | Default     | What it does                                                      |
-| ------------ | --------- | ----------- | ----------------------------------------------------------------- |
-| `theme`      | `string`  | `"dark"`    | Mermaid theme: `default`, `dark`, `neutral`, `forest`, or `base`. |
-| `language`   | `string`  | `"mermaid"` | Language name used for fence detection.                           |
-| `showHeader` | `boolean` | `true`      | Show the header strip when the copy button is visible.            |
-| `showCopy`   | `boolean` | `true`      | Show copy-to-clipboard for the source.                            |
+| Option       | Type      | Default     | What it does                                                          |
+| ------------ | --------- | ----------- | --------------------------------------------------------------------- |
+| `theme`      | `string`  | `"dark"`    | The Mermaid theme: `default`, `dark`, `neutral`, `forest`, or `base`. |
+| `language`   | `string`  | `"mermaid"` | The code block language that the plugin claims.                       |
+| `showHeader` | `boolean` | `true`      | Shows the bar above the diagram.                                      |
+| `showCopy`   | `boolean` | `true`      | Shows a button that copies the Mermaid source.                        |
 
-## Streaming behavior
+## Streaming
 
-While the fence is open, the plugin shows the source text. Once the fence closes, Mermaid renders the SVG and the React layer patches the block height after the content settles.
+While the code fence is open, the plugin shows the Mermaid source. When the fence closes, Mermaid renders the SVG, and Inkset updates the height of the block.
 
-## Bundle weight
+## Bundle size
 
-Mermaid is still a substantial dependency. Register the diagram plugin when you need Mermaid support, but do not assume it is free just because no diagram happened to render on a particular page.
+Mermaid is a large package. The plugin loads it when the Inkset pipeline starts, even if the content has no diagrams. Register the plugin only where your app shows diagrams.

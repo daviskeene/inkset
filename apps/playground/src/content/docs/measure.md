@@ -1,26 +1,30 @@
 # Measure
 
-The measure layer asks pretext to prepare every text segment in the enriched AST. Plugins supply their own measurements for non-text content.
+The measure stage calculates the width and height of each block. Pretext measures blocks of text, and plugins give the size of their own blocks.
 
-## What "prepare" means
+## How Pretext measures text
 
-Pretext's `prepare()` walks the text once, calls `Canvas.measureText` per run, and returns a data structure that can be laid out at any width in constant time per glyph. It's the expensive step — roughly **2 ms per text block** — and it's the step that must never happen in the hot path.
+Pretext does its work in two steps:
+
+1. `prepare()` divides the text into segments and measures the width of each segment with `Canvas.measureText`. It does not read from the DOM. This is the expensive step.
+2. `layout()` uses the segment widths to find the line breaks and the height of the text at a given width. This step is arithmetic only.
+
+Inkset calls `prepare()` once for each block of text and keeps the result. When the width changes, Inkset calls only `layout()` again.
 
 ## The cache
 
-Prepared handles are keyed by `(text, font, options)`. When a block's text is unchanged, its prepared handle is reused. This is why you should create your plugin list once at module scope: re-instantiating a plugin invalidates the cache.
+Inkset keeps the prepared text in a cache. The key is the text and the font. If the text of a block does not change, Inkset uses the cached result.
 
-## Mixed fonts
+The cache holds 500 entries by default. If one `<Inkset>` renders a long transcript, increase the limit with the `cacheSize` prop.
 
-The core text pass still measures against the configured typography. Rich inline presentation, such as inline math or inline code styling, is handled later by the React renderer.
+## Fonts
 
-## Non-text content
+Inkset measures text with the `font`, `fontSize`, and `lineHeight` props, and with the heading size, weight, and line-height props. These values must match the CSS that shows the text. If they do not match, Inkset reserves the wrong height for the block.
 
-Plugins can register a synchronous `measure()` function. In practice that usually returns an estimate based on the current width and the kind of content the plugin renders.
+Inkset measures inline code and inline math with the body font. The React renderer applies their styles after measurement.
 
-When plugin content settles later in the DOM, the rendered component can call `onContentSettled()`. The React layer then re-reads the block height and patches the layout.
+## Plugin blocks
 
-## See also
+A plugin can supply a `measure()` function. It must return a result immediately, so it usually returns an estimate from the current width and the type of content.
 
-- [Layout](/docs/layout) — arithmetic over measured glyphs.
-- [Transform](/docs/transform) — where enriched nodes come from.
+When the plugin's component finishes rendering, it calls `onContentSettled()`. Inkset then reads the real height of the block from the DOM and updates the layout.

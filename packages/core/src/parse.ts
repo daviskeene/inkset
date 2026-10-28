@@ -196,7 +196,7 @@ const resolveBlockReferences = (
     return {
       definitions: doc.linkDefinitions,
       footnoteOrder: doc.footnoteOrder,
-      key: `footnotes${doc.footnoteOrder.join(",")}${doc.linkDefinitions}`,
+      key: `footnotes\u0001${doc.footnoteOrder.join(",")}\u0001${doc.linkDefinitions}`,
     };
   }
 
@@ -215,7 +215,7 @@ const resolveBlockReferences = (
   return {
     definitions,
     footnoteOrder,
-    key: `${footnoteOrder.join(",")}${definitions}`,
+    key: `${footnoteOrder.join(",")}\u0001${definitions}`,
   };
 };
 
@@ -842,7 +842,7 @@ const SAFE_URL_PROTOCOL_RE = /^(?:https?|ircs?|mailto|tel|xmpp)$/i;
 const isSafeUrl = (value: unknown): boolean => {
   if (typeof value !== "string") return true;
   // eslint-disable-next-line no-control-regex
-  const url = value.replace(/[ - ]/g, "");
+  const url = value.replace(/[\u0000- \u007f]/g, "");
   const colon = url.indexOf(":");
   if (colon === -1) return true;
 

@@ -1,6 +1,6 @@
 # Parse
 
-The parse layer tokenizes the repaired markdown into a block-level AST. It runs incrementally: only the last (incomplete) block is re-parsed when new tokens arrive. Completed blocks are frozen in the AST.
+The parse stage converts the repaired Markdown into a syntax tree for each block. When a token arrives, Inkset parses only the last block again. Finished blocks keep the tree that Inkset made for them.
 
 ## Block types
 
@@ -15,22 +15,31 @@ The parse layer tokenizes the repaired markdown into a block-level AST. It runs 
 - `thematic-break`
 - `footnotes`
 
-Inline content such as emphasis, inline code, and links stays inside the block tree. Diagram handling happens later when the diagram plugin claims a `code` block such as a Mermaid fence.
+Inline content, such as emphasis, inline code, and links, stays inside the tree of its block. A Mermaid diagram is a `code` block, and the diagram plugin claims it in the transform stage.
 
-## GFM extensions
+## GitHub Flavored Markdown
 
-The parser supports tables, task lists, strikethrough, footnotes, and autolinks out of the box.
+Inkset supports tables, task lists, strikethrough, footnotes, and autolinks.
 
-Footnotes and reference-style links need the whole document, not just one block: `[^1]` in the second paragraph has to find `[^1]: …` at the bottom. Before parsing, the pipeline collects every footnote and link reference definition, hands each block the definitions it cites, and numbers footnotes by the order they are first referenced. Footnote definitions are merged into a single `footnotes` block rendered at the end of the document, the same place GitHub puts them; unreferenced definitions render nothing.
+Footnotes and reference links need information from other parts of the document. For example, a `[^1]` reference in the second paragraph needs the `[^1]: …` definition at the end. Before Inkset parses the blocks, it collects all footnote and link definitions and gives each block the definitions that it uses.
+
+Footnotes get their numbers in the order of their first reference. Inkset puts all footnote definitions into one `footnotes` block at the end of the document, where GitHub also puts them. A definition that has no reference does not render.
 
 ## Raw HTML
 
-Inkset does not run an HTML parser or sanitizer over model output, so raw HTML in markdown is dropped rather than rendered — the same default as react-markdown. Two shapes are kept because dropping them loses meaning: `<a id="…"></a>` scroll anchors become an empty anchor element, and `<br>` becomes a line break. HTML comments and anything else contribute nothing, so a block that is only an anchor or a comment measures at zero height and takes no space in the layout.
+Inkset does not render raw HTML from model output, because it does not parse or sanitize HTML. react-markdown has the same default.
 
-## Why incremental
+Inkset keeps two HTML forms because they have a meaning in the document:
 
-A naive re-parse of the whole buffer on every token is O(n²) work across a message. Tracking the block index means each token is O(length of hot block), which is bounded by the size of a single paragraph or code fence.
+- An `<a id="…"></a>` anchor becomes an empty anchor element, so links to it work.
+- A `<br>` tag becomes a line break.
 
-## Custom handling
+Inkset removes HTML comments and all other HTML. A block that contains only an anchor or a comment has zero height and takes no space in the layout.
 
-Plugins do not need the parser to invent a new block type for every rich block. A plugin can register for an existing type, then narrow with `canHandle()` during transform.
+## Why parsing is incremental
+
+If Inkset parsed the full document on each token, the parse work for one message would grow with the square of its length. Inkset parses only the last block, so the parse work for each token depends only on the size of that block.
+
+## Plugins and block types
+
+A plugin does not need a new block type. It registers for an existing type, such as `code`, and uses `canHandle()` to claim only some blocks of that type. See [Transform](/docs/transform).

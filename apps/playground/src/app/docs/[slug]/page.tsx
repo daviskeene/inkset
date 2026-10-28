@@ -32,7 +32,7 @@ export const generateMetadata = async (props: { params: Promise<Params> }): Prom
   return {
     title,
     description,
-    alternates: { canonical },
+    alternates: { canonical, types: { "text/markdown": `${canonical}.md` } },
     openGraph: {
       type: "article",
       url: `https://inkset.dev${canonical}`,

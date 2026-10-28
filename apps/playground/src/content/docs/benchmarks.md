@@ -1,41 +1,21 @@
 # Benchmarks
 
-Numbers on a MacBook Pro M1, Chrome 125, measured with `performance.now()` across 50 runs. Your mileage will vary.
+The [Compare](/compare) page streams the same response into Inkset, Streamdown, and react-markdown at the same time. It runs in your browser, so you can compare the renderers on your own hardware. Select **Measure** to see the average and peak React render time of each renderer.
 
-## Layout cost
+## Where the difference comes from
 
-A resize of a 1000-block response. Measurement is cached; layout runs fresh.
+Inkset does less work for each update:
 
-| Renderer         | Time per resize |
-| ---------------- | --------------- |
-| `react-markdown` | 180–240 ms      |
-| `streamdown`     | 40–60 ms        |
-| **`inkset`**     | **0.6–0.9 ms**  |
-
-The reason is structural, not micro-optimized: react-markdown and streamdown both call `getBoundingClientRect` as part of their reflow path; Inkset runs arithmetic over cached glyphs.
-
-## Streaming cost
-
-Per-token render during an active stream, 340 chars/sec.
-
-| Renderer         | Per-token render |
-| ---------------- | ---------------- |
-| `react-markdown` | 6–14 ms          |
-| `streamdown`     | 1.5–3.5 ms       |
-| **`inkset`**     | **0.3–0.6 ms**   |
+- When a token arrives, Inkset parses and measures only the last block.
+- Frozen blocks keep their measurements, so Inkset does not measure them again.
+- On resize, Inkset calculates the layout from cached measurements and does not read sizes from the DOM.
 
 ## Bundle size
 
-Gzipped, measured at pinned versions.
+These sizes are approximate and gzipped. They do not include Shiki, KaTeX, and Mermaid, which each library loads as separate chunks.
 
-| Renderer         | Size       | Notes                                           |
-| ---------------- | ---------- | ----------------------------------------------- |
-| `react-markdown` | ~150 KB    | Plus remark/rehype/katex/highlight.             |
-| `streamdown`     | ~180 KB    | Plus Tailwind (required).                       |
-| **`inkset`**     | **~50 KB** | `core + react + code + math + table + diagram`. |
-
-Plugin bundles (Shiki, KaTeX, Mermaid) are loaded on demand by each library so peak network cost is higher; see individual plugin docs.
-
-## See also
-
-- [How it works](/docs/how-it-works) — the pipeline that produces these numbers.
+| Renderer       | Size    | Packages                                                        |
+| -------------- | ------- | --------------------------------------------------------------- |
+| react-markdown | ~150 KB | `react-markdown` 10, with GFM, math, KaTeX, and highlighting    |
+| Streamdown     | ~180 KB | `streamdown` 2.5, with its code, math, and Mermaid plugins      |
+| Inkset         | ~50 KB  | `@inkset/core`, `react`, `code`, `math`, `table`, and `diagram` |

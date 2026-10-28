@@ -1,12 +1,16 @@
 import { DOCS_NAV } from "../../lib/docs-nav";
 import { loadDocsPage } from "../../lib/docs-content";
+import { SITE_DETAILS, SITE_SUMMARY, SITE_URL, docsMarkdownUrl } from "../../lib/docs-markdown";
 
 export const dynamic = "force-static";
 
-const SITE_URL = "https://inkset.dev";
-
+// Descriptions keep a link's text and drop its URL, so a cut never lands
+// inside a link and a relative href never reaches the agent.
 const truncate = (s: string, max: number): string => {
-  const clean = s.replace(/\s+/g, " ").trim();
+  const clean = s
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
   if (clean.length <= max) return clean;
   return `${clean.slice(0, max - 1).trimEnd()}…`;
 };
@@ -16,13 +20,9 @@ export const GET = async (): Promise<Response> => {
 
   lines.push("# Inkset");
   lines.push("");
-  lines.push(
-    "> A rendering library for AI chat UIs in React. Streaming-first, pretext-powered layout; plugin-driven for code, math, tables, and diagrams.",
-  );
+  lines.push(`> ${SITE_SUMMARY}`);
   lines.push("");
-  lines.push(
-    "Inkset is a React markdown renderer built for token-by-token LLM output. Each block is measured and laid out in a pretext pass, so streaming content reflows without visible shift — text reads like published prose instead of a jittering terminal.",
-  );
+  lines.push(SITE_DETAILS);
   lines.push("");
 
   for (const group of DOCS_NAV) {
@@ -30,7 +30,7 @@ export const GET = async (): Promise<Response> => {
     lines.push("");
     for (const entry of group.entries) {
       const page = await loadDocsPage(entry.slug);
-      const url = `${SITE_URL}/docs/${entry.slug}`;
+      const url = docsMarkdownUrl(entry.slug);
       if (page?.lede) {
         lines.push(`- [${entry.title}](${url}): ${truncate(page.lede, 200)}`);
       } else {
@@ -43,12 +43,17 @@ export const GET = async (): Promise<Response> => {
   lines.push("## Optional");
   lines.push("");
   lines.push(
-    `- [Playground](${SITE_URL}/): interactive streaming-markdown demo with scenario presets and theme switcher.`,
+    `- [Playground](${SITE_URL}/): An interactive demo that streams sample responses through Inkset, with presets and themes.`,
   );
   lines.push(
-    `- [Compare](${SITE_URL}/compare): side-by-side performance comparison with Streamdown.`,
+    `- [Generative UI demo](${SITE_URL}/generative-ui): A replayed conversation where the answer mixes streamed Markdown with an interactive json-render component.`,
   );
-  lines.push("- [GitHub](https://github.com/daviskeene/inkset): source, issues, releases.");
+  lines.push(
+    `- [Compare](${SITE_URL}/compare): Streams the same response into Inkset, Streamdown, and react-markdown, and measures their render time in the browser.`,
+  );
+  lines.push(
+    "- [GitHub](https://github.com/daviskeene/inkset): Source code, issues, and releases.",
+  );
   lines.push("");
 
   return new Response(lines.join("\n"), {

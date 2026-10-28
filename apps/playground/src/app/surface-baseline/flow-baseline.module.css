@@ -1,0 +1,136 @@
+.page {
+  max-width: 1240px;
+  margin: auto;
+  padding: 24px;
+  font-family: Arial, sans-serif;
+}
+.page h1 {
+  font-size: 28px;
+}
+.page h2 {
+  font-size: 20px;
+}
+.page button,
+.page input {
+  font: inherit;
+}
+.page button {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.page input:focus-visible,
+.page button:focus-visible,
+.page a:focus-visible {
+  outline: 3px solid #4489ff;
+  outline-offset: 3px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.workspace {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+.scroll {
+  height: 520px;
+  max-width: 100%;
+  flex-shrink: 0;
+  overflow: auto;
+  border: 1px solid #888;
+  border-radius: 8px;
+  background: var(--pg-bg);
+}
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+.parts > * {
+  min-width: 0;
+}
+.panel {
+  container-type: inline-size;
+  border: 1px solid #888;
+  border-radius: 8px;
+  padding: 20px;
+}
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.field input {
+  width: 100%;
+  min-width: 0;
+}
+.field input:not([type="range"]) {
+  padding: 8px;
+}
+.details {
+  grid-column: 1 / -1;
+}
+.expansion {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 350ms ease !important;
+}
+.expansion[data-expanded="true"] {
+  grid-template-rows: 1fr;
+}
+.expansion > div {
+  min-height: 0;
+  overflow: hidden;
+}
+.detailBody {
+  padding-block: 10px;
+}
+.menu {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  width: 220px;
+  padding: 16px;
+  background: #fff;
+  color: #111;
+  border: 2px solid #4489ff;
+  box-shadow: 0 8px 24px #0003;
+}
+.audit {
+  flex: 1;
+  min-width: 220px;
+  font-size: 13px;
+}
+.audit pre {
+  font-size: 11px;
+  overflow: auto;
+}
+@container (max-width: 440px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 1000px) {
+  .workspace {
+    flex-direction: column;
+  }
+  .page {
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .expansion {
+    transition: none !important;
+  }
+}

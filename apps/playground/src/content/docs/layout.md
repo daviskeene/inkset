@@ -1,30 +1,26 @@
 # Layout
 
-Layout is where Inkset's performance story lives. Prepared handles are cheap to lay out; the output is a flat list of positioned blocks.
+The layout stage stacks the measured blocks and calculates the position of each one. It uses only arithmetic, so it does not read from the DOM or cause a browser reflow.
 
 ## What layout does
 
-For each block:
+For each block, Inkset does these steps:
 
-- Run `pretext.layout(preparedHandle, containerWidth)` to place each glyph on the block's canvas.
-- Sum block heights to compute y-offsets.
-- Emit `(x, y, width, height, baseline)` per block.
+1. It gets the height of the block from the measure stage.
+2. It adds the space between this block and the next one, from `blockSpacing`.
+3. It adds the height and the space to find the `y` position of the next block.
 
-All of that is arithmetic over numbers. No DOM reads. No `getBoundingClientRect`. No forced reflow.
+The result is a list of blocks. Each block has an `x` position, a `y` position, a `width`, and a `height`.
 
-## The cost
-
-On a modern laptop, layout is roughly **0.0002 ms per block**. A response with a thousand blocks lays out in under a millisecond. That's the budget Inkset spends on every window resize, every container width change, every theme swap that rebreaks lines.
-
-## Variable-width reflow
-
-Pretext handles obstacles — think shrinkwrap at narrower widths, hanging indents, flush margins — through the same layout step. Inkset wires the container width and hyphenation preference through to pretext; the rest is pretext's job.
+Inkset runs the layout stage again each time a block height or the container width changes. A block with zero height, such as an HTML comment, gets no space before or after it.
 
 ## Shrinkwrap
 
-If `shrinkwrap` is enabled, pretext widens narrow lines until they fill a target ratio. This is most visible on short messages in a wide container, where naive layout would leave a single word on its own line.
+The `shrinkwrap` prop makes text blocks narrower. For each block, Inkset finds the smallest width that keeps the same number of lines, and it sets the block to that width. The lines then have more equal lengths, which helps most with short headings in a wide container.
 
-## See also
-
-- [Measure](/docs/measure) — what layout starts with.
-- [Render targets](/docs/render-targets) — what layout ends at.
+| Value          | Blocks that shrinkwrap                       |
+| -------------- | -------------------------------------------- |
+| `false`        | None. This is the default.                   |
+| `"headings"`   | Headings                                     |
+| `"paragraphs"` | Paragraphs and blockquotes                   |
+| `true`         | Headings, paragraphs, blockquotes, and lists |
