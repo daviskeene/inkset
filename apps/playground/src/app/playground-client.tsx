@@ -369,7 +369,7 @@ export const PlaygroundClient = ({ scenarios: scenarioData }: { scenarios: Scena
         height: "100dvh",
       }}
     >
-      <SiteNav activePage="playground" onOpenMobileMenu={() => setMenuOpen(true)} />
+      <SiteNav activePage="playground" brandAsHeading onOpenMobileMenu={() => setMenuOpen(true)} />
 
       <ScenarioStrip
         active={activeKey}

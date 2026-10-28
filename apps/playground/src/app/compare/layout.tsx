@@ -1,24 +1,23 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
+const TITLE = "Inkset vs react-markdown vs Streamdown: streaming Markdown in React";
+const DESCRIPTION =
+  "Compare Inkset, react-markdown, and Streamdown side by side as they render the same streaming Markdown in React, with live average and peak render times in your browser.";
+
 export const metadata: Metadata = {
-  title: "Compare: Inkset vs Streamdown",
-  description:
-    "Side-by-side benchmark of Inkset and Streamdown rendering the same streaming markdown in React — frame stability, layout shift, and time-to-paint.",
+  // `absolute` skips the "— Inkset" template, which would repeat the name.
+  title: { absolute: TITLE },
+  description: DESCRIPTION,
   alternates: { canonical: "/compare" },
   openGraph: {
     type: "website",
     url: "https://inkset.dev/compare",
-    title: "Compare: Inkset vs Streamdown",
-    description:
-      "Side-by-side benchmark of Inkset and Streamdown rendering the same streaming markdown in React.",
+    siteName: "Inkset",
+    title: TITLE,
+    description: DESCRIPTION,
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Compare: Inkset vs Streamdown",
-    description:
-      "Side-by-side benchmark of Inkset and Streamdown rendering the same streaming markdown in React.",
-  },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
 };
 
 export const viewport: Viewport = {

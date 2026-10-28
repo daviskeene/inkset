@@ -13,7 +13,7 @@
     "url": "git+https://github.com/daviskeene/inkset.git",
     "directory": "packages/animate"
   },
-  "homepage": "https://github.com/daviskeene/inkset/tree/main/packages/animate#readme",
+  "homepage": "https://inkset.dev/docs/plugin-animate",
   "bugs": {
     "url": "https://github.com/daviskeene/inkset/issues"
   },
@@ -23,7 +23,10 @@
     "animation",
     "reveal",
     "shader",
-    "react"
+    "react",
+    "streaming-markdown",
+    "ai-chat",
+    "llm-ui"
   ],
   "exports": {
     ".": {

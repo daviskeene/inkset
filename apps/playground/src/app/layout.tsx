@@ -27,9 +27,6 @@ export const metadata: Metadata = {
     shortcut: "/inkset-mark.svg",
     apple: "/inkset-mark.svg",
   },
-  alternates: {
-    canonical: "/",
-  },
   openGraph: {
     type: "website",
     url: SITE_URL,

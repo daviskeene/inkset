@@ -14,10 +14,9 @@ const nextConfig: NextConfig = {
     "@inkset/table",
     "@inkset/diagram",
   ],
-  // Docs pages render their body in the browser, so agents get the Markdown
-  // source instead: at /docs/<slug>.md, or at /docs/<slug> when they ask for
-  // it with `Accept: text/markdown`. beforeFiles runs ahead of the prerendered
-  // HTML pages.
+  // Agents get Markdown instead of HTML: at /docs/<slug>.md, or at
+  // /docs/<slug> and / when they ask for it with `Accept: text/markdown`.
+  // beforeFiles runs ahead of the prerendered HTML pages.
   rewrites: async () => ({
     beforeFiles: [
       { source: "/docs/:slug([a-z0-9-]+)\\.md", destination: "/docs/md/:slug" },
@@ -26,13 +25,22 @@ const nextConfig: NextConfig = {
         has: [{ type: "header", key: "accept", value: "(.*)text/markdown(.*)" }],
         destination: "/docs/md/:slug",
       },
+      {
+        source: "/",
+        has: [{ type: "header", key: "accept", value: "(.*)text/markdown(.*)" }],
+        destination: "/index.md",
+      },
     ],
     afterFiles: [],
     fallback: [],
   }),
   // Prerendered responses drop a Vary set in the route handler, and a cache
   // that keys only on the URL could otherwise serve Markdown to a browser.
-  headers: async () => [{ source: "/docs/:path*", headers: [{ key: "Vary", value: "Accept" }] }],
+  headers: async () =>
+    ["/", "/docs/:path*"].map((source) => ({
+      source,
+      headers: [{ key: "Vary", value: "Accept" }],
+    })),
 };
 
 export default nextConfig;

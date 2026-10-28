@@ -6,6 +6,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { DocsPage } from "./docs-content";
+import { EXAMPLE_MARKER_RE } from "./docs-body";
 
 export const SITE_URL = "https://inkset.dev";
 
@@ -29,7 +30,6 @@ export const docsMarkdownUrl = (slug: string): string => `${SITE_URL}/docs/${slu
 
 // Live examples are React components the HTML page swaps in for a marker
 // comment; an agent reading the Markdown gets a pointer to the page instead.
-const EXAMPLE_MARKER_RE = /<!-- docs-example:[\w-]+ -->/g;
 
 // Root-relative links resolve against inkset.dev only in a browser. Docs links
 // go to their Markdown version so an agent can keep following them.

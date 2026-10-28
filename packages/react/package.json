@@ -13,7 +13,7 @@
     "url": "git+https://github.com/daviskeene/inkset.git",
     "directory": "packages/react"
   },
-  "homepage": "https://github.com/daviskeene/inkset/tree/main/packages/react#readme",
+  "homepage": "https://inkset.dev",
   "bugs": {
     "url": "https://github.com/daviskeene/inkset/issues"
   },
@@ -23,7 +23,15 @@
     "markdown",
     "streaming",
     "renderer",
-    "llm"
+    "llm",
+    "streaming-markdown",
+    "react-markdown",
+    "streamdown",
+    "ai-chat",
+    "llm-ui",
+    "generative-ui",
+    "pretext",
+    "nextjs"
   ],
   "exports": {
     ".": {
