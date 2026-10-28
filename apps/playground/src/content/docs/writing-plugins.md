@@ -1,8 +1,8 @@
 # Writing a plugin
 
-A plugin gives Inkset three things: a synchronous `transform`, an optional synchronous `measure`, and a React component that renders the enriched node.
+A plugin tells Inkset how to render one type of block. It has a synchronous `transform` function, an optional synchronous `measure` function, and a React component that renders the block.
 
-## The contract
+## The plugin interface
 
 ```ts
 interface InksetPlugin {
@@ -18,60 +18,73 @@ interface InksetPlugin {
 }
 ```
 
-- `name` — unique plugin name.
-- `key` — optional identity key derived from options. Changing it forces a pipeline rebuild.
-- `handles` — block types the plugin registers for, such as `"code"` or `"table"`.
-- `canHandle` — optional finer-grained claim, for example `lang === "mermaid"` on a code block.
-- `widthSensitive` — rerun `transform` on width change.
-- `preload` — optional async warmup for heavy dependencies.
-- `transform` — synchronous enrichment step. Put parsing and metadata preparation here.
-- `measure` — synchronous dimensions for non-text blocks. If omitted, Inkset falls back to text measurement.
-- `component` — renders the enriched node.
+| Field            | What it does                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| `name`           | A unique name for the plugin.                                                                 |
+| `key`            | An identity for the plugin's options. When it changes, Inkset builds a new pipeline.          |
+| `handles`        | The block types that the plugin handles, such as `"code"` or `"table"`.                       |
+| `canHandle`      | Claims only some blocks of a type. For example, it can return `true` only for `mermaid` code. |
+| `widthSensitive` | Set to `true` to run `transform` again when the width changes.                                |
+| `preload`        | Loads large dependencies. Inkset waits for it before the first render.                        |
+| `transform`      | Adds the data that the component needs to `pluginData`. It must return immediately.           |
+| `measure`        | Returns the size of the block. If you do not supply it, Inkset measures the block as text.    |
+| `component`      | Renders the block.                                                                            |
 
-## A worked example
+[Transform](/docs/transform) explains the order in which plugins run.
 
-A plugin that renders `chart` code fences as an inline Vega-Lite chart.
+## Example
+
+This plugin renders code blocks in the `chart` language as charts. The `Chart` component is your own.
 
 ```tsx
-import type { InksetPlugin, EnrichedNode } from "@inkset/core";
+import type { InksetPlugin } from "@inkset/core";
 import { Chart } from "./chart";
+
+const parseSpec = (source: string): unknown => {
+  try {
+    return JSON.parse(source);
+  } catch {
+    return null;
+  }
+};
 
 export const createChartPlugin = (): InksetPlugin => ({
   name: "chart",
   handles: ["code"],
   canHandle: (node) => node.lang === "chart",
 
-  transform(node) {
-    return {
-      ...node,
-      transformedBy: "chart",
-      pluginData: { spec: JSON.parse(node.value) },
-    };
-  },
+  transform: (node) => ({
+    ...node,
+    transformedBy: "chart",
+    pluginData: { spec: parseSpec(node.value ?? "") },
+  }),
 
-  measure(node, maxWidth) {
-    return { width: maxWidth, height: 320 };
-  },
+  measure: (_node, maxWidth) => ({ width: maxWidth, height: 320 }),
 
-  component: ({ node }) => <Chart spec={node.pluginData.spec} />,
+  component: ({ node, onContentSettled }) => {
+    const spec = node.pluginData?.spec;
+    if (!spec) return <pre>{node.value}</pre>;
+    return <Chart spec={spec} onRender={onContentSettled} />;
+  },
 });
 ```
 
-## The `measure` contract
+While the code block streams, its JSON is incomplete, so `parseSpec` returns `null` and the component shows the source. When the JSON is complete, the component shows the chart.
 
-`measure` must return synchronously. For async content like syntax highlighting or Mermaid, return a good estimate and let the rendered component call `onContentSettled()` when the real DOM height is ready. The React layer will then re-read and patch the block height. Until a component settles, the React layer treats the block's DOM as provisional and only lets it grow the reserved height, so a component that renders synchronously should call `onContentSettled()` on mount to let an over-estimate shrink.
+## Measurement
 
-## Dispatch behavior
+`measure` must return a result immediately. For content that renders later, such as a chart or a diagram, return a good estimate. When the content is on the screen, call `onContentSettled()`. Inkset then reads the real height of the block from the DOM and updates the layout.
 
-- If a `canHandle` plugin claims a node, it runs exclusively.
-- If no guarded plugin claims a node, unguarded plugins for that block type chain in registration order.
-- Width-sensitive plugins can re-run on resize.
+Until a plugin calls `onContentSettled()`, Inkset lets the DOM make the block taller, but not shorter. This prevents a short placeholder from removing the space that the estimate reserved. If your component renders immediately, call `onContentSettled()` when it mounts, so that Inkset can also make the block shorter than the estimate.
 
-## Registering
+## Register the plugin
 
-Plugins are passed to `<Inkset plugins={...} />`. Instantiate them at module scope so the measurement cache survives renders.
+Pass the plugin in the `plugins` prop. Create the plugin list once, outside your component:
 
-## See also
+```tsx
+const plugins = [createChartPlugin()];
 
-- [Transform](/docs/transform) — the pipeline stage your plugin plugs into.
-- [Measure](/docs/measure) — what happens after `transform` returns.
+<Inkset content={text} plugins={plugins} />;
+```
+
+Inkset compares plugins by `name` and `key`. If your plugin takes options that change its output, make `key` from the options, so that a change of options builds a new pipeline.

@@ -1,6 +1,6 @@
 # @inkset/table
 
-Responsive markdown tables with horizontal scroll on narrow viewports and a CSV copy action.
+`@inkset/table` renders Markdown tables in a container that scrolls horizontally when the table is wider than the message. It also adds a button that copies the table as CSV.
 
 ## Install
 
@@ -13,35 +13,33 @@ npm install @inkset/table
 ```tsx
 import { createTablePlugin } from "@inkset/table";
 
-<Inkset content={markdown} plugins={[createTablePlugin()]} />;
+const plugins = [createTablePlugin()];
+
+<Inkset content={markdown} plugins={plugins} />;
 ```
 
 ## Example
 
-| Plugin            | Input it claims       | Rendered output                |
-| ----------------- | --------------------- | ------------------------------ |
-| `@inkset/code`    | fenced code blocks    | highlighted code with copy     |
-| `@inkset/math`    | display math blocks   | KaTeX-rendered equations       |
-| `@inkset/diagram` | `mermaid` code fences | SVG diagrams                   |
-| `@inkset/table`   | markdown tables       | responsive table with CSV copy |
+This page uses the table plugin:
+
+| Plugin            | Blocks that it claims    | What it renders                |
+| ----------------- | ------------------------ | ------------------------------ |
+| `@inkset/code`    | Code blocks              | Highlighted code with copy     |
+| `@inkset/math`    | Display math blocks      | Math from KaTeX                |
+| `@inkset/diagram` | Code blocks in `mermaid` | SVG diagrams                   |
+| `@inkset/table`   | Markdown tables          | Scrolling tables with CSV copy |
 
 ## Options
 
-| Option         | Type                              | Default        | What it does                                    |
-| -------------- | --------------------------------- | -------------- | ----------------------------------------------- |
-| `showCopy`     | `boolean`                         | `true`         | Show the copy-as-CSV action in the header.      |
-| `borderStyle`  | `"all" \| "horizontal" \| "none"` | `"horizontal"` | Which borders to draw.                          |
-| `zebra`        | `boolean`                         | `false`        | Zebra-stripe alternate rows.                    |
-| `stickyHeader` | `boolean`                         | `false`        | Keep the header visible while the body scrolls. |
+| Option         | Type                              | Default        | What it does                                              |
+| -------------- | --------------------------------- | -------------- | --------------------------------------------------------- |
+| `showCopy`     | `boolean`                         | `true`         | Shows the button that copies the table as CSV.            |
+| `borderStyle`  | `"all" \| "horizontal" \| "none"` | `"horizontal"` | Which borders to show.                                    |
+| `zebra`        | `boolean`                         | `false`        | Gives every second row a different background.            |
+| `stickyHeader` | `boolean`                         | `false`        | Keeps the header row visible when the table body scrolls. |
 
-## Behavior
+`stickyHeader` has an effect only when a parent element limits the height of the table.
 
-The plugin renders tables inside a horizontal scroll container. Cells stay on one line and the container handles overflow when the table is wider than the viewport.
+## Wide tables
 
-## Why not just markdown's default table?
-
-Because the default table has no useful mobile policy. On a narrow viewport, long cells either wrap into an unreadable mess or push the document wider than the container. Inkset makes the overflow behavior explicit and keeps copy/export support in the same block.
-
-## See also
-
-- [Measure](/docs/measure) — how the plugin reports its dimensions to the layout engine.
+Cells stay on one line. When a table is wider than the container, the container scrolls horizontally. On a narrow screen, this keeps each row on one line and keeps the table inside the message.

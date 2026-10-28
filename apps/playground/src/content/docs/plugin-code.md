@@ -1,6 +1,6 @@
 # @inkset/code
 
-Syntax-highlighted code blocks via [Shiki](https://shiki.style). Supports streaming — tokens that arrive after Shiki has loaded re-highlight the hot block without flashing.
+`@inkset/code` highlights code blocks with [Shiki](https://shiki.style). It highlights code while the code streams, before the code fence closes.
 
 ## Install
 
@@ -9,18 +9,6 @@ npm install @inkset/code
 ```
 
 ## Usage
-
-```tsx
-import { createCodePlugin } from "@inkset/code";
-
-const codePlugin = createCodePlugin({
-  theme: "github-dark",
-});
-
-<Inkset content={markdown} plugins={[codePlugin]} />;
-```
-
-## Example
 
 ```tsx
 import { Inkset } from "@inkset/react";
@@ -35,24 +23,24 @@ export function Message({ text, streaming }: { text: string; streaming: boolean 
 
 ## Options
 
-| Option          | Type      | Default         | What it does                                            |
-| --------------- | --------- | --------------- | ------------------------------------------------------- |
-| `theme`         | `string`  | `"github-dark"` | Shiki theme name for the primary rendering.             |
-| `lightTheme`    | `string`  | same as `theme` | Optional second theme used when dual-theme mode is on.  |
-| `showHeader`    | `boolean` | `true`          | Show the language label + copy button strip.            |
-| `showCopy`      | `boolean` | `true`          | Show the copy-to-clipboard action.                      |
-| `showLangLabel` | `boolean` | `true`          | Show the language label.                                |
-| `wrapLongLines` | `boolean` | `false`         | Wrap lines at the container width instead of scrolling. |
+| Option          | Type       | Default         | What it does                                                    |
+| --------------- | ---------- | --------------- | --------------------------------------------------------------- |
+| `theme`         | `string`   | `"github-dark"` | The Shiki theme.                                                |
+| `lightTheme`    | `string`   | None            | A second Shiki theme for a light color scheme.                  |
+| `langs`         | `string[]` | `[]`            | More Shiki languages to load, in addition to the default set.   |
+| `showHeader`    | `boolean`  | `true`          | Shows the bar above the code with the language and copy button. |
+| `showCopy`      | `boolean`  | `true`          | Shows the copy button.                                          |
+| `showLangLabel` | `boolean`  | `true`          | Shows the language name.                                        |
+| `wrapLongLines` | `boolean`  | `false`         | Wraps long lines. By default, long lines scroll horizontally.   |
 
-## Streaming behavior
+## Languages
 
-While a code fence is still streaming, the block keeps its streaming indicator visible. Once Shiki is ready, partial code can still be highlighted before the fence fully closes.
+The plugin loads a default set of common languages, such as JavaScript, TypeScript, Python, Rust, Go, and Java. To highlight other languages, add their Shiki names to `langs`. A code block in a language that is not loaded shows as plain text.
 
-## Dual-theme mode
+## Streaming
 
-Pass `theme` and `lightTheme` to render both, and let CSS pick which one shows based on the user's theme. This avoids re-highlighting on theme swap, which would otherwise be a measurable jank.
+While a code block streams, it shows a streaming indicator. The plugin highlights the partial code before the code fence closes, and it highlights the code again when more code arrives.
 
-## See also
+## Light and dark themes
 
-- [Theming](/docs/theming) — wiring Shiki's colors to your page palette.
-- [Writing a plugin](/docs/writing-plugins) — if you're building something similar.
+Set `theme` and `lightTheme` to highlight the code in both themes. The plugin renders both versions. CSS shows the `lightTheme` version when the system uses a light color scheme (`prefers-color-scheme: light`), and the `theme` version at all other times. Because both versions are already on the page, a change of color scheme does not need new highlighting.

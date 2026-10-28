@@ -1,10 +1,10 @@
 # Migration
 
-How to move to Inkset from the common markdown renderers.
+Inkset takes a Markdown string and a list of plugins. To move from another renderer, replace the component and its plugins, and then move the spacing rules from your CSS to `blockSpacing`.
 
-## From `react-markdown`
+## From react-markdown
 
-**Before:**
+Before:
 
 ```tsx
 import ReactMarkdown from "react-markdown";
@@ -22,7 +22,7 @@ import "katex/dist/katex.min.css";
 </ReactMarkdown>;
 ```
 
-**After:**
+After:
 
 ```tsx
 import { Inkset } from "@inkset/react";
@@ -36,26 +36,26 @@ const plugins = [createCodePlugin(), createMathPlugin(), createTablePlugin()];
 <Inkset content={content} plugins={plugins} />;
 ```
 
-The shape is similar, but Inkset takes the full markdown string and orchestrates the pipeline itself — you don't wire remark / rehype plugins separately.
+Inkset includes GitHub Flavored Markdown, so you do not need a separate GFM plugin. There are also these differences:
 
-## From `streamdown`
+- Inkset has no `components` prop. To add attributes to links, use `linkAttrs`. To render a block type in your own way, [write a plugin](/docs/writing-plugins).
+- Inkset does not render raw HTML, and it has no equivalent of `rehype-raw`.
 
-Streamdown's `<Streamdown>` and Inkset's `<Inkset>` are nearly-swappable for streaming markdown. The main differences:
+## From Streamdown
 
-- **No Tailwind requirement.** Streamdown ships Tailwind classes; Inkset ships CSS custom properties. If you're not using Tailwind, this is a net reduction.
-- **`plugins` is an array, not an object.** Streamdown's `plugins={{ code, math, mermaid }}` becomes `plugins={[createCodePlugin(), createMathPlugin(), createDiagramPlugin()]}`.
-- **`mode="streaming"` is `streaming={true}`.**
+`<Streamdown>` and `<Inkset>` take similar inputs. These are the differences:
 
-## From a hand-rolled chat renderer
+- **Plugins are an array.** `plugins={{ code, math, mermaid }}` becomes `plugins={[createCodePlugin(), createMathPlugin(), createDiagramPlugin()]}`.
+- **Streaming is a boolean.** `mode="streaming"` becomes `streaming={true}`.
+- **Content is a prop.** Pass the Markdown as `content`, not as children.
+- **Styles come from Inkset.** Inkset includes its own stylesheet and does not need Tailwind.
 
-If you've built your own markdown renderer for your chat app and you're here because it's flickering under fast streams, the one-line upgrade is to wrap your message body in `<Inkset content={text} streaming={streaming} />` and move your plugins (code highlighting, math, etc.) into the plugin array.
+## From your own renderer
 
-If you're doing anything exotic — rendering a custom block type, injecting inline React components between paragraphs, reacting to the layout pass — see [Writing a plugin](/docs/writing-plugins).
+Replace your message body with `<Inkset content={text} streaming={streaming} />`. Then move your code highlighting, math, and other rich content to the `plugins` array.
 
-## What will need changing in your styles
+To show your own React components between parts of the text, use `InksetParts`. See [Generative UI](/docs/generative-ui).
 
-Inkset renders frozen blocks with `position: absolute`, which means sibling-selector CSS (`p + p`, `h2 ~ p`) won't match the way it used to. The equivalents are the layout-native `blockSpacing` prop and the heading tuples (`headingSizes`, `headingWeights`). See [Theming](/docs/theming).
+## Styles
 
-## See also
-
-- [Benchmarks](/docs/benchmarks) — what you're getting out of the switch.
+Inkset positions frozen blocks with `position: absolute`, so CSS margins and sibling selectors such as `p + p` and `h2 ~ p` do not change the layout. Use `blockSpacing` for the space between blocks, and use the heading props for heading sizes. See [Theming](/docs/theming).

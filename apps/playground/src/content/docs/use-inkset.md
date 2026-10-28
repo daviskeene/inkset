@@ -1,46 +1,60 @@
 # useInkset()
 
-A lower-level hook for driving the Inkset pipeline imperatively. Use it when you need direct access to pipeline state, metrics, glyph lookups, or you are building a custom renderer on top of the core layout data.
+`useInkset()` runs the Inkset pipeline without the built-in renderer. Use it when you build your own renderer from the layout, send content to the pipeline from outside React state, or read pipeline metrics and glyph positions. To render Markdown in a React app, use [`<Inkset>`](/docs/component).
 
-`useInkset()` does not render Inkset's built-in DOM output on its own. If you want the default renderer, use [`<Inkset>`](/docs/component).
+## Example
 
-## Return value
+This component draws one box for each block, at the position that Inkset calculated:
 
 ```tsx
+import { useEffect } from "react";
 import { useInkset } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
 
-const inkset = useInkset({ plugins: [createCodePlugin()] });
+const plugins = [createCodePlugin()];
 
-// inkset.state          — current layout + metrics
-// inkset.containerRef   — width source for the pipeline
-// inkset.appendToken()  — push a chunk into the active stream
-// inkset.endStream()    — settle the hot block
-// inkset.setContent()   — replace the whole document
-// inkset.getGlyphLookup() — token coordinate lookup for reveal systems
+export function BlockOutline({ markdown }: { markdown: string }) {
+  const { state, containerRef, setContent, pipelineVersion } = useInkset({ plugins });
+
+  useEffect(() => {
+    void setContent(markdown);
+  }, [markdown, pipelineVersion, setContent]);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", height: state?.totalHeight }}>
+      {state?.layout.map((block) => (
+        <div
+          key={block.blockId}
+          style={{ position: "absolute", top: block.y, height: block.height }}
+        >
+          {block.kind}
+        </div>
+      ))}
+    </div>
+  );
+}
 ```
 
-## What it is for
+Attach `containerRef` to an element. Inkset uses the width of that element for the layout. Send the content again when `pipelineVersion` changes, because a new pipeline starts with an empty document.
 
-- Custom render targets that want Inkset's measured layout without the built-in DOM renderer
-- Imperative content updates from a worker, store, or non-React stream source
-- Access to pipeline metrics or glyph-position data for custom effects
+## Return value
+
+| Field              | What it does                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| `state`            | The current layout, total height, and metrics. It is `null` until the first pass.   |
+| `containerRef`     | A ref for the element that sets the layout width.                                   |
+| `appendToken()`    | Adds text to the end of the document.                                               |
+| `endStream()`      | Ends the stream and freezes the last block.                                         |
+| `resumeStream()`   | Opens a finished document again, so that `appendToken()` can add to it.             |
+| `setContent()`     | Replaces the full document. Pass `{ streaming: true }` to keep the stream open.     |
+| `getGlyphLookup()` | Gives the position of each token in a block. The reveal animations use this lookup. |
+| `registry`         | The registered plugins.                                                             |
+| `pipelineVersion`  | A number that increases each time Inkset builds a new pipeline.                     |
+
+After `endStream()`, Inkset ignores `appendToken()` until you call `resumeStream()`.
 
 ## Options
 
-The hook takes the core pipeline options: typography, width, `blockSpacing`, `hyphenation`, `shrinkwrap`, heading tuples, and plugins.
+`useInkset()` takes the layout options of `<Inkset>`: `plugins`, `width`, `font`, `fontSize`, `lineHeight`, `blockSpacing`, `hyphenation`, `shrinkwrap`, the heading props, and `cacheSize`.
 
-Render-layer props like `theme`, `reveal`, `shaderRegistry`, `unstyled`, and `loadingFallback` belong to [`<Inkset>`](/docs/component), not the hook.
-
-## When to prefer the hook
-
-- You are building a custom renderer around `state.layout`
-- You need imperative `appendToken()` / `setContent()` control outside normal React state flow
-- You need metrics or glyph-position access for instrumentation or custom animation
-
-If you just want to render markdown in a React app, `<Inkset>` is still the right starting point.
-
-## See also
-
-- [Streaming from an LLM](/docs/streaming) — the recommended high-level streaming path.
-- [Render targets](/docs/render-targets) — what Inkset's layout data is designed to feed.
+The render options are on `<Inkset>` only. These are `theme`, `reveal`, `shaderRegistry`, `unstyled`, `loadingFallback`, and `linkAttrs`.

@@ -1,29 +1,34 @@
-# Ingest & repair
+# Ingest and repair
 
-The ingest layer accumulates streaming tokens into a growing markdown string and keeps the downstream parser from ever seeing a half-written block.
+The ingest stage collects streaming tokens into one Markdown string. Before the parser reads the string, the ingest stage closes all syntax that is still open, so the parser always gets complete Markdown.
 
-## What it handles
+## What ingest does
 
-- **Token accumulation.** A growing buffer is the source of truth. New tokens append.
-- **Block boundaries.** Paragraph breaks, code-fence open / close, heading markers, block-level math delimiters — all detected at the string level.
-- **Syntax repair.** Unterminated `**bold**`, `` `code` ``, `[links]()`, `$$math$$`, and fenced code blocks are auto-closed before the parser sees them.
-- **Math delimiter normalization.** LaTeX-style `\(…\)` and `\[…\]` are rewritten to `$…$` and `$$…$$`.
+- **Collects tokens.** Each new token goes at the end of a buffer that holds the full document.
+- **Finds block boundaries.** Inkset finds paragraph breaks, headings, code fences, and display math delimiters in the string, before it parses.
+- **Closes open syntax.** Inkset adds a closing marker to an open code fence or `$$` math block. On the last line, it also closes open `**`, `*`, `` ` ``, and `~~` markers.
+- **Normalizes math delimiters.** Inkset changes the LaTeX delimiters `\(…\)` to `$…$` and `\[…\]` to `$$…$$`.
 
-## Why repair at the string level
+## Why repair comes before parsing
 
-If you wait until the AST phase, the parser emits half-broken nodes that cause UI flicker: a `<strong>` that appears, disappears, then reappears as a full span. By closing the syntax speculatively before parsing, the AST stays stable across token arrivals.
+If the parser reads `**bold` with no closing marker, it shows the asterisks as text. When the closing marker arrives, the same text becomes bold, and the user sees a flicker. Inkset adds the closing marker before it parses, so the text is bold from its first token and stays bold as more tokens arrive.
 
-## What the parser sees
+The added markers are temporary. When the real closing marker arrives, it replaces the added one.
 
-Always a well-formed document. The ingest layer guarantees that every open token has a matching close — even if it was inserted synthetically and will be removed on the next token when the real close arrives.
+## When repair applies
 
-Inline closers (`**`, `*`, `` ` ``, `~~`) are only added while the stream is open. Once the document is complete, a trailing `*` or backtick is the author's, and repair leaves it alone. Delimiters inside inline code and math spans are never counted, so `` `SELECT *` `` or `$x^*$` on the last line never earn a stray closer.
+Inkset closes inline markers only while the stream is open. In a complete document, a `*` or a backtick at the end of a line belongs to the author, and Inkset does not change it.
 
-## Delimiter normalization and CommonMark escapes
+Inkset does not count markers inside inline code or math. For example, `` `SELECT *` `` and `$x^*$` on the last line do not get an extra closing marker.
 
-`\[` and `\(` are CommonMark escapes for literal brackets as well as LaTeX math delimiters. Inkset promotes a pair to math only when what sits between reads as math — a TeX command, an operator, a brace, a sub/superscript, a one- or two-letter identifier, or function application like `f(x)`. `\[brackets\]`, `\[citation needed\]` and `\[1\]` stay literal. Code is never touched: fenced blocks and inline code spans pass through untouched, so a regex like `/\[a-z\]/` in a snippet survives.
+## Math delimiters and escaped brackets
 
-## See also
+In CommonMark, `\[` and `\(` are escaped brackets. In LaTeX, they start math. Inkset changes a pair to math only when its content looks like math. These are examples of content that looks like math:
 
-- [Parse](/docs/parse) — what happens after ingest hands off a string.
-- [Streaming from an LLM](/docs/streaming) — wiring real LLM output through ingest.
+- A TeX command, such as `\frac`
+- An operator or a brace
+- A subscript or a superscript
+- A name with one or two letters
+- A function call, such as `f(x)`
+
+Text such as `\[brackets\]`, `\[citation needed\]`, and `\[1\]` stays as brackets. Inkset does not change code, so a regular expression such as `/\[a-z\]/` in a code block or in inline code keeps its exact text.

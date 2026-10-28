@@ -1,36 +1,28 @@
 # How it works
 
-Inkset is a six-stage pipeline. Every block walks the same broad path, but streaming updates only re-run the hot block, and resizes can often reuse cached text preparation.
+Inkset sends each block of Markdown through a pipeline of six stages. When a token arrives, only the last block goes through the pipeline again. On resize, Inkset uses its cached text measurements and calculates the layout again at the new width.
 
 ## The stages
 
-1. **Ingest** — accumulate tokens, detect block boundaries, repair incomplete syntax.
-2. **Parse** — markdown to AST, incrementally.
-3. **Transform** — plugins enrich the AST with rendering data.
-4. **Measure** — pretext prepares each text segment; plugins measure non-text blocks.
-5. **Layout** — pretext arithmetic positions each block with the container width.
-6. **Render** — absolute positioning for frozen blocks, native flow for the hot block.
+1. **Ingest.** Inkset adds new tokens to the document, finds the block boundaries, and closes unfinished syntax.
+2. **Parse.** Inkset converts each block of Markdown to a syntax tree.
+3. **Transform.** Plugins add the data that they need to render their blocks.
+4. **Measure.** Pretext measures text blocks. Plugins estimate the size of their own blocks.
+5. **Layout.** Inkset stacks the blocks and calculates the position of each one.
+6. **Render.** React renders each block at its position.
 
-Each stage is described in its own page in the Core section.
+## Frozen blocks and the hot block
 
-## What "hot block" means
+The last block, which receives tokens, is the **hot block**. Inkset renders it in normal document flow, so the browser sets its height as the text grows.
 
-The block currently receiving tokens is the **hot block**. It's rendered in native document flow, so the browser computes its height without any help from us. Every block above it is **frozen**: positioned absolutely with coordinates computed by pretext.
+All blocks above it are **frozen**. Inkset positions each frozen block absolutely, at the coordinates from the layout stage.
 
-When a new token arrives:
+When a token arrives, Inkset parses, measures, and lays out only the hot block. Frozen blocks do not move, and Inkset does not measure them again. When a new block starts, the previous hot block becomes frozen.
 
-- The hot block's raw text is updated.
-- Its AST is re-parsed (only the hot block).
-- Its measurement is re-run (only the hot block).
-- Its layout is re-computed (only the hot block).
-- The browser reflows its flow-positioned box naturally.
+## Resize
 
-Nothing frozen moves. Nothing frozen re-measures.
+On resize, Inkset uses the cached Pretext measurements to find the new line breaks and heights. It does not read sizes from the DOM. Plugins that set `widthSensitive` run their transform again. A plugin block can also report a new height after it renders at the new width.
 
-## When the window resizes
+## End of the stream
 
-On a resize, Inkset can usually reuse pretext's prepared text and rerun `layout()` at the new width. Width-sensitive plugins may also re-transform or re-measure, and rich blocks can still settle later through the React layer.
-
-## When the stream ends
-
-When you signal end-of-stream (by toggling `streaming={false}` or calling `endStream()`), the hot block is measured, positioned, and promoted to frozen. The next message can now start its own pipeline.
+When you set `streaming` to `false`, or call `endStream()` from `useInkset()`, Inkset measures the hot block, calculates its position, and freezes it.

@@ -1,56 +1,62 @@
 # Streaming from an LLM
 
-Anthropic, OpenAI, and every other provider you've used speak some dialect of server-sent events. This page shows how to wire their streams through Inkset without fighting the pipeline.
+Keep the response text in React state, add each chunk to it as it arrives, and pass the text to `<Inkset>`. This works with the stream from any model provider.
 
-## The simplest case
+## Basic example
 
-If your UI already keeps the full response in React state, `<Inkset>` is enough.
+This example reads a plain-text stream from your own API route:
 
 ```tsx
 const [text, setText] = useState("");
 const [streaming, setStreaming] = useState(false);
 
-// ...push tokens into setText; toggle streaming around the fetch...
+async function send(prompt: string) {
+  setText("");
+  setStreaming(true);
+  const response = await fetch("/api/chat", { method: "POST", body: JSON.stringify({ prompt }) });
+  const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    setText((previous) => previous + value);
+  }
+  setStreaming(false);
+}
 
 return <Inkset content={text} streaming={streaming} plugins={plugins} />;
 ```
 
-Every time `text` changes, Inkset re-parses the hot block, re-measures it, and re-lays it out. Everything above it stays frozen.
+Each time `text` changes, Inkset parses, measures, and lays out the last block again. The blocks above it do not change.
 
-## When the stream is elsewhere
+## Tokens from outside React
 
-If your tokens arrive in a non-React context (a background worker, a websocket hook, a store), the low-friction option is still to bridge them back into React state and render with `<Inkset>`.
+If the tokens come from a store, a WebSocket, or a worker, subscribe to the source and copy the tokens into React state:
 
 ```tsx
 const [text, setText] = useState("");
 const [streaming, setStreaming] = useState(true);
 
 useEffect(() => {
-  const sub = chatStore.subscribe((event) => {
-    if (event.type === "token") setText((prev) => prev + event.delta);
+  const subscription = chatStore.subscribe((event) => {
+    if (event.type === "token") setText((previous) => previous + event.delta);
     if (event.type === "end") setStreaming(false);
   });
-  return () => sub.unsubscribe();
+  return () => subscription.unsubscribe();
 }, []);
 
 return <Inkset content={text} streaming={streaming} plugins={plugins} />;
 ```
 
-`useInkset()` is still available for custom renderers and lower-level integrations, but it does not render Inkset's built-in DOM output by itself.
+To send tokens to the pipeline directly, without React state, use [`useInkset()`](/docs/use-inkset) and its `appendToken()` function.
 
-## Handling partial syntax
+## Partial syntax
 
-You don't need to. The ingest layer repairs incomplete markdown before it reaches the parser — so an unterminated code fence, a `**bold` without its closer, or a `$$` without the closing `$$` never flash through the UI.
+You do not need to handle partial syntax. Inkset closes open code fences, `$$` math blocks, and inline markers such as `**` before it parses the text. See [Ingest and repair](/docs/ingest).
 
-## Interrupt mid-stream
+## Stop a response
 
-If you keep the full response in React state, clear the string and set `streaming` back to `false`. If you are using `useInkset()`, replace the document with `setContent("")` and start a new stream session from there.
+To stop a response, stop reading the stream and set `streaming` to `false`. To remove the message, also set the text to an empty string. With `useInkset()`, call `setContent("")`.
 
-## Throttling
+## Even pacing
 
-If your stream fires tokens faster than 60 Hz, you might want to coalesce them. The `@inkset/animate` package's token gate handles this without dropping characters. See [plugin-animate](/docs/plugin-animate).
-
-## See also
-
-- [useInkset()](/docs/use-inkset) — hook reference.
-- [Ingest & repair](/docs/ingest) — why partial tokens don't flicker.
+Models often send text in bursts. To show the text at an even pace, use the `throttle` option of the `reveal` prop. It holds the text in a queue and releases it one word or one character at a time. See [@inkset/animate](/docs/plugin-animate).

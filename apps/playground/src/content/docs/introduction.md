@@ -1,41 +1,35 @@
 # Introduction
 
-Inkset is rendering infrastructure for streaming model output. It started as a markdown renderer, because that is what models emit today. The part worth paying attention to is the layer underneath: a pipeline that measures content once with [pretext](https://github.com/chenglou/pretext) and re-lays it out with arithmetic, so the renderer stays stable while tokens stream, while windows resize, and while conversations grow into the thousands of messages.
+Inkset is an open source library for rendering LLM output in React. It efficiently handles streaming Markdown, code blocks, diagrams, and generative UI. You can use it in place of react-markdown or Streamdown with the same Markdown input. Its rendering engine, built on [Pretext](https://github.com/chenglou/pretext), prevents your web applications from feeling clunky or slow as chat history grows or as outputs get more complex. It also comes ready to handle animations and custom shaders, for elegant user experiences.
 
-## Why another renderer
+## Features
 
-Most chat UIs stream tokens into the page and let the browser figure out where things go. That works until someone resizes the window, or the response has code and math, or the stream is fast enough that layout can't keep up. Then you get jitter. Each token forces a reflow. Each reflow shifts the words the user was reading. The window feels like it is fighting back.
+- **Stable streaming.** New tokens do not move the text above them, so the user can read while the answer arrives.
+- **Fast resize.** On resize, Inkset calculates the new layout from cached measurements, without reading sizes from the DOM.
+- **Rich content.** Plugins render code with Shiki, math with KaTeX, tables, and Mermaid diagrams. Each plugin reserves space for its block, so the text below does not jump when the block finishes rendering.
+- **Generative UI.** `InksetParts` renders your own React components between parts of a Markdown answer, and the components keep their state while the text streams. See [Generative UI](/docs/generative-ui).
+- **Stream animations.** The `reveal` prop paces new text and animates it with CSS or with a shader. See [@inkset/animate](/docs/plugin-animate).
+- **Syntax repair.** Inkset closes unfinished Markdown, such as `**bold` without its closing marker, before it parses the text. Half-written syntax does not show on the screen.
+- **Your own styles.** Inkset includes a default stylesheet that you can change with a theme or with CSS. Set `unstyled` to remove it.
 
-The same failure mode scales up. Long conversations get heavy because the browser is recalculating layout for the whole thread on every new message. Mobile feels it first, because reflow is cheaper on a desktop CPU than on a phone.
+To move from another renderer, see [Migration](/docs/migration).
 
-Inkset treats this as a layout problem, not a parsing problem. Pretext measures text once with Canvas, then re-layouts with arithmetic. No DOM reads in the hot path. A thousand blocks relayout in under a millisecond.
+## What makes Inkset so fast
 
-## What you get
+In most chat UIs, the browser calculates the layout again after each new token. A new token can move a line before the user finishes reading it, and a resize makes the browser measure all of the text again.
 
-**Stable streaming.** Completed blocks are frozen onto absolute coordinates computed by pretext. The block currently receiving tokens rides in normal document flow. New tokens do not shift what the user is already reading, because the frozen blocks never re-measure.
+Inkset divides text layout into two steps:
 
-**Cheap resize.** On a window resize, Inkset reuses pretext's prepared text and reruns `layout()` at the new width. The hot path is pure arithmetic over cached segment widths. Good for INP. Good for mobile.
+1. Pretext measures the text of each block with the Canvas API. This step is the expensive one, so Inkset does it once for each block and keeps the result in a cache.
+2. Inkset uses the cached measurements to calculate the line breaks and the position of each block. This step is arithmetic only, so Inkset can do it again on each resize without reading from the DOM.
 
-**Long conversations that stay usable.** Heights are known before blocks mount, so virtual scrolling works correctly instead of needing height estimates and jumpy scrollbars. Thousand-turn conversations stop being a product-level problem.
+Inkset then fixes each finished block at the position that it calculated. Only the last block, which receives new tokens, stays in normal document flow. [How it works](/docs/how-it-works) explains the full pipeline.
 
-**Rich content in the same pipeline.** Code, math, tables, and diagrams are plugins. They participate in measurement and layout the same way text does, so they do not fight the rest of the column or produce second-order reflow when they settle.
+## When would I use something else?
 
-**Incremental syntax repair.** Incomplete markdown is repaired at the string level before parsing. You never see a half-opened `**bold` flashing as `<strong>` mid-stream.
+Inkset is for text that streams in or changes width while the user reads it. For static Markdown, such as a blog post, the measurement step is extra work, and react-markdown is a better fit.
 
-**Protocol-neutral.** The plugin contract is shaped for async-settling content: provisional height, settled height when the content loads, local recompute without disturbing siblings. Generative UI components (json-render, A2UI) fit the same contract as code blocks and math.
+Inkset has these limits:
 
-**Styling on your terms.** Ship with the default stylesheet, or set `unstyled` and bring your own.
-
-## What this is not
-
-It is not a replacement for `react-markdown` in a blog post. If you are rendering static content in a CMS, the cost of Inkset's measurement pass is wasted work.
-
-It is not a full typesetting engine. Pretext handles the hard text-layout parts. Inkset coordinates the pipeline around it and extends it to non-text content.
-
-It is not finished. SSR currently falls back to a character-width estimate when Canvas isn't available. Framework adapters beyond React are on the roadmap. Selection across absolute-positioned blocks needs a custom selection layer. See the README status section for the live list.
-
-## Where to go next
-
-- [Install](/docs/install) walks through adding Inkset to an existing React app.
-- [Quick start](/docs/quick-start) renders your first streaming message.
-- [How it works](/docs/how-it-works) explains the six-stage pipeline the library runs underneath.
+- It supports React only.
+- It renders content in the browser only, because it needs Canvas to measure text. During server rendering, `<Inkset>` shows its loading fallback.

@@ -1,81 +1,38 @@
 # Quick start
 
-Install Inkset, render a streaming markdown message, and learn the shape of the pipeline it runs underneath.
-
-## Install
-
-Install the core and the React binding; add plugins as you need them.
-
-```bash
-npm install @inkset/core @inkset/react
-```
-
-Optional plugins:
-
-```bash
-npm install @inkset/code    # Shiki syntax highlighting
-npm install @inkset/math    # display math
-npm install @inkset/table   # responsive tables
-```
-
-If you use the math plugin's default renderer, also install KaTeX and its stylesheet:
-
-```bash
-npm install katex
-```
+`<Inkset>` takes a Markdown string and a `streaming` flag. Give it the message text each time the text grows, and it renders the update without moving the finished text above.
 
 ## Render a message
 
-The simplest way to use Inkset is the `<Inkset>` component. Pass it the markdown and a `streaming` flag — Inkset keeps the trailing block in hybrid flow while it's receiving tokens, and freezes completed blocks behind it.
+Install the core, the React package, and the code plugin:
+
+```bash
+npm install @inkset/core @inkset/react @inkset/code
+```
+
+Create the plugin list once, outside your component. Then pass the message text and the streaming state to `<Inkset>`:
 
 ```tsx
 import { Inkset } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
-import { createMathPlugin } from "@inkset/math";
-import "katex/dist/katex.min.css";
 
-const plugins = [createCodePlugin(), createMathPlugin()];
+const plugins = [createCodePlugin()];
 
-export function Chat({ message }) {
-  return <Inkset content={message.text} streaming={message.isStreaming} plugins={plugins} />;
+export function Message({ text, streaming }: { text: string; streaming: boolean }) {
+  return <Inkset content={text} streaming={streaming} plugins={plugins} />;
 }
 ```
 
-> **Tip.** Create your plugin list once at module scope. Re-creating plugins on every render invalidates the measurement cache and costs you the 2 ms-per-block prepare step.
+Set `streaming` to `true` while tokens arrive. When the response is complete, set it to `false`, so that Inkset fixes the position of the last block.
 
-### Using the hook directly
+To render math, tables, or diagrams, add their plugins to the same list. [Install](/docs/install) shows the packages for each plugin.
 
-For finer control — for example, pushing content imperatively, inspecting pipeline metrics, or building a custom renderer — use `useInkset()`.
+## Set the font
 
-`useInkset()` is lower-level than `<Inkset>`. It gives you pipeline state and imperative controls, but it does not render the built-in DOM view on its own.
+Inkset measures text with the font that you give it. Set the font with props, so that the measurement and the screen use the same values:
 
-## How it works
+```tsx
+<Inkset content={text} font="Inter, sans-serif" fontSize={16} lineHeight={26} />
+```
 
-Every block of markdown walks the same pipeline once. After that, resizes run only the last step — pure arithmetic over cached measurements.
-
-Frozen blocks sit on absolute coordinates computed from pretext measurements. The currently streaming block uses native document flow, so the browser handles its height natively — no measurement race, no flicker when a token arrives.
-
-### Measurement without the DOM
-
-Inkset uses pretext to measure text with one `Canvas.measureText` call per run. No `getBoundingClientRect`, no forced reflow. The output is a flat list of block extents — width, height, baseline — cached per block.
-
-On resize, only `pretext.layout()` re-runs per block. That's roughly 0.0002 ms per block, which means a thousand-block response relayouts in under a millisecond.
-
-## Packages
-
-Inkset is a small monorepo. Pick the pieces you need; the rest stay out of your bundle.
-
-| Package         | What it does                                           |
-| --------------- | ------------------------------------------------------ |
-| `@inkset/core`  | Pipeline engine: ingest, parse, measure, layout.       |
-| `@inkset/react` | `<Inkset>` component and `useInkset()` hook.           |
-| `@inkset/code`  | Shiki syntax highlighting with streaming support.      |
-| `@inkset/math`  | KaTeX or MathJax rendering, delimiter normalization.   |
-| `@inkset/table` | Responsive tables with horizontal scroll and CSV copy. |
-
-## What to read next
-
-- [How it works](/docs/how-it-works) — the full pipeline, layer by layer.
-- [Streaming from an LLM](/docs/streaming) — feeding tokens into `useInkset()`.
-- [Writing a plugin](/docs/writing-plugins) — transform, measure, and render custom blocks.
-- [Theming](/docs/theming) — CSS custom properties and the atom inheritance model.
+Inkset applies these props to its CSS too. If you set the font in your own CSS instead, Inkset measures with a different font from the one on the screen, and blocks get the wrong height.
