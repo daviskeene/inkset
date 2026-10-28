@@ -1,6 +1,12 @@
 import { DOCS_NAV } from "../../lib/docs-nav";
 import { loadDocsPage } from "../../lib/docs-content";
-import { SITE_DETAILS, SITE_SUMMARY, SITE_URL, docsMarkdownUrl } from "../../lib/docs-markdown";
+import {
+  SITE_DETAILS,
+  SITE_SUMMARY,
+  SITE_URL,
+  SKILL_URL,
+  docsMarkdownUrl,
+} from "../../lib/docs-markdown";
 
 export const dynamic = "force-static";
 
@@ -39,6 +45,13 @@ export const GET = async (): Promise<Response> => {
     }
     lines.push("");
   }
+
+  lines.push("## Agent setup");
+  lines.push("");
+  lines.push(
+    `- [Inkset setup skill](${SKILL_URL}): Steps for a coding agent to add Inkset to a project, or to move a project from react-markdown or Streamdown. Install it with \`npx skills add daviskeene/inkset\`.`,
+  );
+  lines.push("");
 
   lines.push("## Optional");
   lines.push("");
