@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev --port 3333",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:surfaces": "playwright test e2e/surface-baseline.spec.ts"
   },
   "dependencies": {
     "@inkset/code": "workspace:*",
@@ -14,6 +15,8 @@
     "@inkset/math": "workspace:*",
     "@inkset/react": "workspace:*",
     "@inkset/table": "workspace:*",
+    "@json-render/core": "0.21.3",
+    "@json-render/react": "0.21.3",
     "@streamdown/code": "^1.1.1",
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
@@ -32,6 +35,7 @@
     "streamdown": "^2.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@types/node": "25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

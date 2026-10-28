@@ -70,6 +70,12 @@ importers:
       "@inkset/table":
         specifier: workspace:*
         version: link:../../packages/table
+      "@json-render/core":
+        specifier: 0.21.3
+        version: 0.21.3(zod@4.3.6)
+      "@json-render/react":
+        specifier: 0.21.3
+        version: 0.21.3(react@19.2.5)(zod@4.3.6)
       "@streamdown/code":
         specifier: ^1.1.1
         version: 1.1.1(react@19.2.5)
@@ -90,7 +96,7 @@ importers:
         version: 11.14.0
       next:
         specifier: ^16.2.4
-        version: 16.2.4(@babel/core@7.29.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        version: 16.2.4(@babel/core@7.29.0)(@playwright/test@1.64.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react:
         specifier: ^19.2.5
         version: 19.2.5
@@ -119,6 +125,9 @@ importers:
         specifier: ^2.5.0
         version: 2.5.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
     devDependencies:
+      "@playwright/test":
+        specifier: 1.64.1
+        version: 1.64.1
       "@types/node":
         specifier: 25.6.0
         version: 25.6.0
@@ -1307,6 +1316,22 @@ packages:
         integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==,
       }
 
+  "@json-render/core@0.21.3":
+    resolution:
+      {
+        integrity: sha512-sgzPtRhRB5wkhrbLtPm9bAhna5Q0x/U0vUpb3S/VEutouWEvvZRebHhpM5XiEjRM5Shv4W70VMZ8pGcGcz7j+A==,
+      }
+    peerDependencies:
+      zod: ^4.0.0
+
+  "@json-render/react@0.21.3":
+    resolution:
+      {
+        integrity: sha512-+/i0vPRQ164KzvNdPpQleLp+WjfRS2zYRIujLbRZUEmqiQb+WtEi1i9tZMYL/dRFOUzeNveu421KDzI11Wounw==,
+      }
+    peerDependencies:
+      react: ^19.2.3
+
   "@manypkg/find-root@1.1.0":
     resolution:
       {
@@ -1442,6 +1467,14 @@ packages:
         integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==,
       }
     engines: { node: ">=14" }
+
+  "@playwright/test@1.64.1":
+    resolution:
+      {
+        integrity: sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
 
   "@rollup/rollup-android-arm-eabi@4.60.1":
     resolution:
@@ -5148,6 +5181,22 @@ packages:
         integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==,
       }
 
+  playwright-core@1.64.1:
+    resolution:
+      {
+        integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
+
+  playwright@1.64.1:
+    resolution:
+      {
+        integrity: sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
+
   points-on-curve@0.2.0:
     resolution:
       {
@@ -7073,6 +7122,17 @@ snapshots:
       "@jridgewell/resolve-uri": 3.1.2
       "@jridgewell/sourcemap-codec": 1.5.5
 
+  "@json-render/core@0.21.3(zod@4.3.6)":
+    dependencies:
+      zod: 4.3.6
+
+  "@json-render/react@0.21.3(react@19.2.5)(zod@4.3.6)":
+    dependencies:
+      "@json-render/core": 0.21.3(zod@4.3.6)
+      react: 19.2.5
+    transitivePeerDependencies:
+      - zod
+
   "@manypkg/find-root@1.1.0":
     dependencies:
       "@babel/runtime": 7.29.2
@@ -7139,6 +7199,10 @@ snapshots:
 
   "@pkgjs/parseargs@0.11.0":
     optional: true
+
+  "@playwright/test@1.64.1":
+    dependencies:
+      playwright: 1.64.1
 
   "@rollup/rollup-android-arm-eabi@4.60.1":
     optional: true
@@ -9565,7 +9629,7 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  next@16.2.4(@babel/core@7.29.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
+  next@16.2.4(@babel/core@7.29.0)(@playwright/test@1.64.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
       "@next/env": 16.2.4
       "@swc/helpers": 0.5.15
@@ -9584,6 +9648,7 @@ snapshots:
       "@next/swc-linux-x64-musl": 16.2.4
       "@next/swc-win32-arm64-msvc": 16.2.4
       "@next/swc-win32-x64-msvc": 16.2.4
+      "@playwright/test": 1.64.1
       sharp: 0.34.5
     transitivePeerDependencies:
       - "@babel/core"
@@ -9745,6 +9810,12 @@ snapshots:
       confbox: 0.1.8
       mlly: 1.8.2
       pathe: 2.0.3
+
+  playwright-core@1.64.1: {}
+
+  playwright@1.64.1:
+    dependencies:
+      playwright-core: 1.64.1
 
   points-on-curve@0.2.0: {}
 

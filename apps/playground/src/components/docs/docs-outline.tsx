@@ -3,87 +3,43 @@
 import React, { useEffect, useState } from "react";
 import type { OutlineItem } from "../../lib/docs-content";
 
-// Right-rail "on this page" outline. Tracks which heading is currently in
-// view by observing the id-tagged heading elements placed by DocsArticle.
+// Right-rail "on this page" outline. Highlights the section being read: the
+// last heading that has scrolled up under the sticky site nav.
 export const DocsOutline = ({ outline }: { outline: OutlineItem[] }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
     if (outline.length === 0) return;
 
-    // Heading elements are tagged with `id` by DocsArticle after Inkset
-    // renders. They may not exist on the first tick, so we poll briefly
-    // until at least one is present, then observe.
-    let observer: IntersectionObserver | null = null;
-    let cancelled = false;
-
-    const attach = () => {
-      const ids = outline.map((item) => item.id);
-      const elements = ids
-        .map((id) => document.getElementById(id))
-        .filter((el): el is HTMLElement => el !== null);
-
-      if (elements.length === 0) return false;
-
-      // Keep a running list of what's currently intersecting; pick the one
-      // closest to the top of the viewport as "active". Fallback to the
-      // first heading if nothing is intersecting yet (scrolled above all).
-      const visible = new Set<string>();
-
-      observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            const id = entry.target.id;
-            if (entry.isIntersecting) {
-              visible.add(id);
-            } else {
-              visible.delete(id);
-            }
-          }
-          if (visible.size === 0) {
-            // Find the last heading that's above the viewport — that's the
-            // section the user is currently reading.
-            let candidate: string | null = null;
-            for (const el of elements) {
-              if (el.getBoundingClientRect().top < 0) {
-                candidate = el.id;
-              } else {
-                break;
-              }
-            }
-            setActiveId(candidate ?? elements[0].id);
-          } else {
-            // Pick the one that appears earliest in outline order.
-            const first = ids.find((id) => visible.has(id));
-            setActiveId(first ?? null);
-          }
-        },
-        { rootMargin: "-64px 0px -65% 0px", threshold: 0 },
-      );
-
-      for (const el of elements) observer.observe(el);
-      return true;
+    // Recomputed from positions on every scroll frame. Intersection callbacks
+    // only fire when a heading crosses a band, so a fast scroll could skip a
+    // section entirely and leave the previous one highlighted.
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let active: string | null = null;
+      for (const item of outline) {
+        // DocsArticle tags heading ids after Inkset renders, so look them up
+        // each time instead of caching elements that may not exist yet.
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        // 64px nav plus a little reading margin; jump links land at 48px.
+        if (el.getBoundingClientRect().top > 96) break;
+        active = item.id;
+      }
+      setActiveId(active ?? outline[0].id);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
     };
 
-    if (!attach()) {
-      // Inkset may still be laying out; retry a couple of times before giving
-      // up. The second ReadObserver-driven re-measure on width changes can
-      // move headings around but not add or remove them.
-      let attempts = 0;
-      const id = window.setInterval(() => {
-        if (cancelled) return;
-        attempts += 1;
-        if (attach() || attempts > 10) window.clearInterval(id);
-      }, 150);
-      return () => {
-        cancelled = true;
-        window.clearInterval(id);
-        observer?.disconnect();
-      };
-    }
-
+    update();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
     return () => {
-      observer?.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
     };
   }, [outline]);
 

@@ -116,6 +116,7 @@ const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: Pag
     palette: DARK_PALETTE,
     theme: {
       typography: { ...BASE_TYPOGRAPHY },
+      code: { headerBorderColor: "transparent" },
     },
   },
   light: {
@@ -134,7 +135,7 @@ const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: Pag
       typography: { ...BASE_TYPOGRAPHY },
       code: {
         background: "#f6f8fa",
-        headerBorderColor: "rgba(0, 0, 0, 0.08)",
+        headerBorderColor: "transparent",
       },
       table: {
         border: "rgba(0, 0, 0, 0.08)",
@@ -161,7 +162,7 @@ const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: Pag
       typography: { ...BASE_TYPOGRAPHY },
       code: {
         background: "#faf3df",
-        headerBorderColor: "rgba(58, 46, 32, 0.10)",
+        headerBorderColor: "transparent",
       },
       table: {
         border: "rgba(58, 46, 32, 0.12)",
@@ -187,7 +188,7 @@ const THEMES: Record<ThemeKey, { label: string; theme: InksetTheme; palette: Pag
       typography: { ...BASE_TYPOGRAPHY },
       code: {
         background: "#14172b",
-        headerBorderColor: "rgba(230, 223, 200, 0.10)",
+        headerBorderColor: "transparent",
       },
       table: {
         border: "rgba(230, 223, 200, 0.12)",

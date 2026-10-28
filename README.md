@@ -1,10 +1,10 @@
 # inkset
 
-Rendering infrastructure for streaming AI output. Markdown today, generative UI tomorrow.
+Rendering infrastructure for streaming AI output, including answers that mix Markdown with interactive components.
 
 Most chat UIs stream tokens into the page and let the browser figure out where things go. That works until the stream gets fast, the response mixes code and math, someone rotates their phone, or the conversation gets long. At that point the DOM becomes part of the problem. The browser recalculates layout for the whole thread on every new token. Lines the user is reading shift under them. Long conversations start to feel heavy. Anything async that mounts into the column forces another pass.
 
-Inkset uses [pretext](https://github.com/chenglou/pretext) to measure text once, then re-layout with arithmetic. Completed blocks do not reflow when new tokens arrive. Resize runs in microseconds because no DOM reads happen on the hot path. The same cost model extends to code, math, tables, Mermaid diagrams, and the generative UI components (json-render, A2UI) arriving in streams.
+Inkset uses [pretext](https://github.com/chenglou/pretext) to measure text once, then re-layout with arithmetic. Completed blocks do not reflow when new tokens arrive. Resize runs in microseconds because no DOM reads happen on the hot path. The same cost model extends to code, math, tables, and Mermaid diagrams, and interactive components from libraries like json-render can sit between the Markdown without disturbing any of it.
 
 ## Install
 
@@ -60,7 +60,7 @@ Three shifts in the cost model.
 
 **Stable streaming.** The block currently receiving tokens rides in normal document flow, so the browser handles its height natively. Every block above it is frozen onto absolute coordinates computed by pretext. New tokens do not shift what the user is already reading, because frozen blocks never re-measure.
 
-**Protocol-neutral.** The plugin pipeline handles what async-settling content needs: provisional height, settled height when the content loads, local recompute without disturbing siblings. Code, math, tables, and diagrams ship as plugins. Generative UI components fit the same contract.
+**Protocol-neutral.** The plugin pipeline handles what async-settling content needs: provisional height, settled height when the content loads, local recompute without disturbing siblings. Code, math, tables, and diagrams ship as plugins. Interactive components take a different route: they render between Markdown parts, where the browser lays them out (see [Generative UI](#generative-ui)).
 
 The pipeline:
 
@@ -115,12 +115,32 @@ const myPlugin: InksetPlugin = {
 };
 ```
 
+## Generative UI
+
+Models increasingly answer with components as well as prose: a calculator, a comparison, a diagram you can drag around. `InksetParts` renders a message as a list of parts, where Markdown parts stream through Inkset and your own components sit between them in normal document flow.
+
+```tsx
+import { InksetParts } from "@inkset/react";
+
+<InksetParts
+  parts={[
+    { id: "intro", type: "markdown", content: intro },
+    { id: "calculator", type: "surface", data: spec },
+    { id: "rest", type: "markdown", content: rest, streaming: true },
+  ]}
+  renderSurface={(part) => <Surface id={part.id} spec={part.data} />}
+  plugins={plugins}
+/>;
+```
+
+A component keeps its instance, and with it the user's input and focus, for as long as its part ID stays the same, even while the text around it streams and the model sends it updates. It works with any component library or generator. The [Generative UI docs](https://inkset.dev/docs/generative-ui) walk through json-render, and there's a [live demo](https://inkset.dev/generative-ui).
+
 ## Packages
 
 | Package           | What it does                                            |
 | ----------------- | ------------------------------------------------------- |
 | `@inkset/core`    | Pipeline engine: ingest, parse, measure, layout         |
-| `@inkset/react`   | `<Inkset>` component and lower-level `useInkset()` hook |
+| `@inkset/react`   | `<Inkset>`, `<InksetParts>`, and the `useInkset()` hook |
 | `@inkset/animate` | Reveal primitives: token gate, timelines, shaders       |
 | `@inkset/code`    | Shiki syntax highlighting with streaming support        |
 | `@inkset/math`    | Display-math rendering for Inkset                       |
@@ -146,7 +166,7 @@ Known gaps worth tracking:
 - **SSR.** Falls back to a character-width estimate when Canvas isn't available in Node, which produces one layout shift on hydration. A proper story needs pretext's `setMeasureContext` API or a node-canvas polyfill.
 - **Selection across absolute blocks.** Browser-native find-in-page works block-by-block, but selecting across frozen blocks needs a custom selection layer. On the roadmap.
 - **Framework adapters.** React only today. The core is framework-agnostic by design. Vue and Svelte adapters are planned.
-- **Generative UI plugin.** `@inkset/generative` for json-render and A2UI schemas is planned as a reference implementation.
+- **Generative UI adapters.** `InksetParts` hosts components from any library today, and the docs show json-render. A dedicated A2UI adapter isn't built yet.
 - **Web Worker pipeline.** The parse/measure/layout stages have no DOM dependencies. Moving them off the main thread is a near-term goal.
 
 See [TODOS.md](./TODOS.md) for the full list.

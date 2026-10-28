@@ -41,6 +41,7 @@ export const DOCS_NAV: DocsGroup[] = [
       { slug: "component", title: "<Inkset>" },
       { slug: "use-inkset", title: "useInkset()" },
       { slug: "streaming", title: "Streaming from an LLM" },
+      { slug: "generative-ui", title: "Generative UI" },
     ],
   },
   {

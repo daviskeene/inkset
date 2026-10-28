@@ -13,6 +13,7 @@ import type { DocsEntry } from "../../lib/docs-nav";
 import type { DocsPage } from "../../lib/docs-content";
 import { slugifyHeading } from "../../lib/docs-slug";
 import { DocsAnimateExample } from "./docs-plugin-examples";
+import { GearConversation } from "../../app/generative-ui/gear-demo";
 
 // Per-theme plugin bundles — shiki and mermaid need explicit themes so a
 // dark code block on a light page doesn't end up as dark-on-dark.
@@ -42,7 +43,7 @@ const INKSET_THEME: InksetTheme = {
     hr: "var(--pg-divider)",
   },
   code: {
-    headerBorderColor: "var(--pg-border-subtle)",
+    headerBorderColor: "transparent",
   },
   table: {
     border: "var(--pg-border-subtle)",
@@ -64,7 +65,20 @@ const LEDE_THEME: InksetTheme = {
 
 const BODY_FONT = '"Libre Franklin", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif';
 const ZERO_BLOCK_SPACING: BlockSpacing = { default: 0 };
-const ANIMATE_EXAMPLE_MARKER = "<!-- docs-example:animate -->";
+// A page's live example replaces its marker comment in the Markdown body.
+const LIVE_EXAMPLES: Record<
+  string,
+  { marker: string; render: (width: number) => React.ReactNode }
+> = {
+  "plugin-animate": {
+    marker: "<!-- docs-example:animate -->",
+    render: (width) => <DocsAnimateExample width={width} />,
+  },
+  "generative-ui": {
+    marker: "<!-- docs-example:generative-ui -->",
+    render: () => <GearConversation />,
+  },
+};
 const DOCS_BLOCK_SPACING: BlockSpacing = {
   default: 8,
   blocks: {
@@ -114,8 +128,8 @@ export const DocsArticle = ({
     ],
     [themeKey],
   );
-  const bodyParts =
-    page.slug === "plugin-animate" ? page.body.split(ANIMATE_EXAMPLE_MARKER) : [page.body];
+  const example = LIVE_EXAMPLES[page.slug];
+  const bodyParts = example ? page.body.split(example.marker) : [page.body];
 
   // Inkset wants a width in px. We observe the column's width so the layout
   // reflows in lockstep with the viewport.
@@ -283,7 +297,7 @@ export const DocsArticle = ({
                 headingLineHeights={[1.15, 1.2, 1.25, 1.35]}
               />
             ) : null}
-            {index < bodyParts.length - 1 ? <DocsAnimateExample width={width} /> : null}
+            {index < bodyParts.length - 1 ? example?.render(width) : null}
           </React.Fragment>
         ))}
       </div>

@@ -64,9 +64,11 @@ export const viewport: Viewport = {
 const RESPONSIVE_CSS = `
 /* Prevent body-level horizontal scroll on any page. Any overflow from a
    child (wide code block, unexpected layout) is clipped at the root, not
-   shifted via scroll. */
+   shifted via scroll. \`clip\`, not \`hidden\`: hidden on both html and body
+   makes body its own scroll container, and every sticky element inside it
+   (the docs' "On this page" rail) then scrolls away with the page. */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
 }
 html, body, .pg-root {
