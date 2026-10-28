@@ -1,0 +1,15 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Inkset",
+  "description": "Inkset is an open source React library for rendering streaming LLM output. It handles streaming Markdown, code blocks, math, tables, Mermaid diagrams, and generative UI components between Markdown parts, and it can replace react-markdown or Streamdown. Layout is calculated with Pretext, so finished text does not move while tokens stream.",
+  "folders": ["apps/playground/src/content/docs"],
+  "excludeFiles": ["TODOS.md"],
+  "rules": [
+    "Create the Inkset plugin list once at module scope, not inside a component's render function.",
+    "In the Next.js App Router, render <Inkset> from a Client Component, because it uses React hooks.",
+    "Set streaming to true only for the message that is receiving tokens, and set it to false when the response is complete.",
+    "Pass the font family, font size, and line height of the message text as the font, fontSize, and lineHeight props, and do not set fonts with CSS on elements inside Inkset.",
+    "Set the space between blocks with the blockSpacing prop, not with CSS margins.",
+    "Use InksetParts to render application components between Markdown parts of one message."
+  ]
+}
