@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Inkset, type BlockSpacing, type InksetTheme } from "@inkset/react";
+import { Inkset, type InksetTheme } from "@inkset/react";
 import { createCodePlugin } from "@inkset/code";
 import { createMathPlugin } from "@inkset/math";
 import { createTablePlugin } from "@inkset/table";
@@ -12,6 +12,12 @@ import type { ThemeKey } from "../../lib/themes";
 import type { DocsEntry } from "../../lib/docs-nav";
 import type { DocsPage } from "../../lib/docs-content";
 import { slugifyHeading } from "../../lib/docs-slug";
+import {
+  DOCS_BLOCK_SPACING,
+  ZERO_BLOCK_SPACING,
+  splitDocsBody,
+  type DocsSsrHtml,
+} from "../../lib/docs-body";
 import { DocsAnimateExample } from "./docs-plugin-examples";
 import { GearConversation } from "../../app/generative-ui/gear-demo";
 
@@ -64,56 +70,26 @@ const LEDE_THEME: InksetTheme = {
 };
 
 const BODY_FONT = '"Libre Franklin", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif';
-const ZERO_BLOCK_SPACING: BlockSpacing = { default: 0 };
 // A page's live example replaces its marker comment in the Markdown body.
-const LIVE_EXAMPLES: Record<
-  string,
-  { marker: string; render: (width: number) => React.ReactNode }
-> = {
-  "plugin-animate": {
-    marker: "<!-- docs-example:animate -->",
-    render: (width) => <DocsAnimateExample width={width} />,
-  },
-  "generative-ui": {
-    marker: "<!-- docs-example:generative-ui -->",
-    render: () => <GearConversation />,
-  },
+const LIVE_EXAMPLES: Record<string, (width: number) => React.ReactNode> = {
+  "plugin-animate": (width) => <DocsAnimateExample width={width} />,
+  "generative-ui": () => <GearConversation />,
 };
-const DOCS_BLOCK_SPACING: BlockSpacing = {
-  default: 8,
-  blocks: {
-    heading1: { top: 4, bottom: 8 },
-    heading2: { top: 18, bottom: 6 },
-    heading3: { top: 14, bottom: 6 },
-    paragraph: { bottom: 4 },
-    "unordered-list": { top: 2, bottom: 6 },
-    "ordered-list": { top: 2, bottom: 6 },
-    blockquote: { top: 4, bottom: 6 },
-    code: { top: 8, bottom: 8 },
-    table: { top: 8, bottom: 8 },
-    math: { top: 8, bottom: 8 },
-    hr: { top: 12, bottom: 12 },
-  },
-  pairs: [
-    { from: ["heading1", "heading2", "heading3"], to: "paragraph", gap: 8 },
-    {
-      from: ["heading1", "heading2", "heading3"],
-      to: ["unordered-list", "ordered-list", "code", "table", "math", "blockquote"],
-      gap: 10,
-    },
-    { from: "paragraph", to: "heading2", gap: 20 },
-    { from: "paragraph", to: "heading3", gap: 16 },
-    { from: ["unordered-list", "ordered-list"], to: "paragraph", gap: 8 },
-  ],
-};
+
+// Server-rendered HTML that stands in for an <Inkset> until it measures.
+const ServerHtml = ({ html }: { html: string }) => (
+  <div dangerouslySetInnerHTML={{ __html: html }} />
+);
 
 export const DocsArticle = ({
   page,
+  ssrHtml,
   navEntry,
   prev,
   next,
 }: {
   page: DocsPage;
+  ssrHtml: DocsSsrHtml;
   navEntry: DocsEntry & { groupLabel: string };
   prev: DocsEntry | null;
   next: DocsEntry | null;
@@ -128,8 +104,8 @@ export const DocsArticle = ({
     ],
     [themeKey],
   );
-  const example = LIVE_EXAMPLES[page.slug];
-  const bodyParts = example ? page.body.split(example.marker) : [page.body];
+  const renderExample = LIVE_EXAMPLES[page.slug];
+  const bodyParts = splitDocsBody(page.body);
 
   // Inkset wants a width in px. We observe the column's width so the layout
   // reflows in lockstep with the viewport.
@@ -273,6 +249,7 @@ export const DocsArticle = ({
             fontSize={17}
             lineHeight={28}
             blockSpacing={ZERO_BLOCK_SPACING}
+            loadingFallback={ssrHtml.lede ? <ServerHtml html={ssrHtml.lede} /> : undefined}
           />
         </div>
       ) : (
@@ -295,9 +272,10 @@ export const DocsArticle = ({
                 headingSizes={[2, 1.6, 1.15, 1]}
                 headingWeights={[600, 600, 600, 600]}
                 headingLineHeights={[1.15, 1.2, 1.25, 1.35]}
+                loadingFallback={<ServerHtml html={ssrHtml.body[index] ?? ""} />}
               />
             ) : null}
-            {index < bodyParts.length - 1 ? example?.render(width) : null}
+            {index < bodyParts.length - 1 ? renderExample?.(width) : null}
           </React.Fragment>
         ))}
       </div>
