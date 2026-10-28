@@ -10,12 +10,16 @@ type Page = "playground" | "compare" | "docs";
 export const SiteNav = ({
   activePage,
   onOpenMobileMenu,
+  brandAsHeading = false,
 }: {
   activePage?: Page;
   onOpenMobileMenu?: () => void;
+  /** Render the masthead as the page's h1, for pages without a visible title. */
+  brandAsHeading?: boolean;
 }) => {
   const { themeKey, setThemeKey, cycleTheme } = useThemeKey();
   const [themeOpen, setThemeOpen] = useState(false);
+  const Brand = brandAsHeading ? "h1" : "div";
   const themeWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -76,10 +80,17 @@ export const SiteNav = ({
         flexShrink: 0,
       }}
     >
-      {/* Masthead */}
-      <div
+      {/* Masthead. As an h1 it keeps the div's look: `font: inherit` undoes
+          the heading's size and weight. */}
+      <Brand
         className="pg-site-nav-brand"
-        style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          minWidth: 0,
+          ...(brandAsHeading ? { margin: 0, font: "inherit" } : null),
+        }}
       >
         <Link
           href="/"
@@ -103,7 +114,7 @@ export const SiteNav = ({
           >
             inkset
           </span>
-        </Link>
+        </Link>{" "}
         <span
           aria-hidden
           className="pg-site-nav-brand-divider"
@@ -125,7 +136,7 @@ export const SiteNav = ({
         >
           a rendering library for AI chat UIs in React
         </span>
-      </div>
+      </Brand>
 
       {/* Tabs + right rail */}
       <div

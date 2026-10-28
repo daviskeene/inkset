@@ -1,6 +1,17 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
+
+// Plain links on every page, so crawlers can reach the main pages without
+// running the client-side nav.
+const SITE_LINKS = [
+  { href: "/docs/introduction", label: "Introduction" },
+  { href: "/docs/quick-start", label: "Quick start" },
+  { href: "/docs/migration", label: "Migration" },
+  { href: "/generative-ui", label: "Generative UI" },
+  { href: "/compare", label: "Compare" },
+];
 
 export const Footer = () => {
   return (
@@ -13,9 +24,23 @@ export const Footer = () => {
         color: "var(--pg-text-muted)",
         background: "var(--pg-bg)",
         flexShrink: 0,
-        textAlign: "right",
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+        gap: "6px 24px",
       }}
     >
+      <nav aria-label="Site" className="pg-footer-nav">
+        {SITE_LINKS.map((link) => (
+          <Link key={link.href} href={link.href} className="pg-footer-nav-link">
+            {link.label}
+          </Link>
+        ))}
+        {/* A text file, so a plain anchor: client navigation can't render it. */}
+        <a href="/llms.txt" className="pg-footer-nav-link">
+          llms.txt
+        </a>
+      </nav>
       <span>
         Made for humans and agents by{" "}
         <a
@@ -42,6 +67,18 @@ export const FOOTER_STYLES = `
 .pg-footer-link:hover {
   color: var(--pg-accent) !important;
   border-bottom-color: var(--pg-accent) !important;
+}
+.pg-footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.pg-footer-nav-link {
+  color: var(--pg-text-muted);
+  text-decoration: none;
+}
+.pg-footer-nav-link:hover {
+  color: var(--pg-text-primary);
 }
 @media (max-width: 540px) {
   .pg-footer {

@@ -2,6 +2,8 @@
 
 Rendering infrastructure for streaming AI output, including answers that mix Markdown with interactive components.
 
+[Documentation](https://inkset.dev/docs) · [Inkset vs react-markdown vs Streamdown](https://inkset.dev/compare) · [Playground](https://inkset.dev)
+
 Most chat UIs stream tokens into the page and let the browser figure out where things go. That works until the stream gets fast, the response mixes code and math, someone rotates their phone, or the conversation gets long. At that point the DOM becomes part of the problem. The browser recalculates layout for the whole thread on every new token. Lines the user is reading shift under them. Long conversations start to feel heavy. Anything async that mounts into the column forces another pass.
 
 Inkset uses [pretext](https://github.com/chenglou/pretext) to measure text once, then re-layout with arithmetic. Completed blocks do not reflow when new tokens arrive. Resize runs in microseconds because no DOM reads happen on the hot path. The same cost model extends to code, math, tables, and Mermaid diagrams, and interactive components from libraries like json-render can sit between the Markdown without disturbing any of it.

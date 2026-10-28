@@ -5,6 +5,7 @@ import { SiteNav } from "../site-nav";
 import { Footer } from "../footer";
 import type { DocsEntry } from "../../lib/docs-nav";
 import type { DocsPage } from "../../lib/docs-content";
+import type { DocsSsrHtml } from "../../lib/docs-body";
 import { DocsTocSidebar } from "./docs-toc-sidebar";
 import { DocsOutline } from "./docs-outline";
 import { DocsArticle } from "./docs-article";
@@ -12,11 +13,13 @@ import { DOCS_SHELL_STYLES } from "./docs-styles";
 
 export const DocsShell = ({
   page,
+  ssrHtml,
   navEntry,
   prev,
   next,
 }: {
   page: DocsPage;
+  ssrHtml: DocsSsrHtml;
   navEntry: DocsEntry & { groupLabel: string };
   prev: DocsEntry | null;
   next: DocsEntry | null;
@@ -142,7 +145,7 @@ export const DocsShell = ({
             padding: "44px 48px 120px",
           }}
         >
-          <DocsArticle page={page} navEntry={navEntry} prev={prev} next={next} />
+          <DocsArticle page={page} ssrHtml={ssrHtml} navEntry={navEntry} prev={prev} next={next} />
         </main>
 
         <aside
