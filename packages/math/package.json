@@ -13,7 +13,7 @@
     "url": "git+https://github.com/daviskeene/inkset.git",
     "directory": "packages/math"
   },
-  "homepage": "https://github.com/daviskeene/inkset/tree/main/packages/math#readme",
+  "homepage": "https://inkset.dev/docs/plugin-math",
   "bugs": {
     "url": "https://github.com/daviskeene/inkset/issues"
   },
@@ -24,7 +24,10 @@
     "math",
     "latex",
     "katex",
-    "mathjax"
+    "mathjax",
+    "streaming-markdown",
+    "ai-chat",
+    "llm-ui"
   ],
   "exports": {
     ".": {
