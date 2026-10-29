@@ -1,5 +1,12 @@
 # @inkset/table
 
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [89ffd34]
+  - @inkset/core@0.1.9
+
 ## 0.1.8
 
 ### Patch Changes
