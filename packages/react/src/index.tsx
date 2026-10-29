@@ -644,6 +644,22 @@ const INKSET_STYLES = `
   }
 `;
 
+// The layout width used by `<Inkset flow>` when no `width` is given.
+const FLOW_LAYOUT_WIDTH = 640;
+
+// The gap above a block in flow mode: the space the layout left between it
+// and the previous block with height. Zero-height blocks take no space.
+const flowGap = (layout: readonly LayoutBlock[], index: number): number => {
+  if (index === 0) return 0;
+  for (let i = index - 1; i >= 0; i--) {
+    const previous = layout[i];
+    if (previous.height > 0) {
+      return Math.max(0, layout[index].y - (previous.y + previous.height));
+    }
+  }
+  return 0;
+};
+
 const InksetDefaultLoading = () => {
   return (
     <div className="inkset-loading" role="status">
@@ -1010,7 +1026,14 @@ type BlockRendererProps = {
   registry: PluginRegistry;
   isStreaming: boolean;
   /** "absolute" for frozen blocks, "flow" for the hot streaming block */
-  positioning: "absolute" | "flow";
+  /**
+   * `absolute` for frozen blocks, `flow` for the streaming block, and
+   * `natural` for `<Inkset flow>`: in document flow with no fixed width, so
+   * the browser sizes the block from its content.
+   */
+  positioning: "absolute" | "flow" | "natural";
+  /** Space above the block in `natural` mode, from the layout's gaps. */
+  gap?: number;
   observeHeight: boolean;
   onHeightChange: (
     blockId: number,
@@ -1047,6 +1070,7 @@ const BlockRenderer = memo(
     revealDurationMs,
     linkAttrs,
     components,
+    gap,
   }: BlockRendererProps) {
     const { node, x, y, width, height, shrinkwrapWidth } = block;
     const blockRef = useRef<HTMLDivElement>(null);
@@ -1108,7 +1132,9 @@ const BlockRenderer = memo(
     // Shrinkwrap narrows the text content without changing the block's allocated
     // width, so positioning math and plugin-rendered blocks stay unaffected.
     const contentMaxWidth =
-      shrinkwrapWidth && shrinkwrapWidth < width ? shrinkwrapWidth : undefined;
+      positioning !== "natural" && shrinkwrapWidth && shrinkwrapWidth < width
+        ? shrinkwrapWidth
+        : undefined;
 
     const style: React.CSSProperties =
       positioning === "absolute"
@@ -1125,9 +1151,11 @@ const BlockRenderer = memo(
             willChange: "transform",
             contain: "layout style",
           }
-        : {
-            width,
-          };
+        : positioning === "natural"
+          ? { marginTop: gap }
+          : {
+              width,
+            };
     if (contentMaxWidth) {
       // Apply via a CSS var so the default stylesheet can route it to `max-width`
       // on child text elements (p, h1..h6, blockquote) without clamping
@@ -1196,7 +1224,8 @@ const BlockRenderer = memo(
     prev.revealComponent === next.revealComponent &&
     prev.revealDurationMs === next.revealDurationMs &&
     prev.linkAttrs === next.linkAttrs &&
-    prev.components === next.components,
+    prev.components === next.components &&
+    prev.gap === next.gap,
 );
 
 // ── Default block renderer ────────────────────────────────────────
@@ -1637,6 +1666,13 @@ export type InksetProps = {
    * after it renders. Keep the object stable across renders.
    */
   components?: InksetComponents;
+  /**
+   * Render every block in normal document flow instead of at measured
+   * positions, with no fixed width. Use it where the container sizes itself
+   * to its content, such as a chat bubble that hugs its text. Finished text
+   * can then move while new text streams in, as in other renderers.
+   */
+  flow?: boolean;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -1666,6 +1702,7 @@ export const Inkset = ({
   cacheSize,
   linkAttrs,
   components,
+  flow = false,
   className,
   style,
   children,
@@ -1682,7 +1719,9 @@ export const Inkset = ({
     getGlyphLookup,
   } = useInkset({
     plugins,
-    width,
+    // A self-sizing container starts at zero width, which would lay out
+    // nothing, so flow mode lays out at a nominal width. Positions are unused.
+    width: flow ? (width ?? FLOW_LAYOUT_WIDTH) : width,
     font,
     fontSize,
     lineHeight,
@@ -2326,14 +2365,15 @@ export const Inkset = ({
   const frozenBlocks = hotBlockIndex >= 0 ? resolvedLayout.slice(0, hotBlockIndex) : resolvedLayout;
   const hotBlock = hotBlockIndex >= 0 ? resolvedLayout[hotBlockIndex] : null;
 
-  const containerMinHeight = hotBlock ? undefined : resolvedHeight || (state?.totalHeight ?? 0);
+  const containerMinHeight =
+    flow || hotBlock ? undefined : resolvedHeight || (state?.totalHeight ?? 0);
 
   // An in-flow box under the absolutely positioned frozen blocks: while
   // streaming it pushes the hot block below them, and once settled it spans
   // the whole layout. Browser scroll anchoring needs it — Chromium never picks
   // an absolutely positioned element as the anchor, so without it, content
   // growing above a settled document moved the reader by the full amount.
-  const spacerHeight = hotBlock ? hotBlock.y : containerMinHeight;
+  const spacerHeight = flow ? 0 : hotBlock ? hotBlock.y : containerMinHeight;
 
   const baseFontSize = fontSize ?? DEFAULT_FONT_SIZE;
   const baseLineHeight = lineHeight ?? DEFAULT_LINE_HEIGHT;
@@ -2565,14 +2605,15 @@ export const Inkset = ({
             pointerEvents: "none",
           }}
         />,
-        ...frozenBlocks.map((block: LayoutBlock) => (
+        ...(flow ? resolvedLayout : frozenBlocks).map((block: LayoutBlock, index) => (
           <BlockRenderer
             key={block.blockId}
             block={block}
             registry={registry}
-            isStreaming={false}
-            positioning="absolute"
-            observeHeight
+            isStreaming={flow ? block === hotBlock : false}
+            positioning={flow ? "natural" : "absolute"}
+            gap={flow ? flowGap(resolvedLayout, index) : undefined}
+            observeHeight={!flow}
             onHeightChange={handleHeightChange}
             displayNode={displayNodes.get(block.blockId)}
             revealComponent={revealConfig.component}
@@ -2581,7 +2622,7 @@ export const Inkset = ({
             components={components}
           />
         )),
-        ...(hotBlock
+        ...(hotBlock && !flow
           ? [
               <BlockRenderer
                 key={hotBlock.blockId}

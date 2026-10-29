@@ -42,12 +42,15 @@ export function Message({ text, streaming }: { text: string; streaming: boolean 
 | `cacheSize`          | `number`                 | `500`                       | The number of measured text segments that Inkset keeps.                              |
 | `linkAttrs`          | `LinkAttrsFn`            | None                        | Returns extra attributes for each link.                                              |
 | `components`         | `InksetComponents`       | None                        | Replaces elements, such as `a` or `strong`. See [Custom elements](#custom-elements). |
+| `flow`               | `boolean`                | `false`                     | Renders blocks in document flow. See [Width](#width).                                |
 | `className`          | `string`                 | None                        | A class for the root element.                                                        |
 | `style`              | `CSSProperties`          | None                        | Styles for the root element. These override `theme`.                                 |
 
 ## Width
 
 If you set `width`, Inkset uses that value. If you do not set it, Inkset watches the width of its container and calculates the layout again when the width changes. Most apps do not need to set `width`.
+
+Inkset needs a container with a definite width. A container that sizes itself to its content, such as a chat bubble with `width: fit-content`, has no width until its content is there. For that case, set `flow`. Inkset then renders each block in normal document flow with no fixed width, and the browser sizes the container from the text. Use `flow` for content that does not stream, because finished text can move while new text arrives.
 
 ## Links
 

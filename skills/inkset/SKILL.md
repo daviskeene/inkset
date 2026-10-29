@@ -101,6 +101,8 @@ export function MessageText({ message, streaming }: { message: UIMessage; stream
 
 For other token sources, keep the text in React state and add each chunk to it. See https://inkset.dev/docs/streaming.md.
 
+If messages sit in a container that sizes itself to its content, such as a user message bubble with `max-width` and no `width`, add the `flow` prop to that `<Inkset>`. Inkset needs a definite width for its measured layout, and `flow` lets the browser size the bubble from the text.
+
 In the Next.js App Router, put the code that renders `<Inkset>` in a file that starts with `"use client"`. If a Server Component rendered the old renderer, move the render into a small Client Component and pass the text to it as a prop.
 
 ## 5. Match the typography
