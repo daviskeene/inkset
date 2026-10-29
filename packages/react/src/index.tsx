@@ -1022,6 +1022,7 @@ type BlockRendererProps = {
   /** Animation duration (ms) — forwarded to `RevealComponentProps.durationMs`. */
   revealDurationMs?: number;
   linkAttrs?: LinkAttrsFn;
+  components?: InksetComponents;
 };
 
 const BlockRenderer = memo(
@@ -1036,6 +1037,7 @@ const BlockRenderer = memo(
     revealComponent,
     revealDurationMs,
     linkAttrs,
+    components,
   }: BlockRendererProps) {
     const { node, x, y, width, height, shrinkwrapWidth } = block;
     const blockRef = useRef<HTMLDivElement>(null);
@@ -1164,6 +1166,7 @@ const BlockRenderer = memo(
             revealComponent={revealComponent ?? null}
             revealDurationMs={revealDurationMs ?? 0}
             linkAttrs={linkAttrs}
+            components={components}
           />
         )}
       </div>
@@ -1183,7 +1186,8 @@ const BlockRenderer = memo(
     prev.displayNode === next.displayNode &&
     prev.revealComponent === next.revealComponent &&
     prev.revealDurationMs === next.revealDurationMs &&
-    prev.linkAttrs === next.linkAttrs,
+    prev.linkAttrs === next.linkAttrs &&
+    prev.components === next.components,
 );
 
 // ── Default block renderer ────────────────────────────────────────
@@ -1199,6 +1203,7 @@ const DefaultBlockRenderer = ({
   revealComponent,
   revealDurationMs,
   linkAttrs,
+  components,
 }: {
   node: EnrichedNode;
   registry: PluginRegistry;
@@ -1206,19 +1211,18 @@ const DefaultBlockRenderer = ({
   revealComponent?: RevealComponent | null;
   revealDurationMs?: number;
   linkAttrs?: LinkAttrsFn;
+  components?: InksetComponents;
 }) => {
   return (
     <div className="inkset-default-block">
-      {renderAstNode(
-        node,
+      {renderAstNode(node, `${node.blockId}`, {
         registry,
-        `${node.blockId}`,
-        true,
-        revealComponent ?? null,
-        revealDurationMs ?? 0,
+        components,
+        revealComponent: revealComponent ?? null,
+        revealDurationMs: revealDurationMs ?? 0,
         linkAttrs,
         onContentSettled,
-      )}
+      })}
     </div>
   );
 };
@@ -1229,22 +1233,41 @@ const DefaultBlockRenderer = ({
 // we strip them when rendering the default table structure.
 const TABLE_CONTEXT_TAGS = new Set(["table", "thead", "tbody", "tfoot", "tr"]);
 
+// Everything a block's tree renders with that stays the same for every node.
+type RenderContext = {
+  registry: PluginRegistry;
+  components?: InksetComponents;
+  revealComponent: RevealComponent | null;
+  revealDurationMs: number;
+  linkAttrs?: LinkAttrsFn;
+  onContentSettled?: () => void;
+};
+
+const resolveOverride = (
+  components: InksetComponents | undefined,
+  tagName: string,
+  insidePre: boolean,
+): React.ElementType | undefined => {
+  if (!components) return undefined;
+  if (tagName === "code" && !insidePre && components.inlineCode) {
+    return components.inlineCode as React.ElementType;
+  }
+  return (components as Record<string, React.ElementType | undefined>)[tagName];
+};
+
 const renderAstNode = (
   node: EnrichedNode,
-  registry: PluginRegistry,
   key: string,
+  ctx: RenderContext,
   allowInlineMath: boolean = true,
-  revealComponent: RevealComponent | null = null,
-  revealDurationMs: number = 0,
-  linkAttrs?: LinkAttrsFn,
-  onContentSettled?: () => void,
+  insidePre: boolean = false,
 ): React.ReactNode => {
   if (node.type === "text") {
     return node.value ?? "";
   }
 
   if (node.type === "inlineMath") {
-    return renderInlineMathNode(node, registry, key, allowInlineMath, onContentSettled);
+    return renderInlineMathNode(node, ctx.registry, key, allowInlineMath, ctx.onContentSettled);
   }
 
   // The parse layer already converts or drops raw HTML; guard here too so a
@@ -1256,21 +1279,14 @@ const renderAstNode = (
 
   if (node.type === "root") {
     return node.children?.map((child, index) =>
-      renderAstNode(
-        child as EnrichedNode,
-        registry,
-        `${key}.${index}`,
-        allowInlineMath,
-        revealComponent,
-        revealDurationMs,
-        linkAttrs,
-        onContentSettled,
-      ),
+      renderAstNode(child as EnrichedNode, `${key}.${index}`, ctx, allowInlineMath, insidePre),
     );
   }
 
   const tagName = node.tagName ?? "div";
   const nextAllowInlineMath = allowInlineMath && tagName !== "code" && tagName !== "pre";
+  const nextInsidePre = insidePre || tagName === "pre";
+  const { revealComponent, revealDurationMs, linkAttrs } = ctx;
   const props = toReactProps(node.properties, key);
 
   // Phase 4 — intercept reveal spans if a consumer component is configured.
@@ -1283,13 +1299,10 @@ const renderAstNode = (
     const children = rawChildren?.map((child, index) =>
       renderAstNode(
         child as EnrichedNode,
-        registry,
         `${key}.${index}`,
+        { ...ctx, revealComponent: null },
         false,
-        null,
-        revealDurationMs,
-        linkAttrs,
-        onContentSettled,
+        nextInsidePre,
       ),
     );
 
@@ -1330,18 +1343,27 @@ const renderAstNode = (
   const children = rawChildren?.map((child, index) =>
     renderAstNode(
       child as EnrichedNode,
-      registry,
       `${key}.${index}`,
+      ctx,
       nextAllowInlineMath,
-      revealComponent,
-      revealDurationMs,
-      linkAttrs,
-      onContentSettled,
+      nextInsidePre,
     ),
   );
 
   if (tagName === "a" && linkAttrs && typeof props.href === "string") {
     Object.assign(props, linkAttrs(props.href));
+  }
+
+  // Reveal spans belong to the animation layer, so overrides never replace them.
+  const override =
+    props["data-inkset-reveal-token"] === ""
+      ? undefined
+      : resolveOverride(ctx.components, tagName, insidePre);
+  if (typeof override === "string") {
+    return React.createElement(override, props, ...(children ?? []));
+  }
+  if (override) {
+    return React.createElement(override, { ...props, node }, ...(children ?? []));
   }
 
   return React.createElement(tagName, props, ...(children ?? []));
@@ -1488,6 +1510,24 @@ const collectShaderTokens = (
   }
 };
 
+/** Props an element override receives: the element's own props, its rendered children, and its syntax-tree node. */
+export type InksetElementProps<Tag extends keyof React.JSX.IntrinsicElements> =
+  React.JSX.IntrinsicElements[Tag] & { node?: EnrichedNode };
+
+/**
+ * Element overrides for the default renderer, in the shape react-markdown and
+ * Streamdown use: a component, or another tag name to render instead.
+ * Blocks that a plugin renders (code, math, tables, diagrams) are not affected.
+ */
+export type InksetComponents = {
+  [Tag in keyof React.JSX.IntrinsicElements]?:
+    | React.ComponentType<InksetElementProps<Tag>>
+    | keyof React.JSX.IntrinsicElements;
+} & {
+  /** Inline `code` outside a `pre`, as in Streamdown. Falls back to `code`. */
+  inlineCode?: React.ComponentType<InksetElementProps<"code">>;
+};
+
 export type LinkAttrsFn = (
   href: string,
 ) => Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children"> | undefined;
@@ -1574,6 +1614,14 @@ export type InksetProps = {
    * policy such as target/rel without replacing the whole renderer.
    */
   linkAttrs?: LinkAttrsFn;
+  /**
+   * Replaces the elements the default renderer outputs, such as `a`, `p`, or
+   * `strong`. Each override receives the element's props, its `children`, and
+   * its `node`. Inkset measures with its own typography, so an override that
+   * changes font size or margins makes Inkset correct the block's height
+   * after it renders. Keep the object stable across renders.
+   */
+  components?: InksetComponents;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -1601,6 +1649,7 @@ export const Inkset = ({
   shaderRegistry,
   cacheSize,
   linkAttrs,
+  components,
   className,
   style,
   children,
@@ -2512,6 +2561,7 @@ export const Inkset = ({
             revealComponent={revealConfig.component}
             revealDurationMs={timelineConfig?.durationMs ?? 320}
             linkAttrs={linkAttrs}
+            components={components}
           />
         )),
         ...(hotBlock
@@ -2528,6 +2578,7 @@ export const Inkset = ({
                 revealComponent={revealConfig.component}
                 revealDurationMs={timelineConfig?.durationMs ?? 320}
                 linkAttrs={linkAttrs}
+                components={components}
               />,
             ]
           : []),

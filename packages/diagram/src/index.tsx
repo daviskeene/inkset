@@ -160,6 +160,8 @@ const isMermaidNode = (node: ASTNode): boolean => detectLanguage(node) === "merm
 const DiagramBlock = ({ node, isStreaming, onContentSettled }: PluginComponentProps) => {
   const source = (node.pluginData?.source as string) ?? "";
   const theme = (node.pluginData?.theme as string) ?? "dark";
+  const config = node.pluginData?.config as Record<string, unknown> | undefined;
+  const configKey = (node.pluginData?.configKey as string) ?? "";
   const showHeader = (node.pluginData?.showHeader as boolean) ?? true;
   const showCopy = (node.pluginData?.showCopy as boolean) ?? true;
 
@@ -201,8 +203,11 @@ const DiagramBlock = ({ node, isStreaming, onContentSettled }: PluginComponentPr
       const job = renderLock.then(async () => {
         if (cancelled) return;
         try {
+          // `config` may set its own theme, but never loosen the security
+          // level: diagrams come from model output.
           mermaid.default.initialize({
             theme,
+            ...config,
             startOnLoad: false,
             securityLevel: "strict",
           });
@@ -231,7 +236,9 @@ const DiagramBlock = ({ node, isStreaming, onContentSettled }: PluginComponentPr
     return () => {
       cancelled = true;
     };
-  }, [id, source, theme, isStreaming]);
+    // `configKey` stands in for `config`, whose identity changes every transform.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, source, theme, configKey, isStreaming]);
 
   const handleCopy = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
@@ -296,6 +303,12 @@ export type DiagramPluginOptions = {
   showHeader?: boolean;
   /** Show the copy button in the header. Default `true`. */
   showCopy?: boolean;
+  /**
+   * Extra Mermaid configuration merged into `mermaid.initialize`, such as
+   * `{ theme: "base", themeVariables: { ... } }`. `securityLevel` is always
+   * `"strict"` and `startOnLoad` is always `false`.
+   */
+  config?: Record<string, unknown>;
 };
 
 export const createDiagramPlugin = (options?: DiagramPluginOptions): InksetPlugin => {
@@ -303,12 +316,14 @@ export const createDiagramPlugin = (options?: DiagramPluginOptions): InksetPlugi
   const language = options?.language ?? "mermaid";
   const showHeader = options?.showHeader ?? true;
   const showCopy = options?.showCopy ?? true;
+  const config = options?.config;
+  const configKey = config ? JSON.stringify(config) : "";
 
   return {
     name: "diagram",
     // Every option that changes rendered HTML must participate so the
     // pipeline rebuilds on swap (same pattern as code/math/table plugins).
-    key: [theme, language, showHeader, showCopy].join("|"),
+    key: [theme, language, showHeader, showCopy, configKey].join("|"),
     handles: ["code"],
 
     // Lang-scoped gate: only claim code blocks whose language matches
@@ -327,7 +342,7 @@ export const createDiagramPlugin = (options?: DiagramPluginOptions): InksetPlugi
       return {
         ...node,
         transformedBy: "diagram",
-        pluginData: { source, theme, showHeader, showCopy },
+        pluginData: { source, theme, showHeader, showCopy, config, configKey },
       };
     },
 
