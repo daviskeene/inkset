@@ -1638,9 +1638,10 @@ export type InksetProps = {
    */
   unstyled?: boolean;
   /**
-   * Rendered while the pipeline is still preloading plugin dependencies
-   * (shiki, katex) and measuring the first pass. If omitted, Inkset shows
-   * a small centred spinner. Pass `null` to render nothing.
+   * Rendered until the pipeline has loaded its fonts and measured the first
+   * pass. Plugin dependencies (shiki, katex) load later, per block, and do
+   * not hold it. If omitted, Inkset shows a small centred spinner. Pass
+   * `null` to render nothing.
    */
   loadingFallback?: ReactNode;
   /**
@@ -2420,7 +2421,7 @@ export const Inkset = ({
     ...style,
   };
 
-  // Pipeline is still preloading plugin deps + running the first measure.
+  // Pipeline is still loading fonts and pretext and running the first measure.
   // Only show the fallback when we actually have content to render; empty
   // Inkset instances stay empty.
   const isLoading = state === null && content !== undefined && content.length > 0;

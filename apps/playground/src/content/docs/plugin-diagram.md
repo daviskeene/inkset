@@ -73,4 +73,4 @@ While the code fence is open, the plugin shows the Mermaid source. When the fenc
 
 ## Bundle size
 
-Mermaid is a large package. The plugin loads it when the Inkset pipeline starts, even if the content has no diagrams. Register the plugin only where your app shows diagrams.
+Mermaid is a large package. The plugin loads it the first time the content has a Mermaid block, so content without diagrams never downloads it.

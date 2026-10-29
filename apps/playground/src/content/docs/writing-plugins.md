@@ -25,12 +25,14 @@ interface InksetPlugin {
 | `handles`        | The block types that the plugin handles, such as `"code"` or `"table"`.                       |
 | `canHandle`      | Claims only some blocks of a type. For example, it can return `true` only for `mermaid` code. |
 | `widthSensitive` | Set to `true` to run `transform` again when the width changes.                                |
-| `preload`        | Loads large dependencies. Inkset waits for it before the first render.                        |
+| `preload`        | Starts loading a large dependency. Inkset calls it the first time a block needs the plugin.   |
 | `transform`      | Adds the data that the component needs to `pluginData`. It must return immediately.           |
 | `measure`        | Returns the size of the block. If you do not supply it, Inkset measures the block as text.    |
 | `component`      | Renders the block.                                                                            |
 
 [Transform](/docs/transform) explains the order in which plugins run.
+
+`preload` never delays a render. Your component must also load the dependency itself, and show the block's source until it arrives.
 
 ## Example
 
