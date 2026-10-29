@@ -25,6 +25,7 @@ import {
   type HeadingSizeTuple,
   type HeadingWeightTuple,
   type HeadingLineHeightTuple,
+  type HeadingTrackingTuple,
   type ShrinkwrapOption,
   type GlyphPositionLookup,
   type BlockSpacing,
@@ -61,6 +62,7 @@ const headingTuplesToCssVars = (
   sizes: HeadingSizeTuple | undefined,
   weights: HeadingWeightTuple | undefined,
   lineHeights: HeadingLineHeightTuple | undefined,
+  tracking: HeadingTrackingTuple | undefined,
 ): Record<`--${string}`, string | number> => {
   const vars: Record<`--${string}`, string | number> = {};
   if (sizes) {
@@ -76,6 +78,11 @@ const headingTuplesToCssVars = (
   if (lineHeights) {
     for (let i = 0; i < 4; i++) {
       vars[`--inkset-heading-${i + 1}-line-height`] = lineHeights[i];
+    }
+  }
+  if (tracking) {
+    for (let i = 0; i < 4; i++) {
+      vars[`--inkset-heading-${i + 1}-tracking`] = `${tracking[i]}em`;
     }
   }
   return vars;
@@ -138,6 +145,7 @@ const INKSET_STYLES = `
     --inkset-heading-4-size: 1em;
     --inkset-heading-4-line-height: 1.2;
     --inkset-heading-4-weight: 680;
+    --inkset-heading-4-tracking: 0em;
     --inkset-inline-code-size: 0.92em;
 
     /* Spacing */
@@ -225,6 +233,7 @@ const INKSET_STYLES = `
   :where(.inkset-root h4, .inkset-root h5, .inkset-root h6) {
     font-size: var(--inkset-heading-4-size);
     line-height: var(--inkset-heading-4-line-height);
+    letter-spacing: var(--inkset-heading-4-tracking);
     font-weight: var(--inkset-heading-4-weight);
   }
 
@@ -637,6 +646,24 @@ const INKSET_STYLES = `
   }
 `;
 
+// The layout width used by `<Inkset flow>` when no `width` is given.
+const FLOW_LAYOUT_WIDTH = 640;
+
+// The gap above a block in flow mode: the space the layout left between it
+// and the previous block with height. Zero-height blocks take no space.
+const flowGap = (layout: readonly LayoutBlock[], index: number): number => {
+  // A zero-height block (a comment, a scroll anchor) owes no gap; the next
+  // visible block carries it.
+  if (index === 0 || layout[index].height <= 0) return 0;
+  for (let i = index - 1; i >= 0; i--) {
+    const previous = layout[i];
+    if (previous.height > 0) {
+      return Math.max(0, layout[index].y - (previous.y + previous.height));
+    }
+  }
+  return 0;
+};
+
 const InksetDefaultLoading = () => {
   return (
     <div className="inkset-loading" role="status">
@@ -875,6 +902,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
   const headingSizesKey = options?.headingSizes?.join(",") ?? "";
   const headingWeightsKey = options?.headingWeights?.join(",") ?? "";
   const headingLineHeightsKey = options?.headingLineHeights?.join(",") ?? "";
+  const headingTrackingKey = options?.headingTracking?.join(",") ?? "";
 
   useEffect(() => {
     const pipeline = new StreamingPipeline(options);
@@ -920,6 +948,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     headingSizesKey,
     headingWeightsKey,
     headingLineHeightsKey,
+    headingTrackingKey,
   ]);
 
   useEffect(() => {
@@ -1001,7 +1030,14 @@ type BlockRendererProps = {
   registry: PluginRegistry;
   isStreaming: boolean;
   /** "absolute" for frozen blocks, "flow" for the hot streaming block */
-  positioning: "absolute" | "flow";
+  /**
+   * `absolute` for frozen blocks, `flow` for the streaming block, and
+   * `natural` for `<Inkset flow>`: in document flow with no fixed width, so
+   * the browser sizes the block from its content.
+   */
+  positioning: "absolute" | "flow" | "natural";
+  /** Space above the block in `natural` mode, from the layout's gaps. */
+  gap?: number;
   observeHeight: boolean;
   onHeightChange: (
     blockId: number,
@@ -1022,6 +1058,7 @@ type BlockRendererProps = {
   /** Animation duration (ms) — forwarded to `RevealComponentProps.durationMs`. */
   revealDurationMs?: number;
   linkAttrs?: LinkAttrsFn;
+  components?: InksetComponents;
 };
 
 const BlockRenderer = memo(
@@ -1036,6 +1073,8 @@ const BlockRenderer = memo(
     revealComponent,
     revealDurationMs,
     linkAttrs,
+    components,
+    gap,
   }: BlockRendererProps) {
     const { node, x, y, width, height, shrinkwrapWidth } = block;
     const blockRef = useRef<HTMLDivElement>(null);
@@ -1097,7 +1136,9 @@ const BlockRenderer = memo(
     // Shrinkwrap narrows the text content without changing the block's allocated
     // width, so positioning math and plugin-rendered blocks stay unaffected.
     const contentMaxWidth =
-      shrinkwrapWidth && shrinkwrapWidth < width ? shrinkwrapWidth : undefined;
+      positioning !== "natural" && shrinkwrapWidth && shrinkwrapWidth < width
+        ? shrinkwrapWidth
+        : undefined;
 
     const style: React.CSSProperties =
       positioning === "absolute"
@@ -1114,9 +1155,11 @@ const BlockRenderer = memo(
             willChange: "transform",
             contain: "layout style",
           }
-        : {
-            width,
-          };
+        : positioning === "natural"
+          ? { marginTop: gap }
+          : {
+              width,
+            };
     if (contentMaxWidth) {
       // Apply via a CSS var so the default stylesheet can route it to `max-width`
       // on child text elements (p, h1..h6, blockquote) without clamping
@@ -1164,6 +1207,7 @@ const BlockRenderer = memo(
             revealComponent={revealComponent ?? null}
             revealDurationMs={revealDurationMs ?? 0}
             linkAttrs={linkAttrs}
+            components={components}
           />
         )}
       </div>
@@ -1183,7 +1227,9 @@ const BlockRenderer = memo(
     prev.displayNode === next.displayNode &&
     prev.revealComponent === next.revealComponent &&
     prev.revealDurationMs === next.revealDurationMs &&
-    prev.linkAttrs === next.linkAttrs,
+    prev.linkAttrs === next.linkAttrs &&
+    prev.components === next.components &&
+    prev.gap === next.gap,
 );
 
 // ── Default block renderer ────────────────────────────────────────
@@ -1199,6 +1245,7 @@ const DefaultBlockRenderer = ({
   revealComponent,
   revealDurationMs,
   linkAttrs,
+  components,
 }: {
   node: EnrichedNode;
   registry: PluginRegistry;
@@ -1206,19 +1253,18 @@ const DefaultBlockRenderer = ({
   revealComponent?: RevealComponent | null;
   revealDurationMs?: number;
   linkAttrs?: LinkAttrsFn;
+  components?: InksetComponents;
 }) => {
   return (
     <div className="inkset-default-block">
-      {renderAstNode(
-        node,
+      {renderAstNode(node, `${node.blockId}`, {
         registry,
-        `${node.blockId}`,
-        true,
-        revealComponent ?? null,
-        revealDurationMs ?? 0,
+        components,
+        revealComponent: revealComponent ?? null,
+        revealDurationMs: revealDurationMs ?? 0,
         linkAttrs,
         onContentSettled,
-      )}
+      })}
     </div>
   );
 };
@@ -1229,22 +1275,41 @@ const DefaultBlockRenderer = ({
 // we strip them when rendering the default table structure.
 const TABLE_CONTEXT_TAGS = new Set(["table", "thead", "tbody", "tfoot", "tr"]);
 
+// Everything a block's tree renders with that stays the same for every node.
+type RenderContext = {
+  registry: PluginRegistry;
+  components?: InksetComponents;
+  revealComponent: RevealComponent | null;
+  revealDurationMs: number;
+  linkAttrs?: LinkAttrsFn;
+  onContentSettled?: () => void;
+};
+
+const resolveOverride = (
+  components: InksetComponents | undefined,
+  tagName: string,
+  insidePre: boolean,
+): React.ElementType | undefined => {
+  if (!components) return undefined;
+  if (tagName === "code" && !insidePre && components.inlineCode) {
+    return components.inlineCode as React.ElementType;
+  }
+  return (components as Record<string, React.ElementType | undefined>)[tagName];
+};
+
 const renderAstNode = (
   node: EnrichedNode,
-  registry: PluginRegistry,
   key: string,
+  ctx: RenderContext,
   allowInlineMath: boolean = true,
-  revealComponent: RevealComponent | null = null,
-  revealDurationMs: number = 0,
-  linkAttrs?: LinkAttrsFn,
-  onContentSettled?: () => void,
+  insidePre: boolean = false,
 ): React.ReactNode => {
   if (node.type === "text") {
     return node.value ?? "";
   }
 
   if (node.type === "inlineMath") {
-    return renderInlineMathNode(node, registry, key, allowInlineMath, onContentSettled);
+    return renderInlineMathNode(node, ctx.registry, key, allowInlineMath, ctx.onContentSettled);
   }
 
   // The parse layer already converts or drops raw HTML; guard here too so a
@@ -1256,21 +1321,14 @@ const renderAstNode = (
 
   if (node.type === "root") {
     return node.children?.map((child, index) =>
-      renderAstNode(
-        child as EnrichedNode,
-        registry,
-        `${key}.${index}`,
-        allowInlineMath,
-        revealComponent,
-        revealDurationMs,
-        linkAttrs,
-        onContentSettled,
-      ),
+      renderAstNode(child as EnrichedNode, `${key}.${index}`, ctx, allowInlineMath, insidePre),
     );
   }
 
   const tagName = node.tagName ?? "div";
   const nextAllowInlineMath = allowInlineMath && tagName !== "code" && tagName !== "pre";
+  const nextInsidePre = insidePre || tagName === "pre";
+  const { revealComponent, revealDurationMs, linkAttrs } = ctx;
   const props = toReactProps(node.properties, key);
 
   // Phase 4 — intercept reveal spans if a consumer component is configured.
@@ -1283,13 +1341,10 @@ const renderAstNode = (
     const children = rawChildren?.map((child, index) =>
       renderAstNode(
         child as EnrichedNode,
-        registry,
         `${key}.${index}`,
+        { ...ctx, revealComponent: null },
         false,
-        null,
-        revealDurationMs,
-        linkAttrs,
-        onContentSettled,
+        nextInsidePre,
       ),
     );
 
@@ -1330,18 +1385,27 @@ const renderAstNode = (
   const children = rawChildren?.map((child, index) =>
     renderAstNode(
       child as EnrichedNode,
-      registry,
       `${key}.${index}`,
+      ctx,
       nextAllowInlineMath,
-      revealComponent,
-      revealDurationMs,
-      linkAttrs,
-      onContentSettled,
+      nextInsidePre,
     ),
   );
 
   if (tagName === "a" && linkAttrs && typeof props.href === "string") {
     Object.assign(props, linkAttrs(props.href));
+  }
+
+  // Reveal spans belong to the animation layer, so overrides never replace them.
+  const override =
+    props["data-inkset-reveal-token"] === ""
+      ? undefined
+      : resolveOverride(ctx.components, tagName, insidePre);
+  if (typeof override === "string") {
+    return React.createElement(override, props, ...(children ?? []));
+  }
+  if (override) {
+    return React.createElement(override, { ...props, node }, ...(children ?? []));
   }
 
   return React.createElement(tagName, props, ...(children ?? []));
@@ -1488,6 +1552,24 @@ const collectShaderTokens = (
   }
 };
 
+/** Props an element override receives: the element's own props, its rendered children, and its syntax-tree node. */
+export type InksetElementProps<Tag extends keyof React.JSX.IntrinsicElements> =
+  React.JSX.IntrinsicElements[Tag] & { node?: EnrichedNode };
+
+/**
+ * Element overrides for the default renderer, in the shape react-markdown and
+ * Streamdown use: a component, or another tag name to render instead.
+ * Blocks that a plugin renders (code, math, tables, diagrams) are not affected.
+ */
+export type InksetComponents = {
+  [Tag in keyof React.JSX.IntrinsicElements]?:
+    | React.ComponentType<InksetElementProps<Tag>>
+    | keyof React.JSX.IntrinsicElements;
+} & {
+  /** Inline `code` outside a `pre`, as in Streamdown. Falls back to `code`. */
+  inlineCode?: React.ComponentType<InksetElementProps<"code">>;
+};
+
 export type LinkAttrsFn = (
   href: string,
 ) => Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children"> | undefined;
@@ -1536,6 +1618,12 @@ export type InksetProps = {
    */
   headingLineHeights?: HeadingLineHeightTuple;
   /**
+   * Letter-spacing for h1..h4 in em, applied both to measurement and to the
+   * `--inkset-heading-N-tracking` CSS variables. Default
+   * `[-0.04, -0.035, -0.02, 0]`. h5 and h6 inherit h4.
+   */
+  headingTracking?: HeadingTrackingTuple;
+  /**
    * Structured theme overrides. Compiles to `--inkset-*` CSS variables on
    * the root. The `style` prop still has final say, so consumers can escape-
    * hatch any specific property after the theme is applied.
@@ -1574,6 +1662,21 @@ export type InksetProps = {
    * policy such as target/rel without replacing the whole renderer.
    */
   linkAttrs?: LinkAttrsFn;
+  /**
+   * Replaces the elements the default renderer outputs, such as `a`, `p`, or
+   * `strong`. Each override receives the element's props, its `children`, and
+   * its `node`. Inkset measures with its own typography, so an override that
+   * changes font size or margins makes Inkset correct the block's height
+   * after it renders. Keep the object stable across renders.
+   */
+  components?: InksetComponents;
+  /**
+   * Render every block in normal document flow instead of at measured
+   * positions, with no fixed width. Use it where the container sizes itself
+   * to its content, such as a chat bubble that hugs its text. Finished text
+   * can then move while new text streams in, as in other renderers.
+   */
+  flow?: boolean;
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
@@ -1594,6 +1697,7 @@ export const Inkset = ({
   headingSizes,
   headingWeights,
   headingLineHeights,
+  headingTracking,
   theme,
   unstyled,
   loadingFallback,
@@ -1601,6 +1705,8 @@ export const Inkset = ({
   shaderRegistry,
   cacheSize,
   linkAttrs,
+  components,
+  flow = false,
   className,
   style,
   children,
@@ -1617,7 +1723,9 @@ export const Inkset = ({
     getGlyphLookup,
   } = useInkset({
     plugins,
-    width,
+    // A self-sizing container starts at zero width, which would lay out
+    // nothing, so flow mode lays out at a nominal width. Positions are unused.
+    width: flow ? (width ?? FLOW_LAYOUT_WIDTH) : width,
     font,
     fontSize,
     lineHeight,
@@ -1627,6 +1735,7 @@ export const Inkset = ({
     headingSizes,
     headingWeights,
     headingLineHeights,
+    headingTracking,
     cacheSize,
   });
 
@@ -2260,14 +2369,15 @@ export const Inkset = ({
   const frozenBlocks = hotBlockIndex >= 0 ? resolvedLayout.slice(0, hotBlockIndex) : resolvedLayout;
   const hotBlock = hotBlockIndex >= 0 ? resolvedLayout[hotBlockIndex] : null;
 
-  const containerMinHeight = hotBlock ? undefined : resolvedHeight || (state?.totalHeight ?? 0);
+  const containerMinHeight =
+    flow || hotBlock ? undefined : resolvedHeight || (state?.totalHeight ?? 0);
 
   // An in-flow box under the absolutely positioned frozen blocks: while
   // streaming it pushes the hot block below them, and once settled it spans
   // the whole layout. Browser scroll anchoring needs it — Chromium never picks
   // an absolutely positioned element as the anchor, so without it, content
   // growing above a settled document moved the reader by the full amount.
-  const spacerHeight = hotBlock ? hotBlock.y : containerMinHeight;
+  const spacerHeight = flow ? 0 : hotBlock ? hotBlock.y : containerMinHeight;
 
   const baseFontSize = fontSize ?? DEFAULT_FONT_SIZE;
   const baseLineHeight = lineHeight ?? DEFAULT_LINE_HEIGHT;
@@ -2287,7 +2397,7 @@ export const Inkset = ({
     "--inkset-font-family": font ?? "system-ui, sans-serif",
     "--inkset-base-font-size": `${baseFontSize}px`,
     "--inkset-base-line-height-ratio": `${baseLineHeightRatio}`,
-    ...headingTuplesToCssVars(headingSizes, headingWeights, headingLineHeights),
+    ...headingTuplesToCssVars(headingSizes, headingWeights, headingLineHeights, headingTracking),
     ...themeToCssVars(theme),
     hyphens: hyphenation ? "manual" : undefined,
     WebkitHyphens: hyphenation ? "manual" : undefined,
@@ -2499,22 +2609,24 @@ export const Inkset = ({
             pointerEvents: "none",
           }}
         />,
-        ...frozenBlocks.map((block: LayoutBlock) => (
+        ...(flow ? resolvedLayout : frozenBlocks).map((block: LayoutBlock, index) => (
           <BlockRenderer
             key={block.blockId}
             block={block}
             registry={registry}
-            isStreaming={false}
-            positioning="absolute"
-            observeHeight
+            isStreaming={flow ? block === hotBlock : false}
+            positioning={flow ? "natural" : "absolute"}
+            gap={flow ? flowGap(resolvedLayout, index) : undefined}
+            observeHeight={!flow}
             onHeightChange={handleHeightChange}
             displayNode={displayNodes.get(block.blockId)}
             revealComponent={revealConfig.component}
             revealDurationMs={timelineConfig?.durationMs ?? 320}
             linkAttrs={linkAttrs}
+            components={components}
           />
         )),
-        ...(hotBlock
+        ...(hotBlock && !flow
           ? [
               <BlockRenderer
                 key={hotBlock.blockId}
@@ -2528,6 +2640,7 @@ export const Inkset = ({
                 revealComponent={revealConfig.component}
                 revealDurationMs={timelineConfig?.durationMs ?? 320}
                 linkAttrs={linkAttrs}
+                components={components}
               />,
             ]
           : []),

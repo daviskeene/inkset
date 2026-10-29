@@ -38,7 +38,7 @@ const plugins = [createCodePlugin(), createMathPlugin(), createTablePlugin()];
 
 Inkset includes GitHub Flavored Markdown, so you do not need a separate GFM plugin. There are also these differences:
 
-- Inkset has no `components` prop. To add attributes to links, use `linkAttrs`. To render a block type in your own way, [write a plugin](/docs/writing-plugins).
+- `components` works as it does in react-markdown. An override for code blocks, math, or tables applies only if you do not register the matching plugin. See [Custom elements](/docs/component#custom-elements).
 - Inkset does not render raw HTML, and it has no equivalent of `rehype-raw`.
 
 ## From Streamdown
@@ -48,6 +48,8 @@ Inkset includes GitHub Flavored Markdown, so you do not need a separate GFM plug
 - **Plugins are an array.** `plugins={{ code, math, mermaid }}` becomes `plugins={[createCodePlugin(), createMathPlugin(), createDiagramPlugin()]}`.
 - **Streaming is a boolean.** `mode="streaming"` becomes `streaming={true}`.
 - **Content is a prop.** Pass the Markdown as `content`, not as children.
+- **`components` has the same shape,** including the `inlineCode` key, so your overrides move over unchanged.
+- **Animation moves to `reveal`.** `animated={{ animation: "blurIn", duration: 300, sep: "word" }}` becomes `reveal={{ css: { preset: "blurIn" }, timeline: { durationMs: 300, sep: "word" } }}`.
 - **Styles come from Inkset.** Inkset includes its own stylesheet and does not need Tailwind.
 
 ## From your own renderer

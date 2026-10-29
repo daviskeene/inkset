@@ -57,6 +57,15 @@ sequenceDiagram
 | `language`   | `string`  | `"mermaid"` | The code block language that the plugin claims.                       |
 | `showHeader` | `boolean` | `true`      | Shows the bar above the diagram.                                      |
 | `showCopy`   | `boolean` | `true`      | Shows a button that copies the Mermaid source.                        |
+| `config`     | `object`  | None        | Mermaid configuration, such as `themeVariables`. See below.           |
+
+`config` goes to `mermaid.initialize`, so you can set your own colors for each color mode:
+
+```tsx
+createDiagramPlugin({ config: { theme: "base", themeVariables: { primaryColor: "#1b1c22" } } });
+```
+
+The plugin always sets `securityLevel` to `"strict"`, because diagrams come from model output.
 
 ## Streaming
 

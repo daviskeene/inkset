@@ -101,6 +101,8 @@ export function MessageText({ message, streaming }: { message: UIMessage; stream
 
 For other token sources, keep the text in React state and add each chunk to it. See https://inkset.dev/docs/streaming.md.
 
+If messages sit in a container that sizes itself to its content, such as a user message bubble with `max-width` and no `width`, add the `flow` prop to that `<Inkset>`. Inkset needs a definite width for its measured layout, and `flow` lets the browser size the bubble from the text.
+
 In the Next.js App Router, put the code that renders `<Inkset>` in a file that starts with `"use client"`. If a Server Component rendered the old renderer, move the render into a small Client Component and pass the text to it as a prop.
 
 ## 5. Match the typography
@@ -151,7 +153,7 @@ Inkset measures text before it renders it, so the values that it measures with m
    }
    ```
 
-5. To change heading sizes, use the `headingSizes`, `headingWeights`, and `headingLineHeights` props, not CSS.
+5. To change heading sizes, use the `headingSizes`, `headingWeights`, and `headingLineHeights` props, not CSS. If `components` overrides set font sizes or margins with classes, move those values to these props and to `blockSpacing`.
 
 6. Set the space between blocks with the `blockSpacing` prop, not with CSS margins. See https://inkset.dev/docs/theming.md.
 
@@ -171,27 +173,30 @@ The code plugin takes Shiki themes. `createCodePlugin({ theme: "github-dark", li
 
 ## 7. Move from react-markdown
 
-| react-markdown                                                         | Inkset                                                                                                                           |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `<ReactMarkdown>{text}</ReactMarkdown>`                                | `<Inkset content={text} />`                                                                                                      |
-| `remark-gfm`                                                           | Built in. Remove it.                                                                                                             |
-| `remark-math` and `rehype-katex`                                       | `createMathPlugin()` and the KaTeX stylesheet                                                                                    |
-| `rehype-highlight`, `rehype-pretty-code`, or a custom `code` component | `createCodePlugin()`                                                                                                             |
-| A `code` component that renders Mermaid                                | `createDiagramPlugin()`                                                                                                          |
-| A `components.a` override that only sets `target` or `rel`             | `linkAttrs`. See https://inkset.dev/docs/component.md#links.                                                                     |
-| `rehype-raw`                                                           | No equivalent. Inkset does not render raw HTML.                                                                                  |
-| Other `components` overrides                                           | No direct equivalent. For a custom block, write a plugin (https://inkset.dev/docs/writing-plugins.md). Otherwise, tell the user. |
+| react-markdown                                                         | Inkset                                                                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `<ReactMarkdown>{text}</ReactMarkdown>`                                | `<Inkset content={text} />`                                                                                        |
+| `remark-gfm`                                                           | Built in. Remove it.                                                                                               |
+| `remark-math` and `rehype-katex`                                       | `createMathPlugin()` and the KaTeX stylesheet                                                                      |
+| `rehype-highlight`, `rehype-pretty-code`, or a custom `code` component | `createCodePlugin()`                                                                                               |
+| A `code` component that renders Mermaid                                | `createDiagramPlugin()`                                                                                            |
+| A `components.a` override that only sets `target` or `rel`             | `linkAttrs`. See https://inkset.dev/docs/component.md#links.                                                       |
+| `rehype-raw`                                                           | No equivalent. Inkset does not render raw HTML.                                                                    |
+| Other `components` overrides                                           | `components`, with the same shape. An override for a block that a plugin renders applies only without that plugin. |
 
 ## 8. Move from Streamdown
 
-| Streamdown                                                                    | Inkset                                                                      |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `<Streamdown>{text}</Streamdown>`                                             | `<Inkset content={text} />`                                                 |
-| `mode="streaming"` or `isAnimating={…}`                                       | `streaming={…}`                                                             |
-| `plugins={{ code, math, mermaid }}`                                           | `plugins={[createCodePlugin(), createMathPlugin(), createDiagramPlugin()]}` |
-| `shikiTheme={[light, dark]}`                                                  | `createCodePlugin({ theme: dark, lightTheme: light })`                      |
-| `controls={false}`                                                            | `showHeader: false` or `showCopy: false` in the plugin options              |
-| `import "streamdown/styles.css"` and a Tailwind `@source` line for Streamdown | Remove them. Inkset includes its own stylesheet.                            |
+| Streamdown                                                                    | Inkset                                                                               |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `<Streamdown>{text}</Streamdown>`                                             | `<Inkset content={text} />`                                                          |
+| `mode="streaming"` or `isAnimating={…}`                                       | `streaming={…}`                                                                      |
+| `plugins={{ code, math, mermaid }}`                                           | `plugins={[createCodePlugin(), createMathPlugin(), createDiagramPlugin()]}`          |
+| `shikiTheme={[light, dark]}`                                                  | `createCodePlugin({ theme: dark, lightTheme: light })`                               |
+| `controls={false}`                                                            | `showHeader: false` or `showCopy: false` in the plugin options                       |
+| `components`, including `inlineCode`                                          | `components`, with the same shape                                                    |
+| `animated={{ animation: "blurIn", duration: 300, sep: "word" }}`              | `reveal={{ css: { preset: "blurIn" }, timeline: { durationMs: 300, sep: "word" } }}` |
+| `createMermaidPlugin({ config })`                                             | `createDiagramPlugin({ config })`                                                    |
+| `import "streamdown/styles.css"` and a Tailwind `@source` line for Streamdown | Remove them. Inkset includes its own stylesheet.                                     |
 
 ## 9. Components between the text
 
