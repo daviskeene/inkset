@@ -145,6 +145,7 @@ const INKSET_STYLES = `
     --inkset-heading-4-size: 1em;
     --inkset-heading-4-line-height: 1.2;
     --inkset-heading-4-weight: 680;
+    --inkset-heading-4-tracking: 0em;
     --inkset-inline-code-size: 0.92em;
 
     /* Spacing */
@@ -232,6 +233,7 @@ const INKSET_STYLES = `
   :where(.inkset-root h4, .inkset-root h5, .inkset-root h6) {
     font-size: var(--inkset-heading-4-size);
     line-height: var(--inkset-heading-4-line-height);
+    letter-spacing: var(--inkset-heading-4-tracking);
     font-weight: var(--inkset-heading-4-weight);
   }
 
@@ -650,7 +652,9 @@ const FLOW_LAYOUT_WIDTH = 640;
 // The gap above a block in flow mode: the space the layout left between it
 // and the previous block with height. Zero-height blocks take no space.
 const flowGap = (layout: readonly LayoutBlock[], index: number): number => {
-  if (index === 0) return 0;
+  // A zero-height block (a comment, a scroll anchor) owes no gap; the next
+  // visible block carries it.
+  if (index === 0 || layout[index].height <= 0) return 0;
   for (let i = index - 1; i >= 0; i--) {
     const previous = layout[i];
     if (previous.height > 0) {

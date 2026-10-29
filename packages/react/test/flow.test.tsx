@@ -92,4 +92,34 @@ describe("flow", () => {
     expect(blocks[1].style.marginTop).toBe("10px");
     expect(container.querySelector<HTMLElement>(".inkset-root")?.style.minHeight).toBe("");
   });
+
+  // Regression: the gap went on the empty block and again on the next one.
+  it("gives a zero-height block no gap", async () => {
+    await act(async () => {
+      root.render(
+        <Inkset
+          content={"First paragraph.\n\n<!-- a note -->\n\nSecond paragraph."}
+          flow
+          blockSpacing={{ default: 10 }}
+        />,
+      );
+    });
+    await settle();
+
+    const blocks = [...container.querySelectorAll<HTMLElement>(".inkset-root > [data-block-id]")];
+    expect(blocks).toHaveLength(3);
+    expect(blocks[1].style.marginTop).toBe("0px");
+    expect(blocks[2].style.marginTop).toBe("10px");
+  });
+
+  // Regression: measurement used the h4 tracking value but the h4-h6 rule never applied it.
+  it("applies heading 4 tracking in the stylesheet", async () => {
+    await act(async () => {
+      root.render(<Inkset content="#### A small heading" flow />);
+    });
+    await settle();
+
+    const css = container.querySelector(".inkset-root > style")?.textContent ?? "";
+    expect(css).toMatch(/h6\)\s*\{[^}]*letter-spacing: var\(--inkset-heading-4-tracking\)/);
+  });
 });
