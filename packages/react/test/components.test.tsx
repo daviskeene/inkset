@@ -123,4 +123,12 @@ describe("components", () => {
     expect(container.querySelector("h3")?.textContent).toBe("A heading");
     expect(container.querySelector("h2")).toBeNull();
   });
+
+  // Apps that restyle headings in overrides also need to match their letter-spacing.
+  it("sets heading tracking on the root", async () => {
+    await render("## A heading", {}, { headingTracking: [0, 0, 0, 0] });
+
+    const root = container.querySelector<HTMLElement>(".inkset-root");
+    expect(root?.style.getPropertyValue("--inkset-heading-2-tracking")).toBe("0em");
+  });
 });

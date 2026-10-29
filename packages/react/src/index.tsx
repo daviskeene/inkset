@@ -25,6 +25,7 @@ import {
   type HeadingSizeTuple,
   type HeadingWeightTuple,
   type HeadingLineHeightTuple,
+  type HeadingTrackingTuple,
   type ShrinkwrapOption,
   type GlyphPositionLookup,
   type BlockSpacing,
@@ -61,6 +62,7 @@ const headingTuplesToCssVars = (
   sizes: HeadingSizeTuple | undefined,
   weights: HeadingWeightTuple | undefined,
   lineHeights: HeadingLineHeightTuple | undefined,
+  tracking: HeadingTrackingTuple | undefined,
 ): Record<`--${string}`, string | number> => {
   const vars: Record<`--${string}`, string | number> = {};
   if (sizes) {
@@ -76,6 +78,11 @@ const headingTuplesToCssVars = (
   if (lineHeights) {
     for (let i = 0; i < 4; i++) {
       vars[`--inkset-heading-${i + 1}-line-height`] = lineHeights[i];
+    }
+  }
+  if (tracking) {
+    for (let i = 0; i < 4; i++) {
+      vars[`--inkset-heading-${i + 1}-tracking`] = `${tracking[i]}em`;
     }
   }
   return vars;
@@ -875,6 +882,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
   const headingSizesKey = options?.headingSizes?.join(",") ?? "";
   const headingWeightsKey = options?.headingWeights?.join(",") ?? "";
   const headingLineHeightsKey = options?.headingLineHeights?.join(",") ?? "";
+  const headingTrackingKey = options?.headingTracking?.join(",") ?? "";
 
   useEffect(() => {
     const pipeline = new StreamingPipeline(options);
@@ -920,6 +928,7 @@ export const useInkset = (options?: UseInksetOptions): UseInksetResult => {
     headingSizesKey,
     headingWeightsKey,
     headingLineHeightsKey,
+    headingTrackingKey,
   ]);
 
   useEffect(() => {
@@ -1576,6 +1585,12 @@ export type InksetProps = {
    */
   headingLineHeights?: HeadingLineHeightTuple;
   /**
+   * Letter-spacing for h1..h4 in em, applied both to measurement and to the
+   * `--inkset-heading-N-tracking` CSS variables. Default
+   * `[-0.04, -0.035, -0.02, 0]`. h5 and h6 inherit h4.
+   */
+  headingTracking?: HeadingTrackingTuple;
+  /**
    * Structured theme overrides. Compiles to `--inkset-*` CSS variables on
    * the root. The `style` prop still has final say, so consumers can escape-
    * hatch any specific property after the theme is applied.
@@ -1642,6 +1657,7 @@ export const Inkset = ({
   headingSizes,
   headingWeights,
   headingLineHeights,
+  headingTracking,
   theme,
   unstyled,
   loadingFallback,
@@ -1676,6 +1692,7 @@ export const Inkset = ({
     headingSizes,
     headingWeights,
     headingLineHeights,
+    headingTracking,
     cacheSize,
   });
 
@@ -2336,7 +2353,7 @@ export const Inkset = ({
     "--inkset-font-family": font ?? "system-ui, sans-serif",
     "--inkset-base-font-size": `${baseFontSize}px`,
     "--inkset-base-line-height-ratio": `${baseLineHeightRatio}`,
-    ...headingTuplesToCssVars(headingSizes, headingWeights, headingLineHeights),
+    ...headingTuplesToCssVars(headingSizes, headingWeights, headingLineHeights, headingTracking),
     ...themeToCssVars(theme),
     hyphens: hyphenation ? "manual" : undefined,
     WebkitHyphens: hyphenation ? "manual" : undefined,
