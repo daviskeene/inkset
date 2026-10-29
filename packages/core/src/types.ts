@@ -173,8 +173,10 @@ export interface InksetPlugin {
   widthSensitive?: boolean;
   /**
    * Optional async initialiser for heavy dependencies (e.g. shiki, katex).
-   * Awaited during pipeline init so the first render doesn't flicker between
-   * raw fallback and styled output. Plugins should make this idempotent.
+   * The pipeline calls it the first time it transforms a block this plugin
+   * claims, and `warmPlugins()` calls it up front. It never blocks a render,
+   * so the component must also load the dependency itself. Plugins should
+   * make this idempotent.
    */
   preload?(): Promise<void>;
   transform(node: ASTNode, ctx: PluginContext): EnrichedNode;

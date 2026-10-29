@@ -67,6 +67,8 @@ export type PipelineMetrics = {
 export class StreamingPipeline {
   private ingest = new Ingest();
   private registry = new PluginRegistry();
+  // Plugins whose `preload()` has started, so each loads at most once.
+  private warmedPlugins = new Set<string>();
   private measureLayer: MeasureLayer;
 
   private parseCache = new Map<number, ParseCacheEntry>();
@@ -183,14 +185,12 @@ export class StreamingPipeline {
         })
       : Promise.resolve();
 
-    // Fire plugin preloads in the background. Blocking the first render on
-    // shiki (~1–2 MB) + katex + mermaid (~650 KB) added hundreds of ms to
-    // initial paint. Plugin components already degrade to raw source while
-    // their dep loads and upgrade in place once it resolves, so the trade
-    // is a brief pop-in on code/math/diagram blocks in exchange for snappy
-    // paragraph/heading/list rendering. Consumers who need no-flicker can
-    // call `warmPlugins()` explicitly before rendering.
-    void this.warmPlugins();
+    // Plugin dependencies (shiki ~1–2 MB, katex, mermaid ~650 KB) are not
+    // loaded here. Each one starts the first time the document has a block
+    // its plugin claims (see `warmClaimingPlugins`), so a message without
+    // code, math, or diagrams downloads none of them, and on a slow link they
+    // no longer compete with the text. Plugin components show raw source
+    // until their dependency arrives. `warmPlugins()` loads them all up front.
 
     // Only pretext + fonts + hyphenator block first render. These are small
     // and typically already cached by the time init() runs (see the eager
@@ -200,11 +200,30 @@ export class StreamingPipeline {
   }
 
   /**
+   * Starts `preload()` for each plugin that claimed one of these blocks, once
+   * per plugin. Failures only warn: the component loads its dependency again
+   * when it mounts.
+   */
+  private warmClaimingPlugins(nodes: readonly EnrichedNode[]): void {
+    for (const node of nodes) {
+      const name = node.transformedBy;
+      if (!name || this.warmedPlugins.has(name)) continue;
+      this.warmedPlugins.add(name);
+      this.registry
+        .get(name)
+        ?.preload?.()
+        .catch((err: unknown) => {
+          console.warn(`[inkset] plugin "${name}" preload failed:`, err);
+        });
+    }
+  }
+
+  /**
    * Await every registered plugin's `preload()`. Useful when a consumer
-   * wants a fully-upgraded first paint (no raw → highlighted pop-in for
-   * code/math/diagram) at the cost of a slower initial render. Background-
-   * fired during `init()` already, so calling this afterwards reuses the
-   * in-flight promises.
+   * wants every dependency loaded before content needs it (no raw →
+   * highlighted pop-in for code/math/diagram), at the cost of downloading
+   * all of them. Plugins make `preload()` idempotent, so this reuses any
+   * load already in flight.
    */
   async warmPlugins(): Promise<void> {
     await Promise.all(
@@ -436,6 +455,7 @@ export class StreamingPipeline {
       this.transformCache,
       parsedBlockIds,
     );
+    this.warmClaimingPlugins(transformed);
     const nextNodes = this.applyHyphenation(transformed);
     const transformMs = performance.now() - transformStart;
 

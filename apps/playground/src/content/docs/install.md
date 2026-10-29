@@ -26,7 +26,7 @@ npm install @inkset/table
 npm install @inkset/diagram mermaid
 ```
 
-You must install KaTeX and Mermaid in your app yourself. The plugins import them, and Shiki, with dynamic imports, so most bundlers put them in separate chunks. Inkset loads these chunks before its first render, while it shows the loading fallback.
+You must install KaTeX and Mermaid in your app yourself. The plugins import them, and Shiki, with dynamic imports, so most bundlers put them in separate chunks. Inkset loads each chunk the first time the content has a block that needs it, and the block shows its source until then. Content without code, math, or diagrams never downloads them.
 
 The math plugin also needs the KaTeX stylesheet. Import it once in your app:
 

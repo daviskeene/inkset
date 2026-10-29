@@ -129,9 +129,22 @@ describe("StreamingPipeline concurrency", () => {
   });
 
   it("shares one initialization across pre-init calls", async () => {
+    const pipeline = new StreamingPipeline({ font: "sans-serif" });
+    const init = vi.spyOn(pipeline as unknown as { initialize: () => Promise<void> }, "initialize");
+    void pipeline.init();
+    void pipeline.setContent("a", { streaming: true });
+    await pipeline.appendToken("b");
+    await flush();
+    await pipeline.init();
+    expect(init).toHaveBeenCalledTimes(1);
+    pipeline.destroy();
+  });
+
+  // A plugin's dependency (shiki, katex, mermaid) is large, so it loads only
+  // once the document has a block the plugin claims, and only once.
+  it("preloads a plugin when a block needs it, not at init", async () => {
     let preloads = 0;
-    const pipeline = new StreamingPipeline({
-      font: "sans-serif",
+    const pipeline = await ready({
       plugins: [
         noopPlugin({
           preload: async () => {
@@ -140,12 +153,47 @@ describe("StreamingPipeline concurrency", () => {
         }),
       ],
     });
-    void pipeline.init();
-    void pipeline.setContent("a", { streaming: true });
-    await pipeline.appendToken("b");
+    await pipeline.setContent("Only prose here.");
     await flush();
-    await pipeline.init();
+    expect(preloads).toBe(0);
+
+    await pipeline.setContent("Some code:\n\n```\nlet a = 1;\n```");
+    await flush();
     expect(preloads).toBe(1);
+
+    await pipeline.setContent("More code:\n\n```\nlet b = 2;\n```\n\n```\nlet c = 3;\n```");
+    await flush();
+    expect(preloads).toBe(1);
+    pipeline.destroy();
+  });
+
+  // Regression guard: `preload` is optional, and table plugins have none.
+  it("commits blocks claimed by a plugin without preload", async () => {
+    const pipeline = await ready({ plugins: [noopPlugin({ handles: ["code"] })] });
+    await pipeline.setContent("```\nlet a = 1;\n```");
+    await flush();
+    const state = pipeline.getState();
+    expect(state.blockCount).toBe(1);
+    expect(state.layout[0].node.transformedBy).toBe("test");
+    pipeline.destroy();
+  });
+
+  it("preloads every plugin up front with warmPlugins()", async () => {
+    const preloaded: string[] = [];
+    const pipeline = await ready({
+      plugins: ["code", "table"].map((type) =>
+        noopPlugin({
+          name: type,
+          handles: [type],
+          preload: async () => {
+            preloaded.push(type);
+          },
+        }),
+      ),
+    });
+    expect(preloaded).toEqual([]);
+    await pipeline.warmPlugins();
+    expect(preloaded.sort()).toEqual(["code", "table"]);
     pipeline.destroy();
   });
 

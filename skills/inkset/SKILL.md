@@ -41,7 +41,7 @@ Then install a plugin for each type of content that the model sends. Match the f
 | Tables           | `@inkset/table`   | Nothing      |
 | Mermaid diagrams | `@inkset/diagram` | `mermaid`    |
 
-Install the diagram plugin only if the app shows Mermaid diagrams. Mermaid is large, and the plugin loads it when Inkset starts.
+Install the diagram plugin if the app shows Mermaid diagrams. Mermaid is large, but the plugin downloads it only when a message contains a Mermaid block.
 
 If you install the math plugin, import the KaTeX stylesheet once, in the root layout or the entry file:
 

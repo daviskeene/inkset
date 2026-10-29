@@ -36,7 +36,7 @@ export function Message({ text, streaming }: { text: string; streaming: boolean 
 | `shrinkwrap`         | `ShrinkwrapOption`       | `false`                     | Makes text blocks as narrow as their lines. See [Layout](/docs/layout).              |
 | `theme`              | `InksetTheme`            | None                        | Colors and other style tokens. See [Theming](/docs/theming).                         |
 | `unstyled`           | `boolean`                | `false`                     | Removes the default stylesheet.                                                      |
-| `loadingFallback`    | `ReactNode`              | A small spinner             | Shows while plugins load and Inkset measures the first time.                         |
+| `loadingFallback`    | `ReactNode`              | A small spinner             | Shows until Inkset has loaded its fonts and measured the text for the first time.    |
 | `reveal`             | `RevealProp`             | None                        | The animation for new text. See [@inkset/animate](/docs/plugin-animate).             |
 | `shaderRegistry`     | `ShaderRegistry`         | The built-in shaders        | The shaders that `reveal.shader` can use by name.                                    |
 | `cacheSize`          | `number`                 | `500`                       | The number of measured text segments that Inkset keeps.                              |
