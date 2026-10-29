@@ -1,5 +1,13 @@
 # @inkset/react
 
+## 0.1.12
+
+### Patch Changes
+
+- Updated dependencies [89ffd34]
+  - @inkset/core@0.1.9
+  - @inkset/animate@0.1.10
+
 ## 0.1.11
 
 ### Patch Changes
