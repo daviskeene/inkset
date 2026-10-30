@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+} from "react";
 import Link from "next/link";
 import {
   Inkset,
@@ -24,7 +31,7 @@ import {
   DUSK_PALETTE,
 } from "../lib/themes";
 import { useThemeKey } from "../lib/theme-context";
-import { SiteNav } from "../components/site-nav";
+import { formatStars, GithubStarsContext, SiteNav } from "../components/site-nav";
 import { Footer } from "../components/footer";
 import { BracketToggle, CHIP_GROUP_STYLE, CHIP_SECTION_LABEL_STYLE } from "../components/chip";
 import type { ScenarioData } from "../lib/scenarios";
@@ -1300,6 +1307,7 @@ const MobileMenu = ({
   shrinkwrapMode,
   onToggleShrinkwrap,
 }: MobileMenuProps) => {
+  const githubStars = useContext(GithubStarsContext);
   const groupedScenarios = [
     {
       key: "plugins",
@@ -1550,6 +1558,9 @@ const MobileMenu = ({
               />
             </svg>
             GitHub
+            {githubStars === null ? null : (
+              <span style={{ color: "var(--pg-text-faint)" }}>{formatStars(githubStars)}</span>
+            )}
           </a>
           <a
             href="https://www.npmjs.com/package/@inkset/react"

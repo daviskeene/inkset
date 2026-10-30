@@ -1,11 +1,17 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useThemeKey } from "../lib/theme-context";
 import { THEME_LABELS, THEME_ORDER, type ThemeKey } from "../lib/themes";
 
 type Page = "playground" | "compare" | "docs";
+
+/** The repository's star count, fetched by the root layout. Null when unknown. */
+export const GithubStarsContext = createContext<number | null>(null);
+
+export const formatStars = (stars: number): string =>
+  stars < 1000 ? String(stars) : `${(stars / 1000).toFixed(1).replace(/\.0$/, "")}k`;
 
 export const SiteNav = ({
   activePage,
@@ -18,6 +24,7 @@ export const SiteNav = ({
   brandAsHeading?: boolean;
 }) => {
   const { themeKey, setThemeKey, cycleTheme } = useThemeKey();
+  const githubStars = useContext(GithubStarsContext);
   const [themeOpen, setThemeOpen] = useState(false);
   const Brand = brandAsHeading ? "h1" : "div";
   const themeWrapRef = useRef<HTMLDivElement | null>(null);
@@ -215,20 +222,27 @@ export const SiteNav = ({
           href="https://github.com/daviskeene/inkset"
           target="_blank"
           rel="noreferrer"
-          aria-label="Inkset on GitHub"
+          aria-label={
+            githubStars === null ? "Inkset on GitHub" : `Inkset on GitHub, ${githubStars} stars`
+          }
           className="pg-site-nav-gh"
           style={{
             color: "var(--pg-text-muted)",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 28,
+            gap: 6,
+            minWidth: 28,
             height: 28,
+            padding: githubStars === null ? 0 : "0 9px 0 7px",
             borderRadius: 999,
+            fontSize: 12.5,
+            textDecoration: "none",
             transition: "color 120ms ease, background-color 120ms ease",
           }}
         >
           <GithubMark />
+          {githubStars === null ? null : <span>{formatStars(githubStars)}</span>}
         </a>
 
         <a
