@@ -2,7 +2,9 @@ Inkset is an open source React library that renders streaming LLM output quickly
 
 ## Why Inkset
 
-Inkset measures text once with Pretext and works out where each block goes with arithmetic, so finished paragraphs stay put while new tokens arrive, and resizing the window needs no DOM measurements. Shiki, KaTeX, and Mermaid load only when a message needs them, and the [comparison](/compare) shows the sizes side by side. The `components` prop has the same shape as react-markdown's and Streamdown's, so your custom elements carry over, and your coding agent can do the migration from [inkset.dev/skill.md](https://inkset.dev/skill.md).
+As a reply streams in, the browser lays out the page again on every update, and anything that reads an element's size, like auto-scroll, forces it to do that work immediately. Pretext measures text with canvas, outside the DOM, so Inkset knows how tall each paragraph will be at any width before the browser lays it out. Each finished block gets a fixed position from arithmetic, only the block that's still streaming changes, and a resize reuses the measurements Inkset already has.
+
+Your users get text that stays in place while the model keeps writing. You get a package about a third the size of react-markdown, because Shiki, KaTeX, and Mermaid load only when a message uses them, and your coding agent can make the switch for you from [inkset.dev/skill.md](https://inkset.dev/skill.md).
 
 ## What it renders
 
