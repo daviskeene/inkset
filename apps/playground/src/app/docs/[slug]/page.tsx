@@ -19,7 +19,14 @@ export const generateStaticParams = async (): Promise<Array<Params>> => {
 // per doc and far more useful to crawlers than a templated fallback. We
 // clamp to ~200 chars so SERP snippets don't truncate mid-word.
 const describe = (page: DocsPageContent | null, title: string): string => {
-  const rawLede = page?.lede?.replace(/\s+/g, " ").trim() ?? "";
+  // Search results show the description as plain text, so drop code ticks and
+  // keep only the text of Markdown links.
+  const rawLede =
+    page?.lede
+      ?.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/`/g, "")
+      .replace(/\s+/g, " ")
+      .trim() ?? "";
   if (!rawLede) return `${title} — Inkset documentation.`;
   return rawLede.length > 200 ? `${rawLede.slice(0, 197).trimEnd()}…` : rawLede;
 };
@@ -32,7 +39,8 @@ export const generateMetadata = async (props: { params: Promise<Params> }): Prom
   const page = await loadDocsPage(slug);
   const description = describe(page, entry.title);
 
-  const title = entry.title;
+  // The page's own heading can be more descriptive than its sidebar title.
+  const title = page?.title ?? entry.title;
   const canonical = `/docs/${slug}`;
 
   return {
@@ -81,7 +89,7 @@ const DocsPage = async ({ params }: { params: Promise<Params> }) => {
     "@graph": [
       {
         "@type": "TechArticle",
-        headline: entry.title,
+        headline: page?.title ?? entry.title,
         description: describe(page, entry.title),
         url,
         mainEntityOfPage: url,

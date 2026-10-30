@@ -28,6 +28,8 @@ return <Inkset content={text} streaming={streaming} plugins={plugins} />;
 
 Each time `text` changes, Inkset parses, measures, and lays out the last block again. The blocks above it do not change.
 
+For complete examples with a model SDK, see [Anthropic SDK](/docs/streaming-anthropic), [OpenAI SDK](/docs/streaming-openai), and [Vercel AI SDK](/docs/streaming-ai-sdk).
+
 ## Tokens from outside React
 
 If the tokens come from a store, a WebSocket, or a worker, subscribe to the source and copy the tokens into React state:
