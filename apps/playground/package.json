@@ -20,6 +20,7 @@
     "@streamdown/code": "^1.1.1",
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
+    "@vercel/analytics": "^2.0.1",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.0",
     "mermaid": "^11.12.0",

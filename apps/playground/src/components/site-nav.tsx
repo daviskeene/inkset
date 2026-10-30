@@ -231,6 +231,26 @@ export const SiteNav = ({
           <GithubMark />
         </a>
 
+        <a
+          href="https://www.npmjs.com/package/@inkset/react"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Inkset on npm"
+          className="pg-site-nav-npm"
+          style={{
+            color: "var(--pg-text-muted)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 28,
+            height: 28,
+            borderRadius: 999,
+            transition: "color 120ms ease, background-color 120ms ease",
+          }}
+        >
+          <NpmMark />
+        </a>
+
         {onOpenMobileMenu ? (
           <button
             type="button"
@@ -517,6 +537,14 @@ const GithubMark = () => {
   );
 };
 
+const NpmMark = () => {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden>
+      <path d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.04 19.17H5.113z" />
+    </svg>
+  );
+};
+
 const InksetMark = () => {
   return (
     <svg
@@ -570,7 +598,8 @@ export const SITE_NAV_STYLES = `
   .pg-site-nav-brand-divider,
   .pg-site-nav-divider,
   .pg-site-nav-theme-wrap,
-  .pg-site-nav-gh {
+  .pg-site-nav-gh,
+  .pg-site-nav-npm {
     display: none !important;
   }
   .pg-site-nav-mobile-options {
@@ -589,7 +618,8 @@ export const SITE_NAV_STYLES = `
     padding: 4px 6px 6px !important;
   }
 }
-.pg-site-nav-gh:hover {
+.pg-site-nav-gh:hover,
+.pg-site-nav-npm:hover {
   color: var(--pg-text-primary) !important;
   background: var(--pg-surface-raised) !important;
 }

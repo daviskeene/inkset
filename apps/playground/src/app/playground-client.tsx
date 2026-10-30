@@ -1551,6 +1551,27 @@ const MobileMenu = ({
             </svg>
             GitHub
           </a>
+          <a
+            href="https://www.npmjs.com/package/@inkset/react"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 14,
+              color: "var(--pg-text-muted)",
+              textDecoration: "none",
+              padding: "8px 14px",
+              border: "1px solid var(--pg-border-default)",
+              borderRadius: 999,
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden>
+              <path d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.04 19.17H5.113z" />
+            </svg>
+            npm
+          </a>
         </div>
       </div>
     </div>

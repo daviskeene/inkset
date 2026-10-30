@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { fontVariables } from "./fonts";
 import { RootChrome } from "../components/root-chrome";
 // Self-host KaTeX CSS so the font files are bundled by Next and served
@@ -215,6 +216,7 @@ const RootLayout = ({ children }: { children: ReactNode }) => {
         }}
       >
         <RootChrome>{children}</RootChrome>
+        <Analytics />
       </body>
     </html>
   );
