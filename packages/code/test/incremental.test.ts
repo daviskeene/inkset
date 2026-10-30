@@ -86,6 +86,41 @@ describe("highlightIncremental", () => {
     expect(total).toBeLessThan(long.length * 12);
   });
 
+  // remark ends a code block's text with a newline, so while a block streams
+  // every update ends in "\n", including updates that stop mid-line.
+  it("keeps its cache when each update ends in a newline, as remark's code does", () => {
+    const tokenized: string[] = [];
+    const spy: IncrementalHighlighter = {
+      codeToHast: (code, options) => {
+        tokenized.push(code);
+        return highlighter.codeToHast(code, options as Parameters<Highlighter["codeToHast"]>[1]);
+      },
+      getLastGrammarState: (root) =>
+        highlighter.getLastGrammarState(root as Parameters<Highlighter["getLastGrammarState"]>[0]),
+    };
+    const cache = createHighlightCache();
+    const long = SOURCE.repeat(8);
+    for (let end = 0; end <= long.length; end += 5) {
+      const code = `${long.slice(0, end)}\n`;
+      const result = highlightIncremental(
+        spy,
+        hastToHtml,
+        code,
+        "typescript",
+        "github-dark",
+        cache,
+      );
+      if (end % 200 === 0) {
+        expect(toHtml(result)).toBe(
+          highlighter.codeToHtml(code, { lang: "typescript", theme: "github-dark" }),
+        );
+      }
+    }
+
+    const total = tokenized.reduce((sum, code) => sum + code.length, 0);
+    expect(total).toBeLessThan(long.length * 12);
+  });
+
   it("starts over when the code is replaced rather than extended", () => {
     const cache = createHighlightCache();
     highlightIncremental(

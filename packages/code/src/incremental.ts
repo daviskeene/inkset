@@ -102,9 +102,11 @@ export const highlightIncremental = (
     return { lines, state: highlighter.getLastGrammarState(root) };
   };
 
-  // Lines that end in `\n` can no longer change; only the tail after the last
-  // newline is still being written.
-  const lastNewline = code.lastIndexOf("\n");
+  // Every line before the last one is final. The last line is not, even when
+  // it ends in `\n`: remark ends a code block's text with a newline, so while
+  // a block streams its half-written last line looks complete. Caching it
+  // would make the next update a non-prefix change and reset the cache.
+  const lastNewline = code.slice(0, -1).lastIndexOf("\n");
   const completed = code.slice(0, lastNewline + 1);
   if (completed.length > cache.source.length) {
     // Drop the final `\n`: it terminates the last new line, it doesn't start
