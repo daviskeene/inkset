@@ -1,0 +1,14 @@
+{
+  "inkset": {
+    "version": "0.1.12",
+    "upFrontKb": 65
+  },
+  "react-markdown": {
+    "version": "10.1.0",
+    "upFrontKb": 178
+  },
+  "streamdown": {
+    "version": "2.5.0",
+    "upFrontKb": 443
+  }
+}
