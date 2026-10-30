@@ -618,7 +618,7 @@ export const PlaygroundClient = ({ scenarios: scenarioData }: { scenarios: Scena
         </main>
       </div>
 
-      <Footer />
+      <Footer pinned />
 
       {menuOpen && (
         <MobileMenu
@@ -982,7 +982,7 @@ const ChatInput = ({
       <div style={{ width: "100%", maxWidth: CHAT_MAX_WIDTH }}>
         {showPreview && (
           <div
-            className="pg-playground-markdown"
+            className="pg-playground-markdown pg-chat-input-preview"
             style={{
               marginBottom: 10,
               padding: "10px 14px",
@@ -994,6 +994,7 @@ const ChatInput = ({
             }}
           >
             <div
+              className="pg-chat-input-preview-label"
               style={{
                 ...SMALL_CAPS_LABEL,
                 opacity: 0.4,
@@ -1095,6 +1096,7 @@ const ChatInput = ({
         </div>
 
         <div
+          className="pg-chat-input-hint"
           style={{
             marginTop: 8,
             fontSize: 13,

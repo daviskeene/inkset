@@ -376,6 +376,7 @@ export const DocsArticle = ({
       ) : null}
 
       <div
+        className="pg-docs-meta"
         style={{
           marginTop: 32,
           fontSize: 11,
@@ -395,7 +396,11 @@ export const DocsArticle = ({
         >
           Edit this page on GitHub
         </a>
-        <span aria-hidden style={{ color: "var(--pg-text-faint)" }}>
+        <span
+          aria-hidden
+          className="pg-docs-meta-separator"
+          style={{ color: "var(--pg-text-faint)" }}
+        >
           ·
         </span>
         <span>

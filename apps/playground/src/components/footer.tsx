@@ -13,10 +13,15 @@ const SITE_LINKS = [
   { href: "/compare", label: "Compare" },
 ];
 
-export const Footer = () => {
+export const Footer = ({
+  pinned = false,
+}: {
+  /** The footer sits under a full-height view instead of at the end of the page. */
+  pinned?: boolean;
+}) => {
   return (
     <footer
-      className="pg-footer"
+      className={pinned ? "pg-footer pg-footer-pinned" : "pg-footer"}
       style={{
         borderTop: "1px solid var(--pg-border-subtle)",
         padding: "10px 22px",
@@ -83,6 +88,20 @@ export const FOOTER_STYLES = `
 @media (max-width: 540px) {
   .pg-footer {
     padding: 8px 14px !important;
+  }
+  /* 25px rows, so each link is a large enough tap target. */
+  .pg-footer-nav {
+    gap: 0 16px;
+  }
+  .pg-footer-nav-link {
+    padding: 5px 0;
+  }
+}
+/* A pinned footer takes its rows from the view above it, and phones can't
+   spare them. The links stay in the HTML, so crawlers still find them. */
+@media (max-width: 768px), (max-height: 500px) {
+  .pg-footer-pinned {
+    display: none !important;
   }
 }
 `;

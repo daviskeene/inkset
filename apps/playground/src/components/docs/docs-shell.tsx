@@ -114,12 +114,20 @@ export const DocsShell = ({
               onClick={() => setTocOpen(false)}
               aria-label="Close navigation"
               style={{
+                // 32px square so a thumb can hit it; the negative margin
+                // keeps the glyph aligned with the header's right edge.
+                width: 32,
+                height: 32,
+                margin: "-8px -9px -8px 0",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
                 border: "none",
                 background: "transparent",
                 color: "var(--pg-text-muted)",
                 fontSize: 14,
                 cursor: "pointer",
-                padding: 4,
+                padding: 0,
                 lineHeight: 1,
               }}
             >

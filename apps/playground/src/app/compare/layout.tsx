@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 const TITLE = "Inkset vs react-markdown vs Streamdown: streaming Markdown in React";
@@ -18,12 +18,6 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
   },
   twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
 };
 
 const CompareLayout = ({ children }: { children: ReactNode }) => children;

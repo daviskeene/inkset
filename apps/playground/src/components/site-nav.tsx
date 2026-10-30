@@ -339,6 +339,7 @@ const TabLink = ({
       {children}
       <span
         aria-hidden
+        className="pg-site-nav-tab-underline"
         style={{
           position: "absolute",
           left: 10,
@@ -581,6 +582,14 @@ const InksetMark = () => {
 };
 
 export const SITE_NAV_STYLES = `
+/* Below 960px the tagline wraps onto several lines and makes the bar
+   taller than the content it sits over. */
+@media (max-width: 959px) {
+  .pg-site-nav-sub,
+  .pg-site-nav-brand-divider {
+    display: none !important;
+  }
+}
 @media (max-width: 720px) {
   .pg-site-nav {
     padding: 10px 14px !important;
@@ -608,8 +617,21 @@ export const SITE_NAV_STYLES = `
     font-size: 13px !important;
     padding: 4px 7px 6px !important;
   }
-  .pg-site-nav-sub,
-  .pg-site-nav-brand-divider,
+  .pg-site-nav-tab-underline {
+    left: 7px !important;
+    right: 7px !important;
+  }
+  /* Extend the tap areas of the tabs and the menu button to the height
+     of the bar without changing how they look. */
+  .pg-site-nav nav[aria-label="Primary"] a::before,
+  .pg-site-nav-mobile-options::before {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+  .pg-site-nav-mobile-options {
+    position: relative;
+  }
   .pg-site-nav-divider,
   .pg-site-nav-theme-wrap,
   .pg-site-nav-gh,
@@ -630,6 +652,28 @@ export const SITE_NAV_STYLES = `
   .pg-site-nav nav[aria-label="Primary"] a {
     font-size: 12.5px !important;
     padding: 4px 6px 6px !important;
+  }
+  .pg-site-nav-tab-underline {
+    left: 6px !important;
+    right: 6px !important;
+  }
+}
+/* At 320px the tabs otherwise run into the menu button. */
+@media (max-width: 360px) {
+  .pg-site-nav {
+    padding: 10px 12px !important;
+    gap: 6px !important;
+  }
+  .pg-site-nav-right {
+    gap: 4px !important;
+  }
+  .pg-site-nav nav[aria-label="Primary"] a {
+    font-size: 12px !important;
+    padding: 4px 4px 6px !important;
+  }
+  .pg-site-nav-tab-underline {
+    left: 4px !important;
+    right: 4px !important;
   }
 }
 .pg-site-nav-gh:hover,

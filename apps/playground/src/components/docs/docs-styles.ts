@@ -168,6 +168,16 @@ export const DOCS_SHELL_STYLES = `
   .pg-docs-shell {
     padding: 0 14px !important;
   }
+  /* The meta row wraps at this width, and the dot would end the first
+     line, so the row becomes a column. */
+  .pg-docs-meta {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+  .pg-docs-meta-separator {
+    display: none;
+  }
   .pg-docs-main {
     padding: 22px 0 88px !important;
   }
