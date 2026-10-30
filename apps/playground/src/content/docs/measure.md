@@ -13,9 +13,9 @@ Inkset calls `prepare()` once for each block of text and keeps the result. When 
 
 ## The cache
 
-Inkset keeps the prepared text in a cache. The key is the text and the font. If the text of a block does not change, Inkset uses the cached result.
+Each block keeps its prepared text. On a resize, Inkset lays out the prepared text again at the new width and does not prepare it again. This is true for a document of any length.
 
-The cache holds 500 entries by default. If one `<Inkset>` renders a long transcript, increase the limit with the `cacheSize` prop.
+Inkset also keeps prepared text in a shared cache. The key is the text and the font. If Inkset parses a block again and its text did not change, Inkset uses the cached result. The block that is still streaming does not go into the cache, because its text changes on each update. The cache holds 500 entries by default. To change the limit, use the `cacheSize` prop.
 
 ## Fonts
 

@@ -119,7 +119,10 @@ describe("flow", () => {
     });
     await settle();
 
-    const css = container.querySelector(".inkset-root > style")?.textContent ?? "";
+    // React hoists the shared stylesheet into <head>.
+    const css = Array.from(document.head.querySelectorAll("style"))
+      .map((el) => el.textContent ?? "")
+      .join("\n");
     expect(css).toMatch(/h6\)\s*\{[^}]*letter-spacing: var\(--inkset-heading-4-tracking\)/);
   });
 });

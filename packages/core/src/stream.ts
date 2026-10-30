@@ -273,8 +273,7 @@ export class StreamingPipeline {
 
   async appendToken(token: string): Promise<void> {
     if (this.destroyed) return;
-    const events = this.ingest.append(token);
-    if (events.length === 0) return;
+    if (!this.ingest.appendText(token)) return;
     this.schedulePipelineUpdate();
   }
 
@@ -314,7 +313,7 @@ export class StreamingPipeline {
     this.currentMeasured = [];
     this.currentLayout = [];
     this.ingest.reset();
-    this.ingest.append(content);
+    this.ingest.appendText(content);
     if (!options?.streaming) {
       this.ingest.end();
     }
@@ -553,8 +552,10 @@ export class StreamingPipeline {
     containerWidth: number = this.containerWidth,
   ): Promise<MeasuredBlock[]> {
     const measured: MeasuredBlock[] = [];
+    const hotIndex = this.ingest.isStreaming ? nodes.length - 1 : -1;
 
-    for (const node of nodes) {
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes[index];
       // Node identity is the validity key: frozen blocks keep the same
       // enriched-node object across ticks, while the hot block (and any
       // frozen block re-parsed after a repair rewrite) gets a fresh one.
@@ -567,7 +568,9 @@ export class StreamingPipeline {
 
       const plugin = node.transformedBy ? this.registry.get(node.transformedBy) : undefined;
 
-      const result = await this.measureLayer.measureBlock(node, containerWidth, plugin);
+      const result = await this.measureLayer.measureBlock(node, containerWidth, plugin, {
+        transient: index === hotIndex,
+      });
 
       // Shrinkwrap only applies to text-shaped blocks; plugin-rendered blocks
       // (code, table, math) own their own width and shouldn't be narrowed.
@@ -580,6 +583,7 @@ export class StreamingPipeline {
           extractText(node),
           containerWidth,
           node.blockType === "heading" ? getHeadingLevelFromNode(node) : undefined,
+          node,
         );
         if (shrink && shrink.width > 0 && shrink.width < containerWidth) {
           result.shrinkwrapWidth = shrink.width;

@@ -45,6 +45,20 @@ This example streams a short sentence with the `ink-dither` shader.
 
 Set an option to `false` to turn it off.
 
+## Pacing
+
+`throttle` releases one word or one character for each `delayInMs`. If the model sends text faster than that, the queue gets longer and the text on the screen falls behind the stream. The `maxLagMs` option sets the maximum delay. The default is 600 ms. When the queue holds more text than `throttle` can release in `maxLagMs`, each release includes more of the queue, so the text stays approximately `maxLagMs` behind the stream. A release that occurs late, for example in a background tab, includes all of the text that it missed.
+
+```tsx
+<Inkset
+  content={text}
+  streaming={streaming}
+  reveal={{ throttle: { delayInMs: 30, chunking: "word", maxLagMs: 600 } }}
+/>
+```
+
+To release exactly one word or character each time, set `maxLagMs` to `Infinity`.
+
 ## Shaders
 
 Inkset includes two shaders:
