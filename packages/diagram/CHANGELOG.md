@@ -1,5 +1,12 @@
 # @inkset/diagram
 
+## 0.1.12
+
+### Patch Changes
+
+- Updated dependencies [402879b]
+  - @inkset/core@0.1.10
+
 ## 0.1.11
 
 ### Patch Changes

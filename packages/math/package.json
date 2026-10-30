@@ -1,6 +1,6 @@
 {
   "name": "@inkset/math",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "KaTeX math plugin for Inkset.",
   "type": "module",
   "sideEffects": false,
