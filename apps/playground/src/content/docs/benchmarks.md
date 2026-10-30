@@ -1,6 +1,6 @@
 # Benchmarks
 
-The [Compare](/compare) page streams the same response into Inkset, Streamdown, and react-markdown at the same time. It runs in your browser, so you can compare the renderers on your own hardware. Select **Measure** to see the average and peak React render time of each renderer.
+The [Compare](/compare) page streams the same response into Inkset, Streamdown, and react-markdown at the same time, so you can see how each renderer shows the same tokens in your browser.
 
 ## Where the difference comes from
 
@@ -12,10 +12,12 @@ Inkset does less work for each update:
 
 ## Bundle size
 
-These sizes are approximate and gzipped. They do not include Shiki, KaTeX, and Mermaid, which each library loads as separate chunks.
+The table shows the JavaScript that each renderer loads up front, with the plugins that the Compare page uses. The sizes are minified and gzipped, and they do not include React. Chunks that load only when a block needs them, such as Shiki languages and Mermaid, are not included. Inkset puts its styles in its JavaScript, so only the Inkset size includes CSS.
 
-| Renderer       | Size    | Packages                                                        |
-| -------------- | ------- | --------------------------------------------------------------- |
-| react-markdown | ~150 KB | `react-markdown` 10, with GFM, math, KaTeX, and highlighting    |
-| Streamdown     | ~180 KB | `streamdown` 2.5, with its code, math, and Mermaid plugins      |
-| Inkset         | ~50 KB  | `@inkset/core`, `react`, `code`, `math`, `table`, and `diagram` |
+| Renderer       | Up front | Packages                                                            |
+| -------------- | -------- | ------------------------------------------------------------------- |
+| Inkset         | 65 KB    | `@inkset/react` 0.1.12, with `code`, `math`, `table`, and `diagram` |
+| react-markdown | 178 KB   | `react-markdown` 10.1, with GFM, math, KaTeX, and highlight.js      |
+| Streamdown     | 443 KB   | `streamdown` 2.5, with its code, math, and Mermaid plugins          |
+
+The script `apps/playground/scripts/measure-bundles.mjs` in the repository calculates these sizes.

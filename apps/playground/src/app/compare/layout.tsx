@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 const TITLE = "Inkset vs react-markdown vs Streamdown: streaming Markdown in React";
 const DESCRIPTION =
-  "Compare Inkset, react-markdown, and Streamdown side by side as they render the same streaming Markdown in React, with live average and peak render times in your browser.";
+  "Compare Inkset, react-markdown, and Streamdown side by side as they render the same streaming Markdown in React.";
 
 export const metadata: Metadata = {
   // `absolute` skips the "— Inkset" template, which would repeat the name.
