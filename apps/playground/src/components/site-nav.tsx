@@ -7,7 +7,7 @@ import { THEME_LABELS, THEME_ORDER, type ThemeKey } from "../lib/themes";
 
 type Page = "playground" | "compare" | "docs";
 
-/** The repository's star count, fetched by the root layout. Null when unknown. */
+/** The repository's star count, fetched by the root layout. Null when unknown or too small to show. */
 export const GithubStarsContext = createContext<number | null>(null);
 
 export const formatStars = (stars: number): string =>

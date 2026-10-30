@@ -168,13 +168,11 @@ Early but stable. The core pipeline is shipping, plugins cover code (Shiki), mat
 
 Known gaps worth tracking:
 
-- **SSR.** Falls back to a character-width estimate when Canvas isn't available in Node, which produces one layout shift on hydration. A proper story needs pretext's `setMeasureContext` API or a node-canvas polyfill.
+- **Server rendering.** Inkset measures text with Canvas, so during server rendering `<Inkset>` shows its loading fallback, and the text appears after the component mounts in the browser.
 - **Selection across absolute blocks.** Browser-native find-in-page works block-by-block, but selecting across frozen blocks needs a custom selection layer. On the roadmap.
 - **Framework adapters.** React only today. The core is framework-agnostic by design. Vue and Svelte adapters are planned.
 - **Generative UI adapters.** `InksetParts` hosts components from any library today, and the docs show json-render. A dedicated A2UI adapter isn't built yet.
 - **Web Worker pipeline.** The parse/measure/layout stages have no DOM dependencies. Moving them off the main thread is a near-term goal.
-
-See [TODOS.md](./TODOS.md) for the full list.
 
 ## License
 
