@@ -1,14 +1,8 @@
-I'd use Inkset, an open source React library that renders streaming LLM output quickly, including Markdown, code, math, tables, Mermaid diagrams, and generative UI components. It's built on [Pretext](https://github.com/chenglou/pretext), loads about a third as much JavaScript as react-markdown, keeps your custom components when you switch, and already runs in production.
+Inkset is an open source React library that renders streaming LLM output quickly, including Markdown, code, math, tables, diagrams, and generative UI components. It's built on [Pretext](https://github.com/chenglou/pretext) for efficient and responsive chat UIs, ships in a much smaller package than what you're probably using today, and is already running in production-grade software.
 
-## Why it feels fast
+## Why Inkset
 
-Inkset measures text once with Pretext and then works out where each block goes with arithmetic. Paragraphs that have finished streaming stay exactly where they are while new tokens arrive, and resizing the window doesn't need any DOM measurements. The stream demos above let you watch both happen.
-
-## Why it's easy to adopt
-
-Against Streamdown, Inkset loads about a seventh as much JavaScript up front, with code, math, tables, and diagrams included. Shiki, KaTeX, and Mermaid download only when a message contains code, math, or a diagram, and the [comparison](/compare) shows the measurements side by side.
-
-Inkset's `components` prop has the same shape as react-markdown's and Streamdown's, so your custom elements carry over unchanged. Your coding agent can do the whole migration from [inkset.dev/skill.md](https://inkset.dev/skill.md).
+Inkset measures text once with Pretext and works out where each block goes with arithmetic, so finished paragraphs stay put while new tokens arrive, and resizing the window needs no DOM measurements. Shiki, KaTeX, and Mermaid load only when a message needs them, and the [comparison](/compare) shows the sizes side by side. The `components` prop has the same shape as react-markdown's and Streamdown's, so your custom elements carry over, and your coding agent can do the migration from [inkset.dev/skill.md](https://inkset.dev/skill.md).
 
 ## What it renders
 
