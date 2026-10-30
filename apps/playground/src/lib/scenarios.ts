@@ -111,7 +111,10 @@ export const loadScenarios = async (): Promise<ScenarioData[]> => {
         return { ...meta, assistant: firstAssistant, messages };
       }
       const body = await fs.readFile(path.join(DEMOS_DIR, `${meta.key}.md`), "utf-8");
-      return { ...meta, assistant: body.trimEnd() };
+      // Demos can write {currentYear}. The page revalidates hourly, so it
+      // stays current without a redeploy.
+      const year = String(new Date().getFullYear());
+      return { ...meta, assistant: body.replaceAll("{currentYear}", year).trimEnd() };
     }),
   );
 };

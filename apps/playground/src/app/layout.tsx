@@ -1,7 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { fontVariables } from "./fonts";
 import { RootChrome } from "../components/root-chrome";
+import { getGithubStars } from "../lib/github-stars";
 // Self-host KaTeX CSS so the font files are bundled by Next and served
 // same-origin. Using the CDN <link> caused a measurable font-swap flicker
 // where pretext measured math blocks against the fallback font before the
@@ -189,7 +191,8 @@ html, body, .pg-root {
 }
 `;
 
-const RootLayout = ({ children }: { children: ReactNode }) => {
+const RootLayout = async ({ children }: { children: ReactNode }) => {
+  const githubStars = await getGithubStars();
   return (
     <html lang="en" suppressHydrationWarning style={fontVariables as CSSProperties}>
       <head>
@@ -214,7 +217,8 @@ const RootLayout = ({ children }: { children: ReactNode }) => {
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        <RootChrome>{children}</RootChrome>
+        <RootChrome githubStars={githubStars}>{children}</RootChrome>
+        <Analytics />
       </body>
     </html>
   );

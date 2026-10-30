@@ -1,0 +1,34 @@
+/* Streamdown styles its components with Tailwind classes and shadcn color
+   variables, so the comparison sets both up the way Streamdown's README
+   documents. Only Tailwind's theme and utilities load, without its preflight
+   reset, and utilities are generated only from Streamdown's own files, so the
+   rest of the site is untouched. */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+@source "../../../node_modules/streamdown/dist/*.js";
+@source "../../../node_modules/@streamdown/code/dist/*.js";
+@source "../../../node_modules/@streamdown/math/dist/*.js";
+@source "../../../node_modules/@streamdown/mermaid/dist/*.js";
+
+/* KaTeX puts an `underline` class on \underline{} spans, and this stylesheet
+   stays loaded after client-side navigation, so the utility would add a
+   second line to that math everywhere. No scenario here has links. */
+@source not inline("underline");
+
+/* The shadcn tokens, mapped to the site palette so the column follows the
+   theme switcher like the other two. */
+@theme inline {
+  --color-background: var(--pg-bg);
+  --color-foreground: var(--pg-text-primary);
+  --color-card: var(--pg-surface-raised);
+  --color-card-foreground: var(--pg-text-primary);
+  --color-muted: var(--pg-surface-raised);
+  --color-muted-foreground: var(--pg-text-muted);
+  --color-border: var(--pg-border-subtle);
+  --color-input: var(--pg-border-default);
+  --color-primary: var(--pg-text-primary);
+  --color-primary-foreground: var(--pg-bg);
+  --color-sidebar: var(--pg-surface-raised);
+}

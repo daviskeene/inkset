@@ -3,7 +3,7 @@
 import React from "react";
 import { ThemeProvider, useThemeKey } from "../lib/theme-context";
 import { getPalette, paletteToCssVars } from "../lib/themes";
-import { SITE_NAV_STYLES } from "./site-nav";
+import { GithubStarsContext, SITE_NAV_STYLES } from "./site-nav";
 import { FOOTER_STYLES } from "./footer";
 
 const GLOBAL_STYLES = `
@@ -48,11 +48,19 @@ const PaletteApplier = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-export const RootChrome = ({ children }: { children: React.ReactNode }) => {
+export const RootChrome = ({
+  children,
+  githubStars,
+}: {
+  children: React.ReactNode;
+  githubStars: number | null;
+}) => {
   return (
     <ThemeProvider>
-      <style dangerouslySetInnerHTML={{ __html: GLOBAL_STYLES }} />
-      <PaletteApplier>{children}</PaletteApplier>
+      <GithubStarsContext.Provider value={githubStars}>
+        <style dangerouslySetInnerHTML={{ __html: GLOBAL_STYLES }} />
+        <PaletteApplier>{children}</PaletteApplier>
+      </GithubStarsContext.Provider>
     </ThemeProvider>
   );
 };
