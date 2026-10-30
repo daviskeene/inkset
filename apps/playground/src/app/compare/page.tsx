@@ -206,18 +206,23 @@ const SHIKI_THEME_PAIR_BY_KEY = {
 // What each column loads, and what the host app has to provide for it.
 const COLUMN_INFO = {
   inkset: {
+    label: "inkset",
     packages: `@inkset/react@${BUNDLE_SIZES.inkset.version} + code, math, table, diagram`,
     note: "Ships its own styles. Shiki, KaTeX, and Mermaid load when a block first needs them.",
   },
   reactMarkdown: {
+    label: "react-markdown",
     packages: `react-markdown@${BUNDLE_SIZES["react-markdown"].version} + gfm, math, katex, highlight`,
     note: "Ships no styles, so this page adds its own prose CSS. Everything loads up front, including KaTeX and highlight.js.",
   },
   streamdown: {
+    label: "streamdown",
     packages: `streamdown@${BUNDLE_SIZES.streamdown.version} + code, math, mermaid`,
     note: "Needs Tailwind and shadcn color variables in your app, set up here for this column. KaTeX loads up front.",
   },
 };
+type ColumnKey = keyof typeof COLUMN_INFO;
+const COLUMN_KEYS = Object.keys(COLUMN_INFO) as ColumnKey[];
 
 // ── Switching ──────────────────────────────────────────────────────
 
@@ -302,6 +307,8 @@ const ComparePage = () => {
     ? Math.max(280, Math.min(780, typeof window !== "undefined" ? window.innerWidth - 32 : 780))
     : 780;
   const effectiveWidth = Math.min(sharedWidth, effectiveMaxWidth);
+  // The one column that shows when the columns stack.
+  const [stackedColumn, setStackedColumn] = useState<ColumnKey>("inkset");
 
   const activeScenario = SCENARIOS.find((s) => s.key === scenarioKey) ?? SCENARIOS[0];
   const content =
@@ -392,7 +399,7 @@ const ComparePage = () => {
             style={{ width: 1, height: 16, background: "var(--pg-divider)" }}
           />
 
-          <div style={{ ...CHIP_GROUP_STYLE, gap: 10 }}>
+          <div className="pg-compare-width" style={{ ...CHIP_GROUP_STYLE, gap: 10 }}>
             <span style={CHIP_SECTION_LABEL_STYLE}>Width</span>
             <input
               type="range"
@@ -433,6 +440,22 @@ const ComparePage = () => {
           </div>
         </div>
 
+        {/* When the columns stack, this switch shows one renderer at a time.
+            Otherwise the switching section sits under three copies of the
+            same document. */}
+        <div className="pg-compare-picker" role="group" aria-label="Renderer">
+          {COLUMN_KEYS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={stackedColumn === key}
+              onClick={() => setStackedColumn(key)}
+            >
+              {COLUMN_INFO[key].label}
+            </button>
+          ))}
+        </div>
+
         {/* Three columns */}
         <div
           className="pg-compare-columns"
@@ -444,7 +467,8 @@ const ComparePage = () => {
           }}
         >
           <Column
-            label="inkset"
+            label={COLUMN_INFO.inkset.label}
+            hiddenWhenStacked={stackedColumn !== "inkset"}
             upFrontKb={BUNDLE_SIZES.inkset.upFrontKb}
             packages={COLUMN_INFO.inkset.packages}
             note={COLUMN_INFO.inkset.note}
@@ -471,7 +495,8 @@ const ComparePage = () => {
           </Column>
 
           <Column
-            label="react-markdown"
+            label={COLUMN_INFO.reactMarkdown.label}
+            hiddenWhenStacked={stackedColumn !== "reactMarkdown"}
             upFrontKb={BUNDLE_SIZES["react-markdown"].upFrontKb}
             packages={COLUMN_INFO.reactMarkdown.packages}
             note={COLUMN_INFO.reactMarkdown.note}
@@ -489,7 +514,8 @@ const ComparePage = () => {
           </Column>
 
           <Column
-            label="streamdown"
+            label={COLUMN_INFO.streamdown.label}
+            hiddenWhenStacked={stackedColumn !== "streamdown"}
             upFrontKb={BUNDLE_SIZES.streamdown.upFrontKb}
             packages={COLUMN_INFO.streamdown.packages}
             note={COLUMN_INFO.streamdown.note}
@@ -522,6 +548,7 @@ const ComparePage = () => {
 
 const Column = ({
   label,
+  hiddenWhenStacked,
   upFrontKb,
   packages,
   note,
@@ -529,6 +556,7 @@ const Column = ({
   children,
 }: {
   label: string;
+  hiddenWhenStacked: boolean;
   upFrontKb: number;
   packages: string;
   note: string;
@@ -538,6 +566,7 @@ const Column = ({
   return (
     <div
       className="pg-compare-column"
+      data-hidden-when-stacked={hiddenWhenStacked || undefined}
       style={{
         flex: 1,
         minWidth: 0,
@@ -570,6 +599,7 @@ const Column = ({
           }}
         >
           <div
+            className="pg-compare-column-label"
             style={{
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
               fontSize: 13,
@@ -989,13 +1019,50 @@ const GlobalStyles = () => {
           grid-template-columns: minmax(0, 1fr);
         }
       }
+      .pg-compare-picker {
+        display: none;
+      }
       @media (max-width: 900px) {
         .pg-compare-column {
           border-right: 0 !important;
-          border-bottom: 1px solid var(--pg-border-subtle);
         }
-        .pg-compare-column:last-child {
-          border-bottom: 0 !important;
+        .pg-compare-column[data-hidden-when-stacked] {
+          display: none !important;
+        }
+        /* The switch above the column names the renderer. */
+        .pg-compare-column-label {
+          display: none;
+        }
+        .pg-compare-picker {
+          display: flex;
+          border-bottom: 1px solid var(--pg-border-subtle);
+          background: var(--pg-bg);
+        }
+        .pg-compare-picker button {
+          flex: 1;
+          position: relative;
+          padding: 12px 4px 11px;
+          font: inherit;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--pg-text-muted);
+          background: transparent;
+          border: 0;
+          cursor: pointer;
+          transition: color 120ms ease;
+        }
+        .pg-compare-picker button[aria-pressed="true"] {
+          color: var(--pg-text-primary);
+        }
+        .pg-compare-picker button[aria-pressed="true"]::after {
+          content: "";
+          position: absolute;
+          left: 16px;
+          right: 16px;
+          bottom: -1px;
+          height: 1.5px;
+          background: var(--pg-text-primary);
         }
       }
       @media (max-width: 768px) {
@@ -1004,6 +1071,10 @@ const GlobalStyles = () => {
           gap: 10px !important;
         }
         .pg-compare-divider {
+          display: none !important;
+        }
+        /* On a phone the slider can narrow the column by only about 80px. */
+        .pg-compare-width {
           display: none !important;
         }
       }

@@ -57,7 +57,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  viewportFit: "cover",
 };
 
 const RESPONSIVE_CSS = `
@@ -88,6 +87,23 @@ html, body, .pg-root {
   }
   .pg-chat-input-wrap {
     padding: 10px 12px 14px !important;
+  }
+}
+/* Short of space, the composer drops its explanations. Sending a message
+   still says that the demo has no model. */
+@media (max-width: 768px), (max-height: 500px) {
+  .pg-chat-input-hint,
+  .pg-chat-input-preview-label {
+    display: none !important;
+  }
+  .pg-chat-input-preview {
+    max-height: 132px !important;
+  }
+}
+/* iOS zooms the page when a field with text under 16px gets focus. */
+@media (pointer: coarse) {
+  .pg-chat-input-wrap textarea {
+    font-size: 16px !important;
   }
 }
 @media (min-width: 769px) {
