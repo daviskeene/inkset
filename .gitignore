@@ -9,4 +9,8 @@ test-results/
 playwright-report/
 .DS_Store
 .gstack/
+# Written by tsup while it loads a TypeScript config.
+*.bundled_*.mjs
+# Written by `next dev`.
+apps/playground/AGENTS.md
 /docs/

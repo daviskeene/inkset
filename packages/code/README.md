@@ -5,7 +5,7 @@ Shiki-powered code block plugin for Inkset.
 ## Install
 
 ```bash
-npm install @inkset/code shiki
+npm install @inkset/code
 ```
 
 ## Usage
