@@ -4,7 +4,7 @@ Inkset is an open source React library that renders streaming LLM output quickly
 
 When an LLM response streams in, the browser lays out the page again on every update, and anything that reads an element's size, like auto-scroll, forces it to re-calculate that work immediately. For dynamic interfaces like AI Chat, this becomes really expensive, and causes slow/laggy behavior as user chat history grows (along with the complexity of what is actually being rendered). To fix this, Inkset uses Pretext, a new tool that can measure where text is supposed to go based almost entirely on what computers are already really good at: arithmetic.
 
-The result is a lightweight, drop-in replacement for your current rendering stack that is built with performance in mind. It's also great at handling inline math & code snippets. Inkset primarily exists to ensure that a model's intelligence can be properly expressed on the web.
+The result is a lightweight, drop-in replacement for your current rendering stack that is built with performance in mind. To switch, point your coding agent at [inkset.dev/skill.md](https://inkset.dev/skill.md), and it handles the setup. It's also great at handling inline math & code snippets. Inkset primarily exists to ensure that a model's intelligence can be properly expressed on the web.
 
 ## What it renders
 
