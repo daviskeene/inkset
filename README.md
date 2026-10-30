@@ -58,7 +58,7 @@ const inkset = useInkset({ plugins: [createCodePlugin(), createMathPlugin()] });
 
 Three shifts in the cost model.
 
-**Layout without reflow.** Pretext measures text via Canvas once. After that, re-layout at a new width is pure arithmetic over cached segment widths. A thousand blocks relayout in about 2 ms on a laptop (`pnpm bench`), with no DOM reads on the hot path. Good for INP. Good for mobile.
+**Layout without reflow.** Pretext measures text via Canvas once. After that, re-layout at a new width is pure arithmetic over cached segment widths. A thousand blocks relayout in under 2 ms on a laptop (`pnpm bench`), with no DOM reads on the hot path. Good for INP. Good for mobile.
 
 **Stable streaming.** The block currently receiving tokens rides in normal document flow, so the browser handles its height natively. Every block above it is frozen onto absolute coordinates computed by pretext. New tokens do not shift what the user is already reading, because frozen blocks never re-measure.
 
